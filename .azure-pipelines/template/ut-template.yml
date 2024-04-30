@@ -1,0 +1,57 @@
+parameters:
+  - name: dockerConfigName
+    type: string
+    default: "commonDockerConfig"
+  - name: repo
+    type: string
+    default: "https://github.com/intel/neural-compressor"
+  - name: utScriptFileName
+    type: string
+  - name: uploadPath
+    type: string
+  - name: utArtifact
+    type: string
+  - name: utTestMode
+    type: string
+    default: "coverage"
+  - name: utContainerName
+    type: string
+    default: "utTest"
+
+steps:
+  - template: docker-template.yml
+    parameters:
+      dockerConfigName: ${{ parameters.dockerConfigName }}
+      repoName: "neural-compressor"
+      repoTag: "py310"
+      dockerFileName: "Dockerfile"
+      containerName: ${{ parameters.utContainerName }}
+      repo: ${{ parameters.repo }}
+
+  - script: |
+      docker exec ${{ parameters.utContainerName }} bash -c "cd /neural-compressor/.azure-pipelines/scripts \
+      && bash install_nc.sh \
+      && bash ut/${{ parameters.utScriptFileName }}.sh"
+    displayName: "Run UT"
+
+  - task: PublishPipelineArtifact@1
+    condition: succeededOrFailed()
+    inputs:
+      targetPath: ${{ parameters.uploadPath }}
+      artifact: $(System.JobAttempt)_${{ parameters.utArtifact }}_report
+      publishLocation: "pipeline"
+
+  - ${{ if eq(parameters.utTestMode, 'coverage') }}:
+    - task: PublishPipelineArtifact@1
+      inputs:
+        targetPath: ${{ parameters.uploadPath }}
+        artifact: ${{ parameters.utArtifact }}_coverage
+        publishLocation: "pipeline"
+
+  - task: Bash@3
+    condition: always()
+    inputs:
+      targetType: "inline"
+      script: |
+        docker exec ${{ parameters.utContainerName }} bash -c "rm -fr /neural-compressor/* && rm -fr /neural-compressor/.* || true"
+    displayName: "Docker clean up"
