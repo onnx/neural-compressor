@@ -19,7 +19,7 @@ There are many style guides, and they may conflict with each other. To avoid ove
 
 ### Imports
 
-- Recommend
+- Recommended
 
 ```python
 import os
@@ -31,7 +31,7 @@ from copy import deepcopy
 from subprocess import Popen, PIPE
 ```
 
-- Not recommend
+- Not Recommended
 
 ```python
 from sub_module import *  # May lead to namespace pollution
@@ -41,7 +41,7 @@ import copy  # May import local copy.py
 
 ### Strings
 
-- Recommend
+- Recommended
 
 ```python
 long_string = """This is fine if your use case can accept
@@ -50,7 +50,7 @@ long_string = """This is fine if your use case can accept
 long_string = "And this is fine if you cannot accept\n" "extraneous leading spaces."
 ```
 
-- Not recommend
+- Not Recommended
 
 ```python
 logger.info("This is fine if your use case can accept")
@@ -59,7 +59,7 @@ logger.info("extraneous leading spaces.")
 
 ### Logger
 
-- Recommend
+- Recommended
 
 ```python
 from neural_compressor_ort.utils import logger
@@ -81,7 +81,7 @@ logger.warning(
 )
 ```
 
-- Not recommend
+- Not Recommended
 
 ```python
 logger.info(f"Current ONNX Runtime Version is: {ort.__version__}")  # Use f-string
@@ -93,7 +93,7 @@ logger.info(os.getenv("PAGER", default=""))
 
 ### Type Annotations
 
-- Recommend
+- Recommended
 
 ```python
 def register_config(framework_name: str, algo_name: str, priority: int = 0) -> Callable[..., Any]: ...
@@ -107,7 +107,7 @@ from typing import TypeAlias
 ComplexTFMap: TypeAlias = Mapping[str, _LossAndGradient]
 ```
 
-- Not recommend
+- Not Recommended
 
 ```python
 def xx_func(cls) -> Dict[str, OrderedDict[str, Dict[str, object]]]: # Can't improve the readability
@@ -120,7 +120,7 @@ def xx_func(cls) -> Dict[str, OrderedDict[str, Dict[str, object]]]: # Can't impr
 
 ### Comments
 
-- Recommend
+- Recommended
 
 ```python
 class CheeseShopAddress:
@@ -134,7 +134,7 @@ class OutOfCheeseError(Exception):
     """No more cheese is available."""
 ```
 
-- Not recommend
+- Not Recommended
 
 ```python
 class CheeseShopAddress:
@@ -151,7 +151,7 @@ class OutOfCheeseError(Exception):
 
 ### TODO Comments
 
-- Recommend
+- Recommended
 
 ```python
 # TODO: crbug.com/192795 - Investigate cpufreq optimizations.
@@ -163,7 +163,7 @@ class OutOfCheeseError(Exception):
 
 > A `TODO` comment begins with the word `TODO:` for facilitate searching.
 
-- Plug:
+- Extensions:
     [Better Comments](https://marketplace.visualstudio.com/items?itemName=aaron-bond.better-comments)
 
 
@@ -180,8 +180,8 @@ __all__ = [
 ]
 ```
 
-## Recommend VS Code `settings.json`
-To keep the coding style consistent, we suggest you replace `.vscode/settings.json` with `neural-compressor/.vscode/settings_recommended.json`.
+## Recommended VS Code `settings.json`
+To keep the coding style consistent, we suggest you replace `.vscode/settings.json` with `neural-compressor/.vscode/settings_Recommendeded.json`.
 
 
 ## Reference
