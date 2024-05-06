@@ -34,7 +34,7 @@ The following prerequisites and requirements must be satisfied for a successful 
   git clone https://github.com/onnx/neural-compressor.git
   cd neural-compressor
   pip install -r requirements.txt
-  python setup.py install
+  pip install .
   ```
 
 ## System Requirements

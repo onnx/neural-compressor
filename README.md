@@ -29,7 +29,7 @@ In particular, the tool provides the key features, typical examples, and open co
 git clone https://github.com/onnx/neural-compressor.git
 cd neural-compressor
 pip install -r requirements.txt
-python setup.py install
+pip install .
 ```
 
 > **Note**: 
