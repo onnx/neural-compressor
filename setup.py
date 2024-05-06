@@ -56,7 +56,7 @@ if __name__ == "__main__":
         packages=find_packages(),
         include_package_data=True,
         install_requires=fetch_requirements("requirements.txt"),
-        python_requires=">=3.7.0",
+        python_requires=">=3.8.0",
         classifiers=[
             "Intended Audience :: Science/Research",
             "Programming Language :: Python :: 3",
