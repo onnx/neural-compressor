@@ -1,13 +1,19 @@
-Security Policy
-===============
+<!--
+Copyright (c) ONNX Project Contributors
 
-## Report a Vulnerability
+SPDX-License-Identifier: Apache-2.0
+-->
 
-Please report security issues or vulnerabilities to the [Intel® Security Center].
+# Security Policy
 
-For more information on how Intel® works to resolve security issues, see
-[Vulnerability Handling Guidelines].
+## Reporting a Vulnerability
+If you think you have found a security vulnerability, please send a report to onnx-security@lists.lfaidata.foundation. Please do not post security vulnerabilities on Slack.
 
-[Intel® Security Center]:https://www.intel.com/security
+We don't currently have a PGP key, unfortunately.
 
-[Vulnerability Handling Guidelines]:https://www.intel.com/content/www/us/en/security-center/vulnerability-handling-guidelines.html
+An ONNX committer will send you a response indicating the next steps in handling your report. After the initial reply to your report, the committer will keep you informed of the progress towards a fix and full announcement, and may ask for additional information or guidance.
+
+Important: Please don't disclose the vulnerability before it has been fixed and announced, to protect our users.
+
+## Security announcements
+Please subscribe to the [announcements mailing list](https://lists.lfaidata.foundation/g/onnx-announce), where we post notifications and remediation details for security vulnerabilities.
