@@ -47,7 +47,10 @@ import copy  # May import local copy.py
 long_string = """This is fine if your use case can accept
     extraneous leading spaces."""
 
-long_string = "And this is fine if you cannot accept\n" "extraneous leading spaces."
+long_string = (
+    "And this is fine if you cannot accept\n"
+    "extraneous leading spaces."
+)
 ```
 
 - Not recommend
