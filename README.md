@@ -7,7 +7,6 @@ ONNX Neural Compressor
 [![python](https://img.shields.io/badge/python-3.8%2B-blue)](https://github.com/onnx/neural-compressor)
 [![version](https://img.shields.io/badge/release-2.5-green)](https://github.com/onnx/neural-compressor/releases)
 [![license](https://img.shields.io/badge/license-Apache%202-blue)](https://github.com/onnx/neural-compressor/blob/master/LICENSE)
-[![coverage](https://img.shields.io/badge/coverage-85%25-green)](https://github.com/onnx/neural-compressor)
 
 
 ---
