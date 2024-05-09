@@ -15,7 +15,7 @@ parameters:
     type: string
   - name: repo
     type: string
-    default: "https://github.com/intel/neural-compressor"
+    default: "https://github.com/onnx/neural-compressor"
 
 steps:
   - task: Bash@3
