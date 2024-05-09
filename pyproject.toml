@@ -13,7 +13,7 @@ line-length = 120
 skip = '*.po,*.ts,*.js,*.map,*.js.map,*.css.map,.azure-pipelines/scripts/codeScan/codespell/inc_dict.txt'
 count = ''
 quiet-level = 3
-ignore-words = ".azure-pipelines/scripts/codeScan/codespell/inc_dict.txt"
+ignore-words = ".azure-pipelines/scripts/codeScan/codespell/nc_dict.txt"
 
 
 [tool.ruff]
