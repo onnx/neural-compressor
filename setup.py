@@ -5,11 +5,6 @@ from io import open
 from setuptools import find_packages, setup
 
 
-def fetch_requirements(path):
-    with open(path, "r") as fd:
-        return [r.strip() for r in fd.readlines()]
-
-
 def is_commit_on_tag():
     try:
         result = subprocess.run(
@@ -43,7 +38,7 @@ except Exception as error:
 if __name__ == "__main__":
 
     setup(
-        name="neural_compressor_ort",
+        name="onnx-neural-compressor",
         author="Intel AIPT Team",
         version=get_build_version(),
         author_email="tai.huang@intel.com, mengni.wang@intel.com, yuwen.zhou@intel.com, suyue.chen@intel.com",
@@ -55,7 +50,8 @@ if __name__ == "__main__":
         url="",
         packages=find_packages(),
         include_package_data=True,
-        install_requires=fetch_requirements("requirements.txt"),
+        install_requires=["onnx", "onnxruntime", "onnxruntime-extensions", "psutil", "numpy",
+                          "py-cpuinfo", "pydantic", "transformers"],
         python_requires=">=3.8.0",
         classifiers=[
             "Intended Audience :: Science/Research",

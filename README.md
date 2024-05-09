@@ -38,9 +38,10 @@ pip install .
 
 Setting up the environment:  
 ```bash
-pip install neural-compressor-ort "onnxruntime>=1.17.0" onnx
+pip install onnx-neural-compressor "onnxruntime>=1.17.0" onnx
 ```
 After successfully installing these packages, try your first quantization program.
+> Notes: please install from source before the formal pypi release. 
 
 ### Weight-Only Quantization (LLMs)
 Following example code demonstrates Weight-Only Quantization on LLMs, it supports Intel CPU, Nvidia GPU, device will be selected for efficiency automatically when multiple devices are available. 
