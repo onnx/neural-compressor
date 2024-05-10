@@ -26,8 +26,8 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
 
 from typing_extensions import Self
 
-from neural_compressor_ort.utils import logger
-from neural_compressor_ort.utils.constants import (
+from onnx_neural_compressor.utils import logger
+from onnx_neural_compressor.utils.constants import (
     BASE_CONFIG,
     COMPOSABLE_CONFIG,
     DEFAULT_WHITE_LIST,
@@ -37,7 +37,7 @@ from neural_compressor_ort.utils.constants import (
     LOCAL,
     OP_NAME_OR_MODULE_TYPE,
 )
-from neural_compressor_ort.utils.tuning_param import TuningParam
+from onnx_neural_compressor.utils.tuning_param import TuningParam
 
 __all__ = [
     "options",
@@ -511,7 +511,7 @@ def _check_value(name, src, supported_type, supported_value=[]):
 
     Example::
 
-        from neural_compressor_ort.base_config import _check_value
+        from onnx_neural_compressor.base_config import _check_value
 
         def datatype(self, datatype):
             if _check_value("datatype", datatype, list, ["fp32", "bf16", "uint8", "int8"]):
@@ -541,7 +541,7 @@ class Options:
     """Option Class for configs.
 
     This class is used for configuring global variables. The global variable options is created with this class.
-    If you want to change global variables, you should use functions from neural_compressor_ort.utils.utility.py:
+    If you want to change global variables, you should use functions from onnx_neural_compressor.utils.utility.py:
         set_random_seed(seed: int)
         set_workspace(workspace: str)
         set_resume_from(resume_from: str)
@@ -559,7 +559,7 @@ class Options:
 
     Example::
 
-        from neural_compressor_ort import set_random_seed, set_workspace, set_resume_from
+        from onnx_neural_compressor import set_random_seed, set_workspace, set_resume_from
         set_random_seed(2022)
         set_workspace("workspace_path")
         set_resume_from("workspace_path")

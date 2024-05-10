@@ -12,11 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from neural_compressor_ort.utils.logger import *
-from neural_compressor_ort.utils.onnx_model import ONNXModel
-from neural_compressor_ort.utils.constants import *
-from neural_compressor_ort.utils.utility import *
-from neural_compressor_ort.utils.base_config import options
+from onnx_neural_compressor.utils.logger import *
+from onnx_neural_compressor.utils.onnx_model import ONNXModel
+from onnx_neural_compressor.utils.constants import *
+from onnx_neural_compressor.utils.utility import *
+from onnx_neural_compressor.utils.base_config import options
 
 
 __all__ = [

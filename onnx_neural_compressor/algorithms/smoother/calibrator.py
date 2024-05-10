@@ -24,9 +24,9 @@ import onnx
 import onnx.numpy_helper as numpy_helper
 import onnxruntime
 
-from neural_compressor_ort.quantization.calibrate import CalibrationDataReader
-from neural_compressor_ort.utils import logger
-from neural_compressor_ort.utils.onnx_model import ONNXModel
+from onnx_neural_compressor.quantization.calibrate import CalibrationDataReader
+from onnx_neural_compressor.utils import logger
+from onnx_neural_compressor.utils.onnx_model import ONNXModel
 
 __all__ = ["Calibrator"]
 

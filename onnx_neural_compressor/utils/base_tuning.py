@@ -17,8 +17,8 @@ import copy
 import uuid
 from typing import Any, Callable, Dict, Generator, Iterator, List, Optional, Sized, Tuple, Union
 
-from neural_compressor_ort.utils import logger
-from neural_compressor_ort.utils.base_config import BaseConfig
+from onnx_neural_compressor.utils import logger
+from onnx_neural_compressor.utils.base_config import BaseConfig
 
 __all__ = [
     "Evaluator",
@@ -244,7 +244,7 @@ class TuningConfig:
     """Config for auto tuning pipeline.
 
     Examples:
-        from neural_compressor_ort.torch.quantization import TuningConfig
+        from onnx_neural_compressor.utils import TuningConfig
         tune_config = TuningConfig(
             config_set=[config1, config2, ...],
             max_trials=3,

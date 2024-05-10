@@ -23,13 +23,13 @@ import numpy as np
 import onnx
 from optimum.exporters.onnx import main_export
 
-from neural_compressor_ort.quantization import (
+from onnx_neural_compressor.quantization import (
     CalibrationDataReader,
     QuantType,
     SmoothQuantConfig,
     get_default_sq_config,
 )
-from neural_compressor_ort.quantization.quantize import _quantize
+from onnx_neural_compressor.quantization.quantize import _quantize
 
 
 class DataReader(CalibrationDataReader):
@@ -125,7 +125,7 @@ class TestONNXRT3xSmoothQuant(unittest.TestCase):
         self.assertEqual(num_muls, 30)
 
     def test_sq_with_ort_like_api(self):
-        from neural_compressor_ort.quantization import StaticQuantConfig, quantize
+        from onnx_neural_compressor.quantization import StaticQuantConfig, quantize
 
         self.data_reader.rewind()
         config = StaticQuantConfig(

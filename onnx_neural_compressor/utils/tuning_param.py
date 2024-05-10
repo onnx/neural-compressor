@@ -18,7 +18,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from neural_compressor_ort.utils import logger
+from onnx_neural_compressor.utils import logger
 
 
 class ParamLevel(Enum):

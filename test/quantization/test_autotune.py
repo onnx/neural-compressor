@@ -27,7 +27,7 @@ import onnx
 import onnxruntime as ort
 from optimum.exporters.onnx import main_export
 
-from neural_compressor_ort.quantization import (
+from onnx_neural_compressor.quantization import (
     AWQConfig,
     CalibrationDataReader,
     GPTQConfig,
@@ -36,7 +36,7 @@ from neural_compressor_ort.quantization import (
     autotune,
     get_woq_tuning_config,
 )
-from neural_compressor_ort.utils.base_tuning import Evaluator, TuningConfig
+from onnx_neural_compressor.utils.base_tuning import Evaluator, TuningConfig
 
 
 def fake_eval(model, eval_result_lst):

@@ -30,7 +30,7 @@ from torch.utils.data import DataLoader
 from intel_extension_for_transformers.transformers.llm.evaluation.lm_eval import evaluate
 from optimum.onnxruntime import ORTModelForCausalLM
 from transformers import LlamaConfig, LlamaTokenizer
-from neural_compressor_ort.quantization.calibrate import CalibrationDataReader
+from onnx_neural_compressor.quantization.calibrate import CalibrationDataReader
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(format = "%(asctime)s - %(levelname)s - %(name)s -   %(message)s",
@@ -329,7 +329,7 @@ class GPTQDataloader(CalibrationDataReader):
         self.iter_next = iter(self.encoded_list)
 
 if __name__ == "__main__":
-    from neural_compressor_ort import set_workspace
+    from onnx_neural_compressor import set_workspace
     set_workspace(args.workspace)
     if not os.path.exists(args.workspace):
         os.mkdir(args.workspace)
@@ -343,7 +343,7 @@ if __name__ == "__main__":
             print("Accuracy: %.5f" % acc_result)
 
     if args.tune:
-        from neural_compressor_ort.quantization import matmul_nbits_quantizer
+        from onnx_neural_compressor.quantization import matmul_nbits_quantizer
         model_name = "model.onnx" # require optimum >= 1.14.0
         model_path = os.path.join(args.model_path, model_name)
 
@@ -406,8 +406,8 @@ if __name__ == "__main__":
             best_model = quant.model
 
         elif args.algorithm.upper() == "WOQ_TUNE":
-            from neural_compressor_ort.quantization import get_woq_tuning_config, autotune
-            from neural_compressor_ort.base_tuning import TuningConfig
+            from onnx_neural_compressor.quantization import get_woq_tuning_config, autotune
+            from onnx_neural_compressor.base_tuning import TuningConfig
             calibration_data_reader = GPTQDataloader(model_path, seqlen=args.seqlen, batch_size=1)
             # set tolerable_loss to 0.5% for test, default is 1%
             custom_tune_config = TuningConfig(config_set=get_woq_tuning_config(), tolerable_loss=0.005)

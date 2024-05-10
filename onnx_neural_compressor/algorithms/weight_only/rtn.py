@@ -27,15 +27,15 @@ import onnx
 import onnxruntime as ort
 from packaging.version import Version
 
-from neural_compressor_ort.algorithms.weight_only.utility import (
+from onnx_neural_compressor.algorithms.weight_only.utility import (
     make_matmul_weight_only_node,
     pad_tensor,
     qdq_tensor,
     quant_tensor,
 )
-from neural_compressor_ort.quantization.config import RTNConfig
-from neural_compressor_ort.utils import ONNXRT116_VERSION, ONNXRT1161_VERSION, dtype_mapping, simple_progress_bar
-from neural_compressor_ort.utils.onnx_model import ONNXModel
+from onnx_neural_compressor.quantization.config import RTNConfig
+from onnx_neural_compressor.utils import ONNXRT116_VERSION, ONNXRT1161_VERSION, dtype_mapping, simple_progress_bar
+from onnx_neural_compressor.utils.onnx_model import ONNXModel
 
 __all__ = ["apply_rtn_on_model", "rtn_quantize"]
 
@@ -205,7 +205,7 @@ def apply_rtn_on_model(model: Union[onnx.ModelProto, ONNXModel, Path, str], quan
             quant_config[op_name_type] = op_config.to_dict()
 
     if layer_wise:
-        from neural_compressor_ort.algorithms import layer_wise_quant
+        from onnx_neural_compressor.algorithms import layer_wise_quant
 
         quantized_model = layer_wise_quant(model, quant_func=rtn_quantize, weight_config=quant_config, **quant_kwargs)
     else:

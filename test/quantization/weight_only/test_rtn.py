@@ -5,7 +5,7 @@ import unittest
 
 from optimum.exporters.onnx import main_export
 
-from neural_compressor_ort.utils import logger
+from onnx_neural_compressor.utils import logger
 
 
 def find_onnx_file(folder_path):
@@ -57,7 +57,7 @@ class TestRTNQuant(unittest.TestCase):
 
     def _apply_rtn(self, quant_config):
         logger.info(f"Test RTN with config {quant_config}")
-        from neural_compressor_ort.quantization.quantize import _quantize
+        from onnx_neural_compressor.quantization.quantize import _quantize
 
         fp32_model = copy.deepcopy(self.gptj)
         qmodel = _quantize(fp32_model, quant_config)
@@ -67,7 +67,7 @@ class TestRTNQuant(unittest.TestCase):
 
 class TestRTNQuantWithInternalAPI(TestRTNQuant):
     def test_rtn_params_combination(self):
-        from neural_compressor_ort.quantization import RTNConfig
+        from onnx_neural_compressor.quantization import RTNConfig
 
         # some tests were skipped to accelerate the CI
         # TODO: check params combination.
@@ -89,7 +89,7 @@ class TestRTNQuantWithInternalAPI(TestRTNQuant):
             self.assertEqual(self._count_woq_matmul(qmodel, bits=value[1], group_size=value[2]), 30)
 
     def test_rtn_config(self):
-        from neural_compressor_ort.quantization import RTNConfig
+        from onnx_neural_compressor.quantization import RTNConfig
 
         rtn_config1 = RTNConfig(weight_bits=4)
         quant_config_dict = {
@@ -99,15 +99,15 @@ class TestRTNQuantWithInternalAPI(TestRTNQuant):
         self.assertEqual(rtn_config1.to_dict(), rtn_config2.to_dict())
 
     def test_quantize_rtn_from_dict_default(self):
-        from neural_compressor_ort.quantization import get_default_rtn_config
-        from neural_compressor_ort.quantization.quantize import _quantize
+        from onnx_neural_compressor.quantization import get_default_rtn_config
+        from onnx_neural_compressor.quantization.quantize import _quantize
 
         qmodel = self._apply_rtn(quant_config=get_default_rtn_config())
         self.assertIsNotNone(qmodel)
         self.assertTrue(self._check_model_is_quantized(qmodel))
 
     def test_quantize_rtn_from_dict_beginner(self):
-        from neural_compressor_ort.quantization.quantize import _quantize
+        from onnx_neural_compressor.quantization.quantize import _quantize
 
         quant_config = {
             "rtn": {
@@ -121,16 +121,16 @@ class TestRTNQuantWithInternalAPI(TestRTNQuant):
         self.assertTrue(self._check_model_is_quantized(qmodel))
 
     def test_quantize_rtn_from_class_beginner(self):
-        from neural_compressor_ort.quantization import RTNConfig
-        from neural_compressor_ort.quantization.quantize import _quantize
+        from onnx_neural_compressor.quantization import RTNConfig
+        from onnx_neural_compressor.quantization.quantize import _quantize
 
         quant_config = RTNConfig(weight_bits=4, weight_group_size=32)
         qmodel = self._apply_rtn(quant_config)
         self.assertIsNotNone(qmodel)
 
     def test_quantize_rtn_fallback_from_class_beginner(self):
-        from neural_compressor_ort.quantization import RTNConfig
-        from neural_compressor_ort.quantization.quantize import _quantize
+        from onnx_neural_compressor.quantization import RTNConfig
+        from onnx_neural_compressor.quantization.quantize import _quantize
 
         fp32_config = RTNConfig(weight_dtype="fp32")
         quant_config = RTNConfig(
@@ -146,7 +146,7 @@ class TestRTNQuantWithInternalAPI(TestRTNQuant):
         self.assertFalse(self._check_node_is_quantized(qmodel, "/h.4/mlp/fc_out/MatMul"))
 
     def test_quantize_rtn_from_dict_advance(self):
-        from neural_compressor_ort.quantization.quantize import _quantize
+        from onnx_neural_compressor.quantization.quantize import _quantize
 
         quant_config = {
             "rtn": {
@@ -189,7 +189,7 @@ class TestRTNQuantWithInternalAPI(TestRTNQuant):
 
 class TestRTNQuantWithORTLikeAPI(TestRTNQuant):
     def test_rtn_config_4bits(self):
-        from neural_compressor_ort.quantization import matmul_4bits_quantizer
+        from onnx_neural_compressor.quantization import matmul_4bits_quantizer
 
         algo_config = matmul_4bits_quantizer.RTNWeightOnlyQuantConfig()
 
@@ -204,7 +204,7 @@ class TestRTNQuantWithORTLikeAPI(TestRTNQuant):
         self.assertTrue(self._check_model_is_quantized(quant.model))
 
     def test_rtn_config_4bits_with_exclude_node(self):
-        from neural_compressor_ort.quantization import matmul_4bits_quantizer
+        from onnx_neural_compressor.quantization import matmul_4bits_quantizer
 
         algo_config = matmul_4bits_quantizer.RTNWeightOnlyQuantConfig()
 
@@ -221,7 +221,7 @@ class TestRTNQuantWithORTLikeAPI(TestRTNQuant):
         self.assertFalse(self._check_node_is_quantized(quant.model, "/h.4/mlp/fc_out/MatMul"))
 
     def test_rtn_config_nbits(self):
-        from neural_compressor_ort.quantization import matmul_nbits_quantizer
+        from onnx_neural_compressor.quantization import matmul_nbits_quantizer
 
         algo_config = matmul_nbits_quantizer.RTNWeightOnlyQuantConfig()
 
@@ -238,7 +238,7 @@ class TestRTNQuantWithORTLikeAPI(TestRTNQuant):
             self.assertEqual(self._count_woq_matmul(quant.model, bits=n_bits, group_size=32), 30)
 
     def test_rtn_config_nbits_with_exclude_node(self):
-        from neural_compressor_ort.quantization import matmul_nbits_quantizer
+        from onnx_neural_compressor.quantization import matmul_nbits_quantizer
 
         algo_config = matmul_nbits_quantizer.RTNWeightOnlyQuantConfig()
 

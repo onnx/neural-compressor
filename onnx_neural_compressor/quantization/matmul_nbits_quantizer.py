@@ -21,15 +21,15 @@ from onnxruntime.quantization.matmul_4bits_quantizer import RTNWeightOnlyQuantCo
 from onnxruntime.quantization.matmul_4bits_quantizer import WeightOnlyQuantConfig
 from packaging import version
 
-from neural_compressor_ort.quantization.algorithm_entry import (
+from onnx_neural_compressor.quantization.algorithm_entry import (
     awq_quantize_entry,
     gptq_quantize_entry,
     rtn_quantize_entry,
 )
-from neural_compressor_ort.quantization.calibrate import CalibrationDataReader
-from neural_compressor_ort.utils import logger
-from neural_compressor_ort.utils.base_config import config_registry
-from neural_compressor_ort.utils.onnx_model import ONNXModel
+from onnx_neural_compressor.quantization.calibrate import CalibrationDataReader
+from onnx_neural_compressor.utils import logger
+from onnx_neural_compressor.utils.base_config import config_registry
+from onnx_neural_compressor.utils.onnx_model import ONNXModel
 
 
 class RTNWeightOnlyQuantConfig(ORTRTNWeightOnlyQuantConfig):
@@ -167,7 +167,7 @@ class MatMulNBitsQuantizer:
         logger.info(f"complete quantization of model with {self.algorithm} algorithm.")
 
     def process(self):
-        from neural_compressor_ort.version import __version__
+        from onnx_neural_compressor.version import __version__
 
         assert version.parse(__version__) >= version.parse(
             "2.6"

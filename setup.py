@@ -28,7 +28,7 @@ def get_build_version():
 
 
 try:
-    filepath = "./neural_compressor_ort/version.py"
+    filepath = "./onnx_neural_compressor/version.py"
     with open(filepath) as version_file:
         (__version__,) = re.findall('__version__ = "(.*)"', version_file.read())
 except Exception as error:

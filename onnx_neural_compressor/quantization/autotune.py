@@ -19,11 +19,11 @@ from typing import Any, Callable, List, Optional, Tuple, Union
 
 import onnx
 
-from neural_compressor_ort.quantization.calibrate import CalibrationDataReader
-from neural_compressor_ort.quantization.quantize import _quantize
-from neural_compressor_ort.utils import logger
-from neural_compressor_ort.utils.base_config import BaseConfig, get_all_config_set_from_config_registry
-from neural_compressor_ort.utils.base_tuning import EvaluationFuncWrapper, TuningConfig, init_tuning
+from onnx_neural_compressor.quantization.calibrate import CalibrationDataReader
+from onnx_neural_compressor.quantization.quantize import _quantize
+from onnx_neural_compressor.utils import logger
+from onnx_neural_compressor.utils.base_config import BaseConfig, get_all_config_set_from_config_registry
+from onnx_neural_compressor.utils.base_tuning import EvaluationFuncWrapper, TuningConfig, init_tuning
 
 __all__ = [
     "autotune",

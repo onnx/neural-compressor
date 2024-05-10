@@ -47,7 +47,7 @@ Following example code demonstrates Weight-Only Quantization on LLMs, it support
 
 Run the example:
 ```python
-from neural_compressor_ort.quantization import matmul_nbits_quantizer
+from onnx_neural_compressor.quantization import matmul_nbits_quantizer
 
 algo_config = matmul_nbits_quantizer.RTNWeightOnlyQuantConfig()
 quant = matmul_nbits_quantizer.MatMulNBitsQuantizer(
@@ -64,8 +64,8 @@ best_model = quant.model
 ### Static Quantization
 
 ```python
-from neural_compressor_ort.quantization import quantize, StaticQuantConfig
-from neural_compressor_ort.quantization.calibrate import CalibrationDataReader
+from onnx_neural_compressor.quantization import quantize, StaticQuantConfig
+from onnx_neural_compressor.quantization.calibrate import CalibrationDataReader
 
 
 class DataReader(CalibrationDataReader):

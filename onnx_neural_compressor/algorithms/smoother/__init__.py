@@ -12,6 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from neural_compressor_ort.algorithms.layer_wise.core import layer_wise_quant
+from onnx_neural_compressor.algorithms.smoother.core import Smoother
 
-__all__ = ["layer_wise_quant"]
+__all__ = ["Smoother"]

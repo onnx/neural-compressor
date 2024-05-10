@@ -58,7 +58,7 @@ class Logger(object):
     def _log(self):
         """Setup the logger format and handler."""
         LOGLEVEL = os.environ.get("LOGLEVEL", "INFO").upper()
-        self._logger = logging.getLogger("neural_compressor_ort")
+        self._logger = logging.getLogger("onnx_neural_compressor")
         self._logger.handlers.clear()
         self._logger.setLevel(LOGLEVEL)
         formatter = logging.Formatter(

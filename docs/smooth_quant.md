@@ -302,7 +302,7 @@ In our experiments, an $\alpha$ range of [0.0, 1.0] with a step_size of 0.1 is f
 *fully automated*: users only need to pass a model and dataloader.
 
 ```python
-from neural_compressor_ort.algorithms import Smoother
+from onnx_neural_compressor.algorithms import Smoother
 
 smoother = Smoother(
     model,
@@ -322,7 +322,7 @@ There are two ways to apply smooth quantization: 1) using a fixed `alpha` for th
 To set a fixed alpha for the entire model, users can follow this example:
 
 ```python
-from neural_compressor_ort.quantization import StaticQuantConfig
+from onnx_neural_compressor.quantization import StaticQuantConfig
 
 config = StaticQuantConfig(
     data_reader, extra_options={"SmoothQuant": True, "SmoothQuantAlpha": 0.5, "SmoothQuantFolding": True}
@@ -344,8 +344,8 @@ The tuning process looks for the optimal `alpha` value from a list of `alpha` va
 Here is an example:
 
 ```python
-from neural_compressor_ort.utils.base_tuning import TuningConfig
-from neural_compressor_ort.quantization import SmoothQuantConfig, autotune
+from onnx_neural_compressor.utils.base_tuning import TuningConfig
+from onnx_neural_compressor.quantization import SmoothQuantConfig, autotune
 
 config = TuningConfig(config_set=[SmoothQuantConfig(alpha=np.arange(0.1, 0.5, 0.05).tolist())])
 best_model = autotune(
@@ -360,7 +360,7 @@ In this case, the tuning process searches the optimal `alpha` of each operator b
 Here is an example:
 
 ```python
-from neural_compressor_ort.quantization import StaticQuantConfig, quantize
+from onnx_neural_compressor.quantization import StaticQuantConfig, quantize
 
 config = StaticQuantConfig(
     data_reader,

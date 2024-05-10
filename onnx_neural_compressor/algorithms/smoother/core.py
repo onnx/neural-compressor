@@ -23,11 +23,11 @@ import onnx
 from onnx import helper, numpy_helper
 from onnx import onnx_pb as onnx_proto
 
-from neural_compressor_ort.algorithms.smoother.calibrator import Calibrator
-from neural_compressor_ort.quantization.calibrate import CalibrationDataReader
-from neural_compressor_ort.utils import logger
-from neural_compressor_ort.utils.onnx_model import ONNXModel
-from neural_compressor_ort.utils.utility import (
+from onnx_neural_compressor.algorithms.smoother.calibrator import Calibrator
+from onnx_neural_compressor.quantization.calibrate import CalibrationDataReader
+from onnx_neural_compressor.utils import logger
+from onnx_neural_compressor.utils.onnx_model import ONNXModel
+from onnx_neural_compressor.utils.utility import (
     get_qrange_for_qType,
     is_B_transposed,
     quantize_data,

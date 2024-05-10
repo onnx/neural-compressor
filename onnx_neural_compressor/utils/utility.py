@@ -26,7 +26,7 @@ import onnxruntime.tools.symbolic_shape_infer as symbolic_shape_infer
 import psutil
 from packaging.version import Version
 
-from neural_compressor_ort.utils import logger
+from onnx_neural_compressor.utils import logger
 
 __all__ = [
     "set_workspace",
@@ -194,27 +194,27 @@ def dump_elapsed_time(customized_msg=""):
 
 def set_random_seed(seed: int):
     """Set the random seed in config."""
-    from neural_compressor_ort.utils.base_config import options
+    from onnx_neural_compressor.utils.base_config import options
 
     options.random_seed = seed
 
 
 def set_workspace(workspace: str):
     """Set the workspace in config."""
-    from neural_compressor_ort.utils.base_config import options
+    from onnx_neural_compressor.utils.base_config import options
 
     options.workspace = workspace
 
 
 def set_resume_from(resume_from: str):
     """Set the resume_from in config."""
-    from neural_compressor_ort.utils.base_config import options
+    from onnx_neural_compressor.utils.base_config import options
 
     options.resume_from = resume_from
 
 
 def log_quant_execution(func):
-    from neural_compressor_ort.utils import TuningLogger
+    from onnx_neural_compressor.utils import TuningLogger
 
     default_tuning_logger = TuningLogger()
 
@@ -446,7 +446,7 @@ def quantize_data(data, quantize_range, qType, scheme):
 
 def check_model_with_infer_shapes(model):
     """Check if the model has been shape inferred."""
-    from neural_compressor_ort.utils.onnx_model import ONNXModel
+    from onnx_neural_compressor.utils.onnx_model import ONNXModel
 
     if isinstance(model, (Path, str)):
         model = onnx.load(model, load_external_data=False)

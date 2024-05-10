@@ -3,7 +3,7 @@
 import unittest
 from typing import List
 
-from neural_compressor_ort.utils.tuning_param import TuningParam
+from onnx_neural_compressor.utils.tuning_param import TuningParam
 
 
 class TestTuningParam(unittest.TestCase):

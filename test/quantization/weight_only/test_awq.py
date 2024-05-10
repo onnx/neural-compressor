@@ -7,8 +7,8 @@ import torch
 from optimum.exporters.onnx import main_export
 from transformers import AutoTokenizer
 
-from neural_compressor_ort.quantization.calibrate import CalibrationDataReader
-from neural_compressor_ort.utils import logger
+from onnx_neural_compressor.quantization.calibrate import CalibrationDataReader
+from onnx_neural_compressor.utils import logger
 
 
 def find_onnx_file(folder_path):
@@ -89,7 +89,7 @@ class TestAWQQuant(unittest.TestCase):
 
     def _apply_awq(self, quant_config):
         logger.info(f"Test AWQ with config {quant_config}")
-        from neural_compressor_ort.quantization.quantize import _quantize
+        from onnx_neural_compressor.quantization.quantize import _quantize
 
         fp32_model = copy.deepcopy(self.gptj)
         qmodel = _quantize(fp32_model, quant_config, calibration_data_reader=self.calibration_data_reader)
@@ -99,7 +99,7 @@ class TestAWQQuant(unittest.TestCase):
 
 class TestAWQQuantWithInternalAPI(TestAWQQuant):
     def test_awq_params_combination(self):
-        from neural_compressor_ort.quantization import AWQConfig
+        from onnx_neural_compressor.quantization import AWQConfig
 
         # some tests were skipped to accelerate the CI
         # TODO: check params combination.
@@ -125,7 +125,7 @@ class TestAWQQuantWithInternalAPI(TestAWQQuant):
             self.assertEqual(self._count_woq_matmul(qmodel, bits=value[1], group_size=value[2]), 30)
 
     def test_awq_config(self):
-        from neural_compressor_ort.quantization import AWQConfig
+        from onnx_neural_compressor.quantization import AWQConfig
 
         awq_config1 = AWQConfig(weight_bits=4)
         quant_config_dict = {
@@ -135,7 +135,7 @@ class TestAWQQuantWithInternalAPI(TestAWQQuant):
         self.assertEqual(awq_config1.to_dict(), awq_config2.to_dict())
 
     def test_quantize_awq_from_dict_default(self):
-        from neural_compressor_ort.quantization import get_default_awq_config
+        from onnx_neural_compressor.quantization import get_default_awq_config
 
         qmodel = self._apply_awq(quant_config=get_default_awq_config())
         self.assertIsNotNone(qmodel)
@@ -154,14 +154,14 @@ class TestAWQQuantWithInternalAPI(TestAWQQuant):
         self.assertTrue(self._check_model_is_quantized(qmodel))
 
     def test_quantize_awq_from_class_beginner(self):
-        from neural_compressor_ort.quantization import AWQConfig
+        from onnx_neural_compressor.quantization import AWQConfig
 
         quant_config = AWQConfig(weight_bits=4, weight_group_size=32)
         qmodel = self._apply_awq(quant_config)
         self.assertIsNotNone(qmodel)
 
     def test_quantize_awq_fallback_from_class_beginner(self):
-        from neural_compressor_ort.quantization import AWQConfig
+        from onnx_neural_compressor.quantization import AWQConfig
 
         fp32_config = AWQConfig(weight_dtype="fp32")
         quant_config = AWQConfig(
@@ -218,7 +218,7 @@ class TestAWQQuantWithInternalAPI(TestAWQQuant):
 
 class TestAWQQuantWithORTLikeAPI(TestAWQQuant):
     def test_awq_config_4bits(self):
-        from neural_compressor_ort.quantization import matmul_4bits_quantizer
+        from onnx_neural_compressor.quantization import matmul_4bits_quantizer
 
         algo_config = matmul_4bits_quantizer.AWQWeightOnlyQuantConfig(
             calibration_data_reader=self.calibration_data_reader
@@ -235,7 +235,7 @@ class TestAWQQuantWithORTLikeAPI(TestAWQQuant):
         self.assertTrue(self._check_model_is_quantized(quant.model))
 
     def test_awq_config_4bits_with_exclude_node(self):
-        from neural_compressor_ort.quantization import matmul_4bits_quantizer
+        from onnx_neural_compressor.quantization import matmul_4bits_quantizer
 
         algo_config = matmul_4bits_quantizer.AWQWeightOnlyQuantConfig(
             calibration_data_reader=self.calibration_data_reader
@@ -254,7 +254,7 @@ class TestAWQQuantWithORTLikeAPI(TestAWQQuant):
         self.assertFalse(self._check_node_is_quantized(quant.model, "/h.4/mlp/fc_out/MatMul"))
 
     def test_awq_config_nbits(self):
-        from neural_compressor_ort.quantization import matmul_nbits_quantizer
+        from onnx_neural_compressor.quantization import matmul_nbits_quantizer
 
         algo_config = matmul_nbits_quantizer.AWQWeightOnlyQuantConfig(
             calibration_data_reader=self.calibration_data_reader
@@ -273,7 +273,7 @@ class TestAWQQuantWithORTLikeAPI(TestAWQQuant):
             self.assertEqual(self._count_woq_matmul(quant.model, bits=n_bits, group_size=32), 30)
 
     def test_awq_config_nbits_with_exclude_node(self):
-        from neural_compressor_ort.quantization import matmul_nbits_quantizer
+        from onnx_neural_compressor.quantization import matmul_nbits_quantizer
 
         algo_config = matmul_nbits_quantizer.AWQWeightOnlyQuantConfig(
             calibration_data_reader=self.calibration_data_reader

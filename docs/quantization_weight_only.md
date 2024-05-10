@@ -94,7 +94,7 @@ Notes:
 
 ### **User Code Example**
 ```python
-from neural_compressor_ort.quantization import matmul_4bits_quantizer
+from onnx_neural_compressor.quantization import matmul_4bits_quantizer
 
 algo_config = matmul_4bits_quantizer.GPTQWeightOnlyQuantConfig(calibration_data_reader=calibration_data_reader)
 quant = matmul_4bits_quantizer.MatMul4BitsQuantizer(
@@ -124,8 +124,8 @@ To find the best algorithm, users can leverage the `autotune` feature to explore
 ### **User code example**
 
 ```python
-from neural_compressor_ort.quantization import get_woq_tuning_config, autotune
-from neural_compressor_ort.utils.base_tuning import TuningConfig
+from onnx_neural_compressor.quantization import get_woq_tuning_config, autotune
+from onnx_neural_compressor.utils.base_tuning import TuningConfig
 
 tune_config = TuningConfig(config_set=get_woq_tuning_config())
 best_model = autotune(

@@ -17,7 +17,7 @@ from typing import List, Union
 from onnx.onnx_pb import ModelProto
 from onnxruntime.quantization.matmul_4bits_quantizer import WeightOnlyQuantConfig
 
-from neural_compressor_ort.quantization.matmul_nbits_quantizer import (
+from onnx_neural_compressor.quantization.matmul_nbits_quantizer import (
     AWQWeightOnlyQuantConfig,
     GPTQWeightOnlyQuantConfig,
     MatMulNBitsQuantizer,

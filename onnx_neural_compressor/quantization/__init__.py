@@ -12,14 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from neural_compressor_ort.quantization.algorithm_entry import (
+from onnx_neural_compressor.quantization.algorithm_entry import (
     smooth_quant_entry,
     rtn_quantize_entry,
     gptq_quantize_entry,
     awq_quantize_entry,
 )
-from neural_compressor_ort.quantization.calibrate import CalibrationDataReader
-from neural_compressor_ort.quantization.config import (
+from onnx_neural_compressor.quantization.calibrate import CalibrationDataReader
+from onnx_neural_compressor.quantization.config import (
     RTNConfig,
     get_default_rtn_config,
     GPTQConfig,
@@ -32,17 +32,17 @@ from neural_compressor_ort.quantization.config import (
     DynamicQuantConfig,
     get_woq_tuning_config,
 )
-from neural_compressor_ort.quantization.autotune import autotune, get_all_config_set
+from onnx_neural_compressor.quantization.autotune import autotune, get_all_config_set
 
-from neural_compressor_ort.quantization.matmul_4bits_quantizer import MatMul4BitsQuantizer
-from neural_compressor_ort.quantization.matmul_nbits_quantizer import (
+from onnx_neural_compressor.quantization.matmul_4bits_quantizer import MatMul4BitsQuantizer
+from onnx_neural_compressor.quantization.matmul_nbits_quantizer import (
     RTNWeightOnlyQuantConfig,
     GPTQWeightOnlyQuantConfig,
     AWQWeightOnlyQuantConfig,
     MatMulNBitsQuantizer,
 )
 
-from neural_compressor_ort.quantization.quantize import quantize
+from onnx_neural_compressor.quantization.quantize import quantize
 
 from onnxruntime.quantization.quant_utils import QuantFormat, QuantType
 

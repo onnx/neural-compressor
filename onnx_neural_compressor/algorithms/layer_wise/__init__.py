@@ -12,11 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from onnx_neural_compressor.algorithms.layer_wise.core import layer_wise_quant
 
-from neural_compressor_ort.algorithms.smoother import Smoother
-from neural_compressor_ort.algorithms.weight_only.rtn import apply_rtn_on_model
-from neural_compressor_ort.algorithms.weight_only.gptq import apply_gptq_on_model
-from neural_compressor_ort.algorithms.weight_only.awq import apply_awq_on_model
-from neural_compressor_ort.algorithms.layer_wise import layer_wise_quant
-
-__all__ = ["Smoother", "apply_rtn_on_model", "apply_gptq_on_model", "apply_awq_on_model", "layer_wise_quant"]
+__all__ = ["layer_wise_quant"]

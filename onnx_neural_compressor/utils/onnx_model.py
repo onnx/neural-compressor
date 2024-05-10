@@ -20,7 +20,7 @@ from pathlib import Path
 import onnx
 from onnxruntime.quantization.onnx_model import ONNXModel as ORTONNXModel
 
-from neural_compressor_ort.utils import logger
+from onnx_neural_compressor.utils import logger
 
 __all__ = ["ONNXModel"]
 
@@ -71,7 +71,7 @@ class ONNXModel(ORTONNXModel):
 
     def check_is_large_model(self):
         """Check model > 2GB."""
-        from neural_compressor_ort.utils import MAXIMUM_PROTOBUF
+        from onnx_neural_compressor.utils import MAXIMUM_PROTOBUF
 
         init_size = 0
         for init in self.model.graph.initializer:
@@ -419,7 +419,7 @@ class ONNXModel(ORTONNXModel):
 
         from onnx import NodeProto
 
-        from neural_compressor_ort.utils.utility import find_by_name
+        from onnx_neural_compressor.utils.utility import find_by_name
 
         # process start node list
         start_node = deque()
@@ -645,8 +645,8 @@ class ONNXModel(ORTONNXModel):
 
     def export(self, save_path, conf):
         """Export Qlinear to QDQ model."""
-        from neural_compressor_ort.config import ONNXQlinear2QDQConfig
-        from neural_compressor_ort.experimental.export import onnx_qlinear_to_qdq
+        from onnx_neural_compressor.config import ONNXQlinear2QDQConfig
+        from onnx_neural_compressor.experimental.export import onnx_qlinear_to_qdq
 
         if isinstance(conf, ONNXQlinear2QDQConfig):
             if len(self._input_name_to_nodes) == 0:

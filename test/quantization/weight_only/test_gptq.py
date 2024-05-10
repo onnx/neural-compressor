@@ -7,8 +7,8 @@ import torch
 from optimum.exporters.onnx import main_export
 from transformers import AutoTokenizer
 
-from neural_compressor_ort.quantization.calibrate import CalibrationDataReader
-from neural_compressor_ort.utils import logger
+from onnx_neural_compressor.quantization.calibrate import CalibrationDataReader
+from onnx_neural_compressor.utils import logger
 
 
 def find_onnx_file(folder_path):
@@ -89,7 +89,7 @@ class TestGPTQQuant(unittest.TestCase):
 
     def _apply_gptq(self, quant_config):
         logger.info(f"Test GPTQ with config {quant_config}")
-        from neural_compressor_ort.quantization.quantize import _quantize
+        from onnx_neural_compressor.quantization.quantize import _quantize
 
         fp32_model = copy.deepcopy(self.gptj)
         qmodel = _quantize(fp32_model, quant_config, calibration_data_reader=self.calibration_data_reader)
@@ -99,7 +99,7 @@ class TestGPTQQuant(unittest.TestCase):
 
 class TestGPTQQuantWithInternalAPI(TestGPTQQuant):
     def test_gptq_params_combination(self):
-        from neural_compressor_ort.quantization import GPTQConfig
+        from onnx_neural_compressor.quantization import GPTQConfig
 
         # some tests were skipped to accelerate the CI
         # TODO: check params combination.
@@ -128,7 +128,7 @@ class TestGPTQQuantWithInternalAPI(TestGPTQQuant):
             self.assertEqual(self._count_woq_matmul(qmodel, bits=value[1], group_size=value[2]), 30)
 
     def test_gptq_config(self):
-        from neural_compressor_ort.quantization import GPTQConfig
+        from onnx_neural_compressor.quantization import GPTQConfig
 
         gptq_config1 = GPTQConfig(weight_bits=4)
         quant_config_dict = {
@@ -138,7 +138,7 @@ class TestGPTQQuantWithInternalAPI(TestGPTQQuant):
         self.assertEqual(gptq_config1.to_dict(), gptq_config2.to_dict())
 
     def test_quantize_gptq_from_dict_default(self):
-        from neural_compressor_ort.quantization import get_default_gptq_config
+        from onnx_neural_compressor.quantization import get_default_gptq_config
 
         qmodel = self._apply_gptq(quant_config=get_default_gptq_config())
         self.assertIsNotNone(qmodel)
@@ -157,14 +157,14 @@ class TestGPTQQuantWithInternalAPI(TestGPTQQuant):
         self.assertTrue(self._check_model_is_quantized(qmodel))
 
     def test_quantize_gptq_from_class_beginner(self):
-        from neural_compressor_ort.quantization import GPTQConfig
+        from onnx_neural_compressor.quantization import GPTQConfig
 
         quant_config = GPTQConfig(weight_bits=4, weight_group_size=32)
         qmodel = self._apply_gptq(quant_config)
         self.assertIsNotNone(qmodel)
 
     def test_quantize_gptq_fallback_from_class_beginner(self):
-        from neural_compressor_ort.quantization import GPTQConfig
+        from onnx_neural_compressor.quantization import GPTQConfig
 
         fp32_config = GPTQConfig(weight_dtype="fp32")
         quant_config = GPTQConfig(
@@ -221,7 +221,7 @@ class TestGPTQQuantWithInternalAPI(TestGPTQQuant):
 
 class TestGPTQQuantWithORTLikeAPI(TestGPTQQuant):
     def test_gptq_config_4bits(self):
-        from neural_compressor_ort.quantization import matmul_4bits_quantizer
+        from onnx_neural_compressor.quantization import matmul_4bits_quantizer
 
         algo_config = matmul_4bits_quantizer.GPTQWeightOnlyQuantConfig(
             calibration_data_reader=self.calibration_data_reader
@@ -238,7 +238,7 @@ class TestGPTQQuantWithORTLikeAPI(TestGPTQQuant):
         self.assertTrue(self._check_model_is_quantized(quant.model))
 
     def test_gptq_config_4bits_with_exclude_node(self):
-        from neural_compressor_ort.quantization import matmul_4bits_quantizer
+        from onnx_neural_compressor.quantization import matmul_4bits_quantizer
 
         algo_config = matmul_4bits_quantizer.GPTQWeightOnlyQuantConfig(
             calibration_data_reader=self.calibration_data_reader
@@ -257,7 +257,7 @@ class TestGPTQQuantWithORTLikeAPI(TestGPTQQuant):
         self.assertFalse(self._check_node_is_quantized(quant.model, "/h.4/mlp/fc_out/MatMul"))
 
     def test_gptq_config_nbits(self):
-        from neural_compressor_ort.quantization import matmul_nbits_quantizer
+        from onnx_neural_compressor.quantization import matmul_nbits_quantizer
 
         algo_config = matmul_nbits_quantizer.GPTQWeightOnlyQuantConfig(
             calibration_data_reader=self.calibration_data_reader
@@ -276,7 +276,7 @@ class TestGPTQQuantWithORTLikeAPI(TestGPTQQuant):
             self.assertEqual(self._count_woq_matmul(quant.model, bits=n_bits, group_size=32), 30)
 
     def test_gptq_config_nbits_with_exclude_node(self):
-        from neural_compressor_ort.quantization import matmul_nbits_quantizer
+        from onnx_neural_compressor.quantization import matmul_nbits_quantizer
 
         algo_config = matmul_nbits_quantizer.GPTQWeightOnlyQuantConfig(
             calibration_data_reader=self.calibration_data_reader

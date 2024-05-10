@@ -2,7 +2,7 @@
 
 import unittest
 
-from neural_compressor_ort.utils import (
+from onnx_neural_compressor.utils import (
     CpuInfo,
     LazyImport,
     options,

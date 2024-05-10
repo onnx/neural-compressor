@@ -11,8 +11,8 @@ import torch
 from optimum.exporters.onnx import main_export
 from transformers import AutoTokenizer
 
-from neural_compressor_ort.quantization.calibrate import CalibrationDataReader
-from neural_compressor_ort.utils import logger
+from onnx_neural_compressor.quantization.calibrate import CalibrationDataReader
+from onnx_neural_compressor.utils import logger
 
 
 def find_onnx_file(folder_path):
@@ -103,7 +103,7 @@ class TestLayerWiseQuant(unittest.TestCase):
         return weight_init
 
     def _apply_quantize(self, quant_config, data_reader=None):
-        from neural_compressor_ort.quantization.quantize import _quantize
+        from onnx_neural_compressor.quantization.quantize import _quantize
 
         fp32_model = copy.deepcopy(self.llama)
         if data_reader is None:
@@ -114,7 +114,7 @@ class TestLayerWiseQuant(unittest.TestCase):
         return qmodel
 
     def test_rtn_layer_wise(self):
-        from neural_compressor_ort.quantization import RTNConfig
+        from onnx_neural_compressor.quantization import RTNConfig
 
         rtn_config = RTNConfig(layer_wise_quant=True)
         qmodel_lwq = self._apply_quantize(rtn_config)
@@ -131,7 +131,7 @@ class TestLayerWiseQuant(unittest.TestCase):
         self.assertTrue((lwq_quantized_weight == quantized_weight).all())
 
     def test_rtn_layer_wise_with_ort_like_api(self):
-        from neural_compressor_ort.quantization import matmul_4bits_quantizer
+        from onnx_neural_compressor.quantization import matmul_4bits_quantizer
 
         # get qmodel without layer_wise_quant
         algo_config = matmul_4bits_quantizer.RTNWeightOnlyQuantConfig(layer_wise_quant=False)
@@ -163,7 +163,7 @@ class TestLayerWiseQuant(unittest.TestCase):
         self.assertTrue((lwq_quantized_weight == quantized_weight).all())
 
     def test_gptq_layer_wise(self):
-        from neural_compressor_ort.quantization import GPTQConfig
+        from onnx_neural_compressor.quantization import GPTQConfig
 
         self.calibration_data_reader.rewind()
         gptq_config = GPTQConfig(layer_wise_quant=True)
@@ -182,7 +182,7 @@ class TestLayerWiseQuant(unittest.TestCase):
         self.assertTrue((lwq_quantized_weight == quantized_weight).all())
 
     def test_gptq_layer_wise_with_ort_like_api(self):
-        from neural_compressor_ort.quantization import matmul_4bits_quantizer
+        from onnx_neural_compressor.quantization import matmul_4bits_quantizer
 
         # get qmodel without layer_wise_quant
         algo_config = matmul_4bits_quantizer.GPTQWeightOnlyQuantConfig(

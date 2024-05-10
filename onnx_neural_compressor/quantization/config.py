@@ -28,8 +28,8 @@ from onnxruntime.quantization.quantize import DynamicQuantConfig as ORTDynamicQu
 from onnxruntime.quantization.quantize import QuantConfig
 from onnxruntime.quantization.quantize import StaticQuantConfig as ORTStaticQuantConfig
 
-from neural_compressor_ort.quantization.calibrate import CalibrationDataReader
-from neural_compressor_ort.utils import (
+from onnx_neural_compressor.quantization.calibrate import CalibrationDataReader
+from onnx_neural_compressor.utils import (
     AWQ,
     DEFAULT_WHITE_LIST,
     GPTQ,
@@ -42,7 +42,7 @@ from neural_compressor_ort.utils import (
     SMOOTH_QUANT,
     logger,
 )
-from neural_compressor_ort.utils.base_config import BaseConfig, register_config, register_supported_configs
+from onnx_neural_compressor.utils.base_config import BaseConfig, register_config, register_supported_configs
 
 __all__ = [
     "RTNConfig",

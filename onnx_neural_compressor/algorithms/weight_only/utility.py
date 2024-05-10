@@ -25,7 +25,7 @@ import onnx
 import onnxruntime as ort
 from packaging.version import Version
 
-from neural_compressor_ort.utils import ONNXRT1161_VERSION, dtype_mapping
+from onnx_neural_compressor.utils import ONNXRT1161_VERSION, dtype_mapping
 
 __all__ = [
     "make_matmul_weight_only_node",

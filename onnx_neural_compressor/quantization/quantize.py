@@ -18,9 +18,9 @@ from typing import Union
 import onnx
 from onnxruntime.quantization.quantize import QuantConfig
 
-from neural_compressor_ort.quantization.calibrate import CalibrationDataReader
-from neural_compressor_ort.utils import algos_mapping, log_quant_execution, logger
-from neural_compressor_ort.utils.base_config import BaseConfig, ComposableConfig, config_registry
+from onnx_neural_compressor.quantization.calibrate import CalibrationDataReader
+from onnx_neural_compressor.utils import algos_mapping, log_quant_execution, logger
+from onnx_neural_compressor.utils.base_config import BaseConfig, ComposableConfig, config_registry
 
 
 # ORT-like user-facing API
@@ -29,12 +29,12 @@ def quantize(
     model_output: Union[str, Path],
     quant_config: QuantConfig,
 ):
-    from neural_compressor_ort.quantization.config import DynamicQuantConfig, StaticQuantConfig
+    from onnx_neural_compressor.quantization.config import DynamicQuantConfig, StaticQuantConfig
 
     if isinstance(quant_config, StaticQuantConfig):
         if quant_config.extra_options.get("SmoothQuant", False):
-            from neural_compressor_ort.quantization.algorithm_entry import smooth_quant_entry
-            from neural_compressor_ort.quantization.config import generate_inc_sq_config
+            from onnx_neural_compressor.quantization.algorithm_entry import smooth_quant_entry
+            from onnx_neural_compressor.quantization.config import generate_inc_sq_config
 
             inc_sq_config = generate_inc_sq_config(quant_config)
             smooth_quant_entry(
