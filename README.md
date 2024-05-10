@@ -1,6 +1,6 @@
 <div align="center">
 
-ONNX Neural Compressor
+Neural Compressor
 ===========================
 <h3> An open-source Python library supporting popular model compression techniques for ONNX</h3>
 
@@ -12,7 +12,7 @@ ONNX Neural Compressor
 ---
 <div align="left">
 
-ONNX Neural Compressor aims to provide popular model compression techniques inherited from [Intel Neural Compressor](https://github.com/intel/neural-compressor) yet focused on ONNX model quantization such as SmoothQuant, weight-only quantization through [ONNX Runtime](https://onnxruntime.ai/). In particular, the tool provides the key features, typical examples, and open collaborations as below:
+Neural Compressor aims to provide popular model compression techniques inherited from [Intel Neural Compressor](https://github.com/intel/neural-compressor) yet focused on ONNX model quantization such as SmoothQuant, weight-only quantization through [ONNX Runtime](https://onnxruntime.ai/). In particular, the tool provides the key features, typical examples, and open collaborations as below:
 
 * Support a wide range of Intel hardware such as [Intel Xeon Scalable Processors](https://www.intel.com/content/www/us/en/products/details/processors/xeon/scalable.html), [Intel Xeon CPU Max Series](https://www.intel.com/content/www/us/en/products/details/processors/xeon/max-series.html); support AMD CPU, ARM CPU, and NVidia GPU with limited testing
 
