@@ -45,10 +45,6 @@ The following prerequisites and requirements must be satisfied for a successful 
 * Intel Xeon Scalable processor (formerly Skylake, Cascade Lake, Cooper Lake, Ice Lake, and Sapphire Rapids)
 * Intel Xeon CPU Max Series (formerly Sapphire Rapids HBM)
 
-#### Support multiple hardware vendors:
-
-* Intel CPU, AMD/ARM CPU, and NVidia GPU.
-
 ### Validated Software Environment
 
 * OS version: CentOS 8.4, Ubuntu 22.04, MacOS Ventura 13.5
