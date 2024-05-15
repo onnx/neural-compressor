@@ -43,7 +43,7 @@ After successfully installing these packages, try your first quantization progra
 > Notes: please install from source before the formal pypi release. 
 
 ### Weight-Only Quantization (LLMs)
-Following example code demonstrates Weight-Only Quantization on LLMs, it supports Intel CPU, Nvidia GPU, device will be selected for efficiency automatically when multiple devices are available. 
+Following example code demonstrates Weight-Only Quantization on LLMs, device will be selected for efficiency automatically when multiple devices are available. 
 
 Run the example:
 ```python
