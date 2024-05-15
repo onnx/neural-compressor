@@ -1,8 +1,8 @@
+import io
 import re
 import subprocess
-from io import open
 
-from setuptools import find_packages, setup
+import setuptools
 
 
 def is_commit_on_tag():
@@ -29,26 +29,25 @@ def get_build_version():
 
 try:
     filepath = "./onnx_neural_compressor/version.py"
-    with open(filepath) as version_file:
+    with io.open(filepath) as version_file:
         (__version__,) = re.findall('__version__ = "(.*)"', version_file.read())
 except Exception as error:
     assert False, "Error: Could not open '%s' due %s\n" % (filepath, error)
 
-
 if __name__ == "__main__":
 
-    setup(
-        name="onnx-neural-compressor",
+    setuptools.setup(
+        name="onnx_neural_compressor",
         author="Intel AIPT Team",
         version=get_build_version(),
         author_email="tai.huang@intel.com, mengni.wang@intel.com, yuwen.zhou@intel.com, suyue.chen@intel.com",
         description="Repository of Neural Compressor ORT",
-        long_description=open("README.md", "r", encoding="utf-8").read(),
+        long_description=io.open("README.md", "r", encoding="utf-8").read(),
         long_description_content_type="text/markdown",
         keywords="quantization",
         license="Apache 2.0",
         url="",
-        packages=find_packages(),
+        packages=setuptools.find_packages(),
         include_package_data=True,
         install_requires=["onnx", "onnxruntime", "onnxruntime-extensions", "psutil", "numpy",
                           "py-cpuinfo", "pydantic", "transformers"],

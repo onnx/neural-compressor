@@ -64,11 +64,12 @@ best_model = quant.model
 ### Static Quantization
 
 ```python
-from onnx_neural_compressor.quantization import quantize, StaticQuantConfig
-from onnx_neural_compressor.quantization.calibrate import CalibrationDataReader
+from onnx_neural_compressor import config
+from onnx_neural_compressor.quantization import quantize
+from onnx_neural_compressor.quantization import calibrate
 
 
-class DataReader(CalibrationDataReader):
+class DataReader(calibrate.CalibrationDataReader):
     def __init__(self):
         self.encoded_list = []
         # append data into self.encoded_list
@@ -83,8 +84,8 @@ class DataReader(CalibrationDataReader):
 
 
 data_reader = DataReader()
-config = StaticQuantConfig(calibration_data_reader=data_reader)
-quantize(model, output_model_path, config)
+qconfig = config.StaticQuantConfig(calibration_data_reader=data_reader)
+quantize(model, output_model_path, qconfig)
 ```
 
 ## Documentation
