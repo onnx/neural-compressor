@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
 # Copyright (c) 2023 MIT HAN Lab
@@ -19,21 +20,17 @@
 
 import struct
 import sys
+from importlib import util
 
 import numpy as np
 import onnx
 import onnxruntime as ort
-from packaging.version import Version
+from onnx_neural_compressor import constants
+from onnx_neural_compressor import utility
+from packaging import version
 
-from onnx_neural_compressor.utils import ONNXRT1161_VERSION, dtype_mapping
-
-__all__ = [
-    "make_matmul_weight_only_node",
-    "prepare_inputs",
-    "pad_tensor",
-    "quant_tensor",
-    "qdq_tensor",
-]
+if sys.version_info < (3, 11) and util.find_spec("onnxruntime_extensions"):  # pragma: no cover
+    import onnxruntime_extensions
 
 
 def _get_blob_size(group_size, has_zp):  # pragma: no cover
@@ -43,7 +40,7 @@ def _get_blob_size(group_size, has_zp):  # pragma: no cover
         group_size (int): how many elements share one scale/zp
         has_zp (bool): whether zero_point is None
     """
-    if Version(ort.__version__) > ONNXRT1161_VERSION:
+    if version.Version(ort.__version__) > constants.ONNXRT1161_VERSION:
         blob_size = group_size // 2
     elif has_zp:
         blob_size = group_size // 2 + 4 + 1
@@ -90,19 +87,18 @@ def make_matmul_weight_only_node(
     new_inits = []
     kwargs = {}
 
-    if Version(ort.__version__) > ONNXRT1161_VERSION:
+    if version.Version(ort.__version__) > constants.ONNXRT1161_VERSION:
         op_type = "MatMulNBits"
 
         # pack quantized weight
         q_weight_pairs = q_weight[:, ::2] | q_weight[:, 1::2] << 4
         packed[:, :] = q_weight_pairs[:, :blob_size]
-        packed = np.reshape(packed, (-1, k_blocks, blob_size))
 
         # build scale tensor
         scale = np.reshape(scale, (-1, k_blocks))
         scale_tensor = onnx.helper.make_tensor(
             name=node.input[1] + "_scale",
-            data_type=dtype_mapping[str(scale.dtype)],
+            data_type=utility.dtype_mapping[str(scale.dtype)],
             dims=scale.shape,
             vals=scale.tobytes(),
             raw=True,
@@ -195,7 +191,7 @@ def prepare_inputs(model, data_reader, providers):
     """Prepare inputs for weight only quantization.
 
     Args:
-        model (ModelProto or ONNXModel): onnx model.
+        model (ModelProto or onnx_model.ONNXModel): onnx model.
         data_reader (CalibrationDataReader): a calibration data reader.
         providers (list): providers to use.
 
@@ -203,13 +199,10 @@ def prepare_inputs(model, data_reader, providers):
         inputs: prepared inputs.
         so: session options
     """
-    from importlib.util import find_spec
 
     so = ort.SessionOptions()
-    if sys.version_info < (3, 11) and find_spec("onnxruntime_extensions"):  # pragma: no cover
-        from onnxruntime_extensions import get_library_path
-
-        so.register_custom_ops_library(get_library_path())
+    if sys.version_info < (3, 11) and util.find_spec("onnxruntime_extensions"):  # pragma: no cover
+        so.register_custom_ops_library(onnxruntime_extensions.get_library_path())
     if model.is_large_model:
         onnx.save_model(
             model.model,
@@ -291,7 +284,6 @@ def quant_tensor(
         scale = np.ones(rmax.shape)
         mask = (max_range > 0)
         scale[mask] = (max_range[mask] * 2.0).astype(np.float64) / (maxq - minq)
-
         zero_point = (
             np.zeros(scale.shape) if dtype == "int" else np.ones(rmax.shape, dtype="uint8") * (1 << (num_bits - 1))
         )
@@ -305,7 +297,6 @@ def quant_tensor(
             if dtype == "int"
             else np.maximum(0, np.minimum(maxq, ((np.zeros(scale.shape) - rmin) / scale).round())).astype("uint8")
         )
-
     q_weight = np.empty_like(data, dtype=scale.dtype)
     np.divide(data, scale, out=q_weight)
     np.add(q_weight, zero_point, out=q_weight)
@@ -313,7 +304,6 @@ def quant_tensor(
     np.clip(q_weight, minq, maxq, out=q_weight)
 
     return q_weight, scale, zero_point
-
 
 def qdq_tensor(
     data: np.array,

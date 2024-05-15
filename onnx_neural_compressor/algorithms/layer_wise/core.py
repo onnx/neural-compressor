@@ -17,46 +17,41 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import copy
 import os
-from copy import deepcopy
-from pathlib import Path
-from typing import Callable, List, Union
+import pathlib
 
 import onnx
 import onnxruntime as ort
-import transformers
+from onnx_neural_compressor import data_reader
+from onnx_neural_compressor import logger
+from onnx_neural_compressor import onnx_model
+from onnx_neural_compressor import utility
 
-from onnx_neural_compressor.quantization.calibrate import CalibrationDataReader
-from onnx_neural_compressor.utils import logger
-from onnx_neural_compressor.utils.onnx_model import ONNXModel
-from onnx_neural_compressor.utils.utility import check_model_with_infer_shapes
-
-__all__ = [
-    "layer_wise_quant",
-]
+from typing import Callable, List, Union  # isort: skip
 
 
 def layer_wise_quant(
-    model: Union[onnx.ModelProto, ONNXModel, Path, str],
+    model: Union[onnx.ModelProto, onnx_model.ONNXModel, pathlib.Path, str],
     quant_func: Callable,
     weight_config: dict,
-    data_reader: CalibrationDataReader = None,
+    data_reader: data_reader.CalibrationDataReader = None,
     *args,
     **kwargs
-) -> ONNXModel:
+) -> onnx_model.ONNXModel:
     """Quantize model layer by layer to save memory.
 
     Args:
-        model (Union[onnx.ModelProto, ONNXModel, Path, str]): onnx model.
+        model (Union[onnx.ModelProto, onnx_model.ONNXModel, pathlib.Path, str]): onnx model.
         quant_func (Callable): quantization algo function.
         weight_config (dict): quantization config.
-        data_reader (CalibrationDataReader, optional): data_reader for calibration. Defaults to None.
+        data_reader (data_reader.CalibrationDataReader, optional): data_reader for calibration. Defaults to None.
 
     Returns:
         _type_: _description_
     """
     # check whether model shape is inferred
-    if not check_model_with_infer_shapes(model):
+    if not utility.check_model_with_infer_shapes(model):
         logger.error(
             "Before applying layer-wise quantization, please make sure to "
             "run symbolic shape inference on your model like follows:\n"
@@ -67,10 +62,10 @@ def layer_wise_quant(
         )
         raise ValueError("Fail to run layer-wise quantization.")
 
-    if not isinstance(model, ONNXModel):
-        model = ONNXModel(model, ignore_warning=True, load_external_data=False)
+    if not isinstance(model, onnx_model.ONNXModel):
+        model = onnx_model.ONNXModel(model, ignore_warning=True, load_external_data=False)
 
-    origin_model = deepcopy(model)
+    origin_model = copy.deepcopy(model)
 
     providers = kwargs.get("providers", ["CPUExecutionProvider"])
 
@@ -210,14 +205,14 @@ def layer_wise_quant(
                 quantized_model_merged.merge_split_models(split_model_part_2_quantized)
 
     # reload external data to prevent external data file path errors
-    from onnx.external_data_helper import load_external_data_for_model
-
-    load_external_data_for_model(quantized_model_merged.model, os.path.dirname(quantized_model_merged.model_path))
+    onnx.external_data_helper.load_external_data_for_model(
+        quantized_model_merged.model, os.path.dirname(quantized_model_merged.model_path)
+    )
 
     return quantized_model_merged
 
 
-class DataReader(CalibrationDataReader):
+class DataReader(data_reader.CalibrationDataReader):
     """Data reader for layer-wise quantization."""
 
     def __init__(self, data_list):
@@ -231,15 +226,15 @@ class DataReader(CalibrationDataReader):
         self.iter_next = iter(self.data_list)
 
 
-def _filter_data_reader_for_current_split_model(model: onnx.ModelProto, data_reader: CalibrationDataReader):
+def _filter_data_reader_for_current_split_model(model: onnx.ModelProto, data_reader: data_reader.CalibrationDataReader):
     """Filter data reader to remove data that is not in model input.
 
     Args:
         model (onnx.ModelProto): onnx model.
-        data_reader (CalibrationDataReader): data reader.
+        data_reader (data_reader.CalibrationDataReader): data reader.
 
     Returns:
-        CalibrationDataReader: filtered data reader.
+        data_reader.CalibrationDataReader: filtered data reader.
     """
     filter_inputs = []
     input_names = [input.name for input in model.graph.input]
@@ -256,7 +251,7 @@ def _filter_data_reader_for_current_split_model(model: onnx.ModelProto, data_rea
 
 def _prepare_data_reader_for_next_split_model(
     model_path: str,
-    data_reader: CalibrationDataReader,
+    data_reader: data_reader.CalibrationDataReader,
     providers: List[str] = ["CPUExecutionProvider"],
 ):
     """Prepare data reader for next split model.
@@ -265,13 +260,13 @@ def _prepare_data_reader_for_next_split_model(
 
     Args:
         model (str): path to onnx model.
-        data_reader (CalibrationDataReader): data reader
+        data_reader (data_reader.CalibrationDataReader): data reader
         providers (List[str], optional): providers to use. Defaults to ["CPUExecutionProvider"].
 
     Returns:
-        CalibrationDataReader: data reader for next split model.
+        data_reader.CalibrationDataReader: data reader for next split model.
     """
-    data_reader = deepcopy(data_reader)
+    data_reader = copy.deepcopy(data_reader)
 
     data_reader_for_next_split_model = []
     session = ort.InferenceSession(model_path, providers=providers)
