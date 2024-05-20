@@ -130,8 +130,8 @@ def _gptq(
         perm = np.argsort(np.diag(H))[::-1]
         W = W[perm, :]
         H = H[perm, :][:, perm]
-    Losses = np.zeros(W.shape)
-    Q = np.zeros(W.shape)
+    Losses = np.zeros_like(W)
+    Q = np.zeros_like(W)
     damp = percdamp * np.mean(np.diag(H))
     diag = np.arange(shape[0])
     H[diag, diag] += damp  # add a average value of
@@ -142,9 +142,9 @@ def _gptq(
         count = i2 - i1
 
         W1 = copy.deepcopy(W[i1:i2, :])
-        Q1 = np.zeros(W1.shape)
-        Err1 = np.zeros(W1.shape)
-        Losses1 = np.zeros(W1.shape)
+        Q1 = np.zeros_like(W1)
+        Err1 = np.zeros_like(W1)
+        Losses1 = np.zeros_like(W1)
         Hinv1 = Hinv[i1:i2, i1:i2]
 
         for i in range(count):  # within a block, channel wise
@@ -155,7 +155,7 @@ def _gptq(
                 if (i1 + i) % group_size == 0:
                     scale, zp = find_params(W[(i1 + i) : (i1 + i + group_size), :])
 
-            q = (scale * (np.clip(np.round(np.expand_dims(w, axis=1) / scale) + zp, 0, maxq) - zp)).flatten()
+            q = (scale * (np.clip(np.round(w[:, np.newaxis] / scale) + zp, 0, maxq) - zp)).flatten()
             Q1[i, :] = q
             Losses1[i, :] = (w - q) ** 2 / d**2
 
@@ -345,6 +345,7 @@ def gptq_quantize(
                 k_blocks = (org_shape[0] + group_size - 1) // group_size
                 q_weight = woq_utility.pad_tensor(q_weight, group_size, k_blocks)
                 q_weight, scale, zp = woq_utility.quant_tensor(q_weight.T, num_bits, group_size, scheme, "uint")
+
                 q_matmul_node, new_inits = woq_utility.make_matmul_weight_only_node(
                     node=node,
                     weight_shape=org_shape,
