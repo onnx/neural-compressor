@@ -30,7 +30,7 @@ import onnxruntime as ort
 import transformers
 from torch.nn import functional
 from torch.utils import data
-from intel_extension_for_transformers.transformers.llm.evaluation import lm_eval
+from evaluation import evaluate, LMEvalParser
 from optimum import onnxruntime as optimum_ort
 from onnx_neural_compressor.quantization import matmul_nbits_quantizer
 from onnx_neural_compressor import config
@@ -109,6 +109,7 @@ parser.add_argument('--mode',
                     type=str,
                     help="benchmark mode of performance or accuracy")
 parser.add_argument("--intra_op_num_threads", type=int, default=24)
+parser.add_argument("--trust_remote_code", type=bool, default=False)
 args = parser.parse_args()
 
 # load model
@@ -140,24 +141,27 @@ def eval_func(model):
 
     replace_architectures(os.path.join(model_dir, "config.json"))
 
-    results = lm_eval.evaluate(
-        model="hf-causal",
+    eval_args = LMEvalParser(
+        model="hf",
         model_args="pretrained=" + model_dir + ",tokenizer=" + args.tokenizer,
         batch_size=args.batch_size,
-        tasks=args.tasks,
-        model_format="onnx",
+        tasks=','.join(args.tasks),
+        provider="CPUExecutionProvider",
+        trust_remote_code=args.trust_remote_code,
+        limit=10,
     )
+    results = evaluate(eval_args)
 
     eval_acc = 0
     for task_name in args.tasks:
         if task_name == "wikitext":
             print("Accuracy for %s is: %s" %
-                  (task_name, results["results"][task_name]["word_perplexity"]))
-            eval_acc += results["results"][task_name]["word_perplexity"]
+                  (task_name, results["results"][task_name]["word_perplexity,none"]))
+            eval_acc += results["results"][task_name]["word_perplexity,none"]
         else:
             print("Accuracy for %s is: %s" %
-                  (task_name, results["results"][task_name]["acc"]))
-            eval_acc += results["results"][task_name]["acc"]
+                  (task_name, results["results"][task_name]["acc,none"]))
+            eval_acc += results["results"][task_name]["acc,none"]
 
     if len(args.tasks) != 0:
         eval_acc /= len(args.tasks)

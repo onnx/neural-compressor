@@ -93,6 +93,7 @@ def make_matmul_weight_only_node(
         # pack quantized weight
         q_weight_pairs = q_weight[:, ::2] | q_weight[:, 1::2] << 4
         packed[:, :] = q_weight_pairs[:, :blob_size]
+        packed = np.reshape(packed, (-1, k_blocks, blob_size))
 
         # build scale tensor
         scale = np.reshape(scale, (-1, k_blocks))
