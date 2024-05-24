@@ -148,7 +148,6 @@ def eval_func(model):
         tasks=','.join(args.tasks),
         provider="CPUExecutionProvider",
         trust_remote_code=args.trust_remote_code,
-        limit=10,
     )
     results = evaluation.evaluate(eval_args)
 
@@ -306,6 +305,8 @@ class GPTQDataloader(data_reader.CalibrationDataReader):
                  seqlen=2048,
                  sub_folder="train",
                  calibration_sampling_size=8):
+        # large `calibration_sampling_size` may result in long GPTQ running time
+        # recommend to use smaller `calibration_sampling_size` value
         random.seed(0)
         self.encoded_list = []
 
