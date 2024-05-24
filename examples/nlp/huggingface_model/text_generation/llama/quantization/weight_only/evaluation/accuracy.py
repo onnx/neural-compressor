@@ -13,28 +13,20 @@
 # limitations under the License.
 
 
-import argparse
 import json
 import logging
 import os
 import re
 import sys
-from functools import partial
+import glob
 from pathlib import Path
-from typing import Union
-
 import numpy as np
 
-from lm_eval import utils
-# import .evaluator
-from .evaluator import(
-    simple_evaluate,
-    request_caching_arg_to_dict
-)
-from lm_eval.logging_utils import WandbLogger
-from lm_eval.tasks import TaskManager
-from lm_eval.utils import make_table, simple_parse_args_string
+import lm_eval.logging_utils
+import lm_eval.tasks
+import lm_eval.utils
 
+from . import evaluator
 
 DEFAULT_RESULTS_FILE = "results.json"
 
@@ -50,9 +42,9 @@ def _handle_non_serializable(o):
 
 def cli_evaluate(args) -> None:
     if args.wandb_args:
-        wandb_logger = WandbLogger(**simple_parse_args_string(args.wandb_args))
+        wandb_logger = lm_eval.logging_utils.WandbLogger(**lm_eval.utils.simple_parse_args_string(args.wandb_args))
 
-    eval_logger = utils.eval_logger
+    eval_logger = lm_eval.utils.eval_logger
     eval_logger.setLevel(getattr(logging, f"{args.verbosity}"))
     eval_logger.info(f"Verbosity set to {args.verbosity}")
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -66,7 +58,7 @@ def cli_evaluate(args) -> None:
 
     if args.include_path is not None:
         eval_logger.info(f"Including path: {args.include_path}")
-    task_manager = TaskManager(args.verbosity, include_path=args.include_path)
+    task_manager = lm_eval.tasks.TaskManager(args.verbosity, include_path=args.include_path)
 
     if args.limit:
         eval_logger.warning(
@@ -84,19 +76,17 @@ def cli_evaluate(args) -> None:
         sys.exit()
     else:
         if os.path.isdir(args.tasks):
-            import glob
-
             task_names = []
             yaml_path = os.path.join(args.tasks, "*.yaml")
             for yaml_file in glob.glob(yaml_path):
-                config = utils.load_yaml_config(yaml_file)
+                config = lm_eval.utils.load_yaml_config(yaml_file)
                 task_names.append(config)
         else:
             task_list = args.tasks.split(",")
             task_names = task_manager.match_tasks(task_list)
             for task in [task for task in task_list if task not in task_names]:
                 if os.path.isfile(task):
-                    config = utils.load_yaml_config(task)
+                    config = lm_eval.utils.load_yaml_config(task)
                     task_names.append(config)
             task_missing = [
                 task for task in task_list if task not in task_names and "*" not in task
@@ -106,7 +96,7 @@ def cli_evaluate(args) -> None:
                 missing = ", ".join(task_missing)
                 eval_logger.error(
                     f"Tasks were not found: {missing}\n"
-                    f"{utils.SPACING}Try `lm-eval --tasks list` for list of available tasks",
+                    f"{lm_eval.utils.SPACING}Try `lm-eval --tasks list` for list of available tasks",
                 )
                 raise ValueError(
                     f"Tasks not found: {missing}. Try `lm-eval --tasks list` for list of available tasks," + \
@@ -142,11 +132,11 @@ def cli_evaluate(args) -> None:
     eval_logger.info(f"Selected Tasks: {task_names}")
     eval_logger.info("Loading selected tasks...")
 
-    request_caching_args = request_caching_arg_to_dict(
+    request_caching_args = evaluator.request_caching_arg_to_dict(
         cache_requests=args.cache_requests
     )
 
-    results = simple_evaluate(
+    results = evaluator.simple_evaluate(
         model=args.model,
         model_args=args.model_args,
         tasks=task_names,
@@ -214,9 +204,9 @@ def cli_evaluate(args) -> None:
             f" gen_kwargs: ({args.gen_kwargs}), limit: {args.limit}, num_fewshot: {args.num_fewshot}, "
             f"batch_size: {args.batch_size}{f' ({batch_sizes})' if batch_sizes else ''}"
         )
-        print(make_table(results))
+        print(lm_eval.utils.make_table(results))
         if "groups" in results:
-            print(make_table(results, "groups"))
+            print(lm_eval.utils.make_table(results, "groups"))
 
         if args.wandb_args:
             # Tear down wandb run once all the logging is done.

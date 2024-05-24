@@ -12,42 +12,32 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
+import accelerate
 import copy
+import huggingface_hub
 import os
+import packaging.version
+import tempfile
+import tqdm
+import transformers
 from typing import List, Literal, Optional, Tuple, Union
 
 import torch
 import torch.nn.functional as F
-import transformers
-from accelerate import find_executable_batch_size
-from tqdm import tqdm
-import transformers
-from transformers.models.auto.modeling_auto import (
-    MODEL_FOR_CAUSAL_LM_MAPPING_NAMES,
-    MODEL_FOR_SEQ_TO_SEQ_CAUSAL_LM_MAPPING_NAMES,
-)
-from transformers import (
-    AutoModelForCausalLM,
-    AutoModelForSeq2SeqLM,
-)
 
-from lm_eval import utils
-from lm_eval.api.instance import Instance
-from lm_eval.api.model import TemplateLM
-from lm_eval.models.utils import (
-    Collator,
-    clear_torch_cache,
-    pad_and_concat,
-    stop_sequences_criteria,
-)
-from packaging.version import Version
+import lm_eval.utils
+import lm_eval.api.instance
+import lm_eval.api.model
+import lm_eval.models.utils
 
 import onnxruntime
+import optimum.version
+import optimum.onnxruntime
 
-eval_logger = utils.eval_logger
+eval_logger = lm_eval.utils.eval_logger
 
-
-class HFLM(TemplateLM):
+class HFLM(lm_eval.api.model.TemplateLM):
     """An abstracted Huggingface model class. Enables usage with both models of
     `optimum.onnxruntime.ORTModelForCausalLM` and
     `optimum.onnxruntime.ORTModelForSeq2SeqLM` classes.
@@ -261,9 +251,9 @@ class HFLM(TemplateLM):
         if backend != "default":
             # if we've settled on non-default backend, use that manually
             if backend == "causal":
-                self.AUTO_MODEL_CLASS = AutoModelForCausalLM
+                self.AUTO_MODEL_CLASS = transformers.AutoModelForCausalLM
             elif backend == "seq2seq":
-                self.AUTO_MODEL_CLASS = AutoModelForSeq2SeqLM
+                self.AUTO_MODEL_CLASS = transformers.AutoModelForSeq2SeqLM
             eval_logger.info(
                 f"Overrode HF model backend type, and using type '{backend}'"
             )
@@ -271,16 +261,17 @@ class HFLM(TemplateLM):
             # determine and use the default HF backend for this model, based on its config + metadata.
             if (
                 getattr(config, "model_type")
-                in MODEL_FOR_SEQ_TO_SEQ_CAUSAL_LM_MAPPING_NAMES
+                in transformers.models.auto.modeling_auto.MODEL_FOR_SEQ_TO_SEQ_CAUSAL_LM_MAPPING_NAMES
             ):
                 # first check if model type is listed under seq2seq models, since some
                 # models like MBart are listed in both seq2seq and causal mistakenly in HF transformers.
                 # these special cases should be treated as seq2seq models.
-                self.AUTO_MODEL_CLASS = AutoModelForSeq2SeqLM
+                self.AUTO_MODEL_CLASS = transformers.AutoModelForSeq2SeqLM
             elif (
-                getattr(self.config, "model_type") in MODEL_FOR_CAUSAL_LM_MAPPING_NAMES
+                getattr(self.config, "model_type") in
+                transformers.models.auto.modeling_auto.MODEL_FOR_CAUSAL_LM_MAPPING_NAMES
             ):
-                self.AUTO_MODEL_CLASS = AutoModelForCausalLM
+                self.AUTO_MODEL_CLASS = transformers.AutoModelForCausalLM
             else:
                 if not trust_remote_code:
                     eval_logger.warning(
@@ -289,11 +280,11 @@ class HFLM(TemplateLM):
                     )
                 # if model type is neither in HF transformers causal or seq2seq model registries
                 # then we default to AutoModelForCausalLM
-                self.AUTO_MODEL_CLASS = AutoModelForCausalLM
+                self.AUTO_MODEL_CLASS = transformers.AutoModelForCausalLM
 
         assert self.AUTO_MODEL_CLASS in [
-            AutoModelForCausalLM,
-            AutoModelForSeq2SeqLM,
+            transformers.AutoModelForCausalLM,
+            transformers.AutoModelForSeq2SeqLM,
         ]
         return None
 
@@ -314,17 +305,11 @@ class HFLM(TemplateLM):
         pretrained: str,
     ) -> None:
         """Create ORTModelForCausalLM or ORTModelForSeq2SeqLM model."""
-        from huggingface_hub.errors import HFValidationError
-        from huggingface_hub.utils import RepositoryNotFoundError
-
         if not os.path.exists(pretrained):
             eval_logger.warning("`{}` path does not exist. Will try to download it from huggingface.")
             try:
-                import tempfile
-                from huggingface_hub import snapshot_download
-
                 local_dir  = tempfile.TemporaryDirectory().name
-                snapshot_download(pretrained, local_dir =local_dir )
+                huggingface_hub.snapshot_download(pretrained, local_dir =local_dir )
                 pretrained = local_dir
             except Exception as e:
                 raise e
@@ -348,57 +333,54 @@ class HFLM(TemplateLM):
                     )
                 )
 
-            import optimum.version
-            from optimum.onnxruntime import ORTModelForCausalLM
-
             sess_options = onnxruntime.SessionOptions()
             sess_options.graph_optimization_level = (
                 onnxruntime.GraphOptimizationLevel.ORT_ENABLE_ALL
             )
 
-            if Version(optimum.version.__version__) >= Version("1.14.0"):
+            if packaging.version.Version(optimum.version.__version__) >= packaging.version.Version("1.14.0"):
                 if os.path.exists(os.path.join(pretrained, "model.onnx")):
-                    session = ORTModelForCausalLM.load_model(  # pylint: disable=E1123
+                    session = optimum.onnxruntime.ORTModelForCausalLM.load_model(
                         os.path.join(pretrained, "model.onnx"),
                         provider=self.provider,
                         session_options=sess_options)
-                    inputs_names = [input.name for input in session.get_inputs()] # pylint: disable=E1101
+                    inputs_names = [input.name for input in session.get_inputs()]
                     key_value_input_names = [key for key in inputs_names if (".key" in key) or (".value" in key)]
                     use_cache = len(key_value_input_names) > 0
 
-                    self._model = ORTModelForCausalLM(session,  # pylint: disable=E1120
+                    self._model = optimum.onnxruntime.ORTModelForCausalLM(session,
                                                       self.config,
                                                       use_cache=True if use_cache else False,
                                                       use_io_binding=True if use_cache else False)
                 else:
                     if os.path.exists(os.path.join(pretrained, "decoder_model_merged.onnx")):
-                        session = ORTModelForCausalLM.load_model(  # pylint: disable=E1123
+                        session = optimum.onnxruntime.ORTModelForCausalLM.load_model(
                             os.path.join(pretrained, "decoder_model_merged.onnx"),
                             provider=self.provider,
                             session_options=sess_options)
-                        self._model = ORTModelForCausalLM(session,  # pylint: disable=E1120
+                        self._model = optimum.onnxruntime.ORTModelForCausalLM(session,
                                                         self.config,
                                                         use_cache=True)
                     elif os.path.exists(os.path.join(pretrained, "decoder_with_past_model.onnx")):
-                        session = ORTModelForCausalLM.load_model(  # pylint: disable=E1123
+                        session = optimum.onnxruntime.ORTModelForCausalLM.load_model(
                             os.path.join(pretrained, "decoder_with_past_model.onnx"),
                             provider=self.provider,
                             session_options=sess_options)
-                        self._model = ORTModelForCausalLM(session,  # pylint: disable=E1120
+                        self._model = optimum.onnxruntime.ORTModelForCausalLM(session,
                                                         self.config,
                                                         use_cache=True)
                     elif os.path.exists(os.path.join(pretrained, "decoder_model.onnx")):
-                        session = ORTModelForCausalLM.load_model(  # pylint: disable=E1123
+                        session = optimum.onnxruntime.ORTModelForCausalLM.load_model(
                             os.path.join(pretrained, "decoder_model.onnx"),
                             provider=self.provider,
                             session_options=sess_options)
-                        self._model = ORTModelForCausalLM(session,  # pylint: disable=E1120
+                        self._model = optimum.onnxruntime.ORTModelForCausalLM(session,
                                                         self.config,
                                                         use_cache=False,
                                                         use_io_binding=False)
             else:
                 if os.path.exists(os.path.join(pretrained, "model.onnx")):
-                    session = ORTModelForCausalLM.load_model(  # pylint: disable=E1123
+                    session = optimum.onnxruntime.ORTModelForCausalLM.load_model(
                         os.path.join(pretrained, "model.onnx"),
                         provider=self.provider,
                         session_options=sess_options)
@@ -406,41 +388,38 @@ class HFLM(TemplateLM):
                     key_value_input_names = [key for key in inputs_names if (".key" in key) or (".value" in key)]
                     use_cache = len(key_value_input_names) > 0
 
-                    # pylint: disable=E1121,E1124
-                    self._model = ORTModelForCausalLM(session[0],
+                    self._model = optimum.onnxruntime.ORTModelForCausalLM(session[0],
                                                     self.config,
                                                     pretrained,
                                                     use_cache=True if use_cache else False,
                                                     use_io_binding=True if use_cache else False,)
                 else:
                     if os.path.exists(os.path.join(pretrained, "decoder_model_merged.onnx")):
-                        sessions = ORTModelForCausalLM.load_model(  # pylint: disable=E1123
+                        sessions = optimum.onnxruntime.ORTModelForCausalLM.load_model(
                             os.path.join(pretrained, "decoder_model_merged.onnx"),
                             provider=self.provider,
                             session_options=sess_options)
-                        self._model = ORTModelForCausalLM(sessions[0],  # pylint: disable=E1121
+                        self._model = optimum.onnxruntime.ORTModelForCausalLM(sessions[0],
                                                         self.config,
                                                         pretrained,
                                                         use_cache=True)
                     elif os.path.exists(os.path.join(pretrained, "decoder_with_past_model.onnx")):
-                        sessions = ORTModelForCausalLM.load_model(  # pylint: disable=E1123
+                        sessions = optimum.onnxruntime.ORTModelForCausalLM.load_model(
                             os.path.join(pretrained, "decoder_model.onnx"),
                             os.path.join(pretrained, "decoder_with_past_model.onnx"),
                             provider=self.provider,
                             session_options=sess_options)
-                        self._model = ORTModelForCausalLM(sessions[0],  # pylint: disable=E1121
+                        self._model = optimum.onnxruntime.ORTModelForCausalLM(sessions[0],
                                                         self.config,
                                                         pretrained,
                                                         sessions[1],
                                                         use_cache=True)
                     else:
-                        # pylint: disable=E1123,E1124
-                        sessions = ORTModelForCausalLM.load_model(
+                        sessions = optimum.onnxruntime.ORTModelForCausalLM.load_model(
                             os.path.join(pretrained, "decoder_model.onnx"),
                             provider=self.provider,
                             session_options=sess_options)
-                        # pylint: disable=E1121,E1124
-                        self._model = ORTModelForCausalLM(sessions[0],
+                        self._model = optimum.onnxruntime.ORTModelForCausalLM(sessions[0],
                                                         self.config,
                                                         pretrained,
                                                         use_cache=False,
@@ -459,9 +438,6 @@ class HFLM(TemplateLM):
                     "decoder_model(_merged).onnx are under {}.".format(pretrained)
                 )
 
-            import onnxruntime as ort
-            from optimum.onnxruntime import ORTModelForSeq2SeqLM
-
             sess_options = onnxruntime.SessionOptions()
             sess_options.graph_optimization_level = (
                 onnxruntime.GraphOptimizationLevel.ORT_ENABLE_ALL
@@ -469,12 +445,12 @@ class HFLM(TemplateLM):
             if os.path.exists(
                 os.path.join(pretrained, "decoder_model_merged.onnx")
             ):
-                sessions = ORTModelForSeq2SeqLM.load_model(
+                sessions = optimum.onnxruntime.ORTModelForSeq2SeqLM.load_model(
                     os.path.join(pretrained, "encoder_model.onnx"),
                     os.path.join(pretrained, "decoder_model_merged.onnx"),
                 )
 
-                self._model = ORTModelForSeq2SeqLM(
+                self._model = optimum.onnxruntime.ORTModelForSeq2SeqLM(
                     sessions[0],
                     sessions[1],
                     self.config,
@@ -485,13 +461,13 @@ class HFLM(TemplateLM):
             elif os.path.exists(
                 os.path.join(pretrained, "decoder_with_past_model.onnx")
             ):
-                sessions = ORTModelForSeq2SeqLM.load_model(
+                sessions = optimum.onnxruntime.ORTModelForSeq2SeqLM.load_model(
                     os.path.join(pretrained, "encoder_model.onnx"),
                     os.path.join(pretrained, "decoder_model.onnx"),
                     os.path.join(pretrained, "decoder_with_past_model.onnx"),
                 )
 
-                self._model = ORTModelForSeq2SeqLM(
+                self._model = optimum.onnxruntime.ORTModelForSeq2SeqLM(
                     sessions[0],
                     sessions[1],
                     self.config,
@@ -500,12 +476,12 @@ class HFLM(TemplateLM):
                     use_cache=True,
                 )
             else:
-                sessions = ORTModelForSeq2SeqLM.load_model(  # pylint: disable=E1120
+                sessions = optimum.onnxruntime.ORTModelForSeq2SeqLM.load_model(
                     os.path.join(pretrained, "encoder_model.onnx"),
                     os.path.join(pretrained, "decoder_model.onnx"),
                 )
 
-                self._model = ORTModelForSeq2SeqLM(
+                self._model = optimum.onnxruntime.ORTModelForSeq2SeqLM(
                     sessions[0],
                     sessions[1],
                     self.config,
@@ -575,7 +551,7 @@ class HFLM(TemplateLM):
             max_length = self.max_length
 
         # if OOM, then halves batch_size and tries again
-        @find_executable_batch_size(starting_batch_size=self.max_batch_size)
+        @accelerate.find_executable_batch_size(starting_batch_size=self.max_batch_size)
         def forward_batch(batch_size):
             if self.AUTO_MODEL_CLASS == transformers.AutoModelForSeq2SeqLM:
                 length = max(max_context_enc, max_cont_enc)
@@ -600,7 +576,7 @@ class HFLM(TemplateLM):
             return batch_size
 
         try:
-            batch_size = forward_batch()   # pylint: disable=E1120
+            batch_size = forward_batch()
         except RuntimeError as e:
             if "No executable batch size found" in str(e):
                 batch_size = 1
@@ -614,10 +590,10 @@ class HFLM(TemplateLM):
                 self.accelerator.gather(max_rnk_bs).cpu().detach().numpy().tolist()
             )
             batch_size = min(gathered)
-            clear_torch_cache()
+            lm_eval.models.utils.clear_torch_cache()
             return batch_size
 
-        clear_torch_cache()
+        lm_eval.models.utils.clear_torch_cache()
         return batch_size
 
     def tok_encode(
@@ -634,7 +610,7 @@ class HFLM(TemplateLM):
 
         # left-truncate the encoded context to be at most `left_truncate_len` tokens long
         if left_truncate_len:
-            encoding = encoding[-left_truncate_len:]  # pylint: disable=E1130
+            encoding = encoding[-left_truncate_len:]
 
         return encoding
 
@@ -662,9 +638,9 @@ class HFLM(TemplateLM):
             add_special_tokens=add_special_tokens,
         )
         if left_truncate_len:
-            encoding["input_ids"] = encoding["input_ids"][:, -left_truncate_len:] # pylint: disable=E1130
+            encoding["input_ids"] = encoding["input_ids"][:, -left_truncate_len:]
             encoding["attention_mask"] = encoding["attention_mask"][
-                :, -left_truncate_len: # pylint: disable=E1130
+                :, -left_truncate_len:
             ]
         self.tokenizer.padding_side = old_padding_side
 
@@ -762,7 +738,7 @@ class HFLM(TemplateLM):
         if do_sample is False and generation_kwargs.get("temperature") == 0.0:
             generation_kwargs.pop("temperature")
         # build stopping criteria
-        stopping_criteria = stop_sequences_criteria(
+        stopping_criteria = lm_eval.models.utils.stop_sequences_criteria(
             self.tokenizer, stop, context.shape[1], context.shape[0]
         )
         return self.model.generate(
@@ -795,7 +771,7 @@ class HFLM(TemplateLM):
         return logits
 
     def loglikelihood_rolling(
-        self, requests: List[Instance], disable_tqdm: bool = False
+        self, requests: List[lm_eval.api.instance.Instance], disable_tqdm: bool = False
     ) -> List[float]:
         loglikelihoods = []
 
@@ -807,13 +783,13 @@ class HFLM(TemplateLM):
             print(f"Determined Largest batch size: {batch_size}")
             adaptive_batch_size = batch_size
 
-        for (string,) in tqdm(
+        for (string,) in tqdm.tqdm(
             [req.args for req in requests], disable=(disable_tqdm or (self.rank != 0))
         ):
             rolling_token_windows = list(
                 map(
-                    utils.make_disjoint_window,
-                    utils.get_rolling_token_windows(
+                    lm_eval.utils.make_disjoint_window,
+                    lm_eval.utils.get_rolling_token_windows(
                         token_list=self.tok_encode(string),
                         prefix_token=self.eot_token_id,
                         max_seq_len=self.max_length,
@@ -902,7 +878,7 @@ class HFLM(TemplateLM):
             # groups requests by context+continuation[:-1] and infer on one request/group.
             return req[-2] + req[-1][:-1]
 
-        re_ord = Collator(
+        re_ord = lm_eval.models.utils.Collator(
             requests,
             sort_fn=_collate,
             group_by=(
@@ -930,7 +906,7 @@ class HFLM(TemplateLM):
         )
 
         chunks = re_ord.get_batched(n=batch_size, batch_fn=batch_fn)
-        pbar = tqdm(
+        pbar = tqdm.tqdm(
             total=len(requests),
             disable=(disable_tqdm or (self.rank != 0)),
             desc="Running loglikelihood requests",
@@ -972,7 +948,7 @@ class HFLM(TemplateLM):
                     (inplen,) = inp.shape
                 elif self.AUTO_MODEL_CLASS == transformers.AutoModelForSeq2SeqLM:
                     inp = torch.tensor(
-                        (context_enc)[-self.max_length :], # pylint: disable=E1130
+                        (context_enc)[-self.max_length :],
                         dtype=torch.long,
                         device=self._device,
                     )
@@ -982,7 +958,7 @@ class HFLM(TemplateLM):
                     encoder_attns.append(torch.ones_like(inp))
 
                     cont = torch.tensor(
-                        (continuation_enc)[-self.max_length :], # pylint: disable=E1130
+                        (continuation_enc)[-self.max_length :],
                         # TODO: left-shift these?
                         # TODO: our code assumes we never end up truncating conts for either model type
                         dtype=torch.long,
@@ -1011,18 +987,18 @@ class HFLM(TemplateLM):
             # create encoder attn mask and batched conts, if seq2seq
             call_kwargs = {}
             if self.AUTO_MODEL_CLASS == transformers.AutoModelForCausalLM:
-                batched_inps = pad_and_concat(
+                batched_inps = lm_eval.models.utils.pad_and_concat(
                     padding_len_inp, inps, padding_side="right"
                 )  # [batch, padding_len_inp]
             elif self.AUTO_MODEL_CLASS == transformers.AutoModelForSeq2SeqLM:
                 # TODO: left-pad encoder inps and mask?
-                batched_inps = pad_and_concat(
+                batched_inps = lm_eval.models.utils.pad_and_concat(
                     padding_len_inp, inps
                 )  # [batch, padding_len_inp]
-                batched_conts = pad_and_concat(
+                batched_conts = lm_eval.models.utils.pad_and_concat(
                     padding_len_cont, conts
                 )  # [batch, padding_len_cont]
-                batched_encoder_mask = pad_and_concat(
+                batched_encoder_mask = lm_eval.models.utils.pad_and_concat(
                     padding_len_inp, encoder_attns
                 )  # [batch, padding_len_inp]
                 call_kwargs = {
@@ -1090,7 +1066,7 @@ class HFLM(TemplateLM):
         return re_ord.get_original(res)
 
     def generate_until(
-        self, requests: List[Instance], disable_tqdm: bool = False
+        self, requests: List[lm_eval.api.instance.Instance], disable_tqdm: bool = False
     ) -> List[str]:
         res = []
 
@@ -1105,7 +1081,7 @@ class HFLM(TemplateLM):
             toks = self.tok_encode(req[0])
             return -len(toks), req[0]
 
-        pbar = tqdm(
+        pbar = tqdm.tqdm(
             total=len(requests),
             disable=(disable_tqdm or (self.rank != 0)),
             desc="Running generate_until requests",
@@ -1133,7 +1109,7 @@ class HFLM(TemplateLM):
         # so that we don't try to execute e.g. greedy sampling and temp=0.8 sampling
         # in the same batch.
         # group_fn=lambda x: x[1] -> x=(context, gen_kwargs)
-        re_ords = Collator(
+        re_ords = lm_eval.models.utils.Collator(
             [reg.args for reg in requests],
             sort_fn=_collate,
             group_by="gen_kwargs",

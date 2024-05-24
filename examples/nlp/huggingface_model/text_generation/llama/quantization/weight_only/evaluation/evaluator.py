@@ -17,8 +17,7 @@ import itertools
 import logging
 import random
 import time
-import os
-from collections import defaultdict
+import collections
 from typing import TYPE_CHECKING, List, Optional, Union
 
 import numpy as np
@@ -27,28 +26,20 @@ import torch
 import lm_eval.api.metrics
 import lm_eval.api.registry
 import lm_eval.models
-from lm_eval.caching.cache import delete_cache
-from lm_eval.evaluator_utils import (
-    consolidate_results,
-    get_sample_size,
-    get_task_list,
-    prepare_print_tasks,
-    print_writeout,
-    run_task_tests,
-)
-from lm_eval.logging_utils import add_env_info, get_git_commit_hash
-from lm_eval.tasks import TaskManager, get_task_dict
-from lm_eval.utils import eval_logger, positional_deprecated, simple_parse_args_string
+import lm_eval.caching.cache
+import lm_eval.evaluator_utils
+import lm_eval.logging_utils
+import lm_eval.utils
 
-from optimum.onnxruntime import ORTModelForSeq2SeqLM, ORTModelForCausalLM
+import optimum.onnxruntime
 
+from .models import huggingface
 
 if TYPE_CHECKING:
-    from lm_eval.api.model import LM
-    from lm_eval.tasks import Task
+    import lm_eval.api.model
+    import lm_eval.tasks
 
-
-@positional_deprecated
+@lm_eval.utils.positional_deprecated
 def simple_evaluate(
     model,
     model_args: Optional[Union[str, dict,object]] = None,
@@ -67,7 +58,7 @@ def simple_evaluate(
     write_out: bool = False,
     log_samples: bool = True,
     gen_kwargs: Optional[str] = None,
-    task_manager: Optional[TaskManager] = None,
+    task_manager: Optional[lm_eval.tasks.TaskManager] = None,
     verbosity: str = "INFO",
     predict_only: bool = False,
     random_seed: int = 0,
@@ -134,12 +125,12 @@ def simple_evaluate(
     Returns:
         dict: Dictionary of results
     """
-    eval_logger.setLevel(getattr(logging, f"{verbosity}"))
+    lm_eval.utils.eval_logger.setLevel(getattr(logging, f"{verbosity}"))
     start_date = time.time()
 
     if delete_requests_cache:
-        eval_logger.info("Deleting requests cache...")
-        delete_cache()
+        lm_eval.utils.eval_logger.info("Deleting requests cache...")
+        lm_eval.caching.cache.delete_cache()
 
     seed_message = []
     if random_seed is not None:
@@ -156,7 +147,7 @@ def simple_evaluate(
         torch.manual_seed(torch_random_seed)
 
     if seed_message:
-        eval_logger.info(" | ".join(seed_message))
+        lm_eval.utils.eval_logger.info(" | ".join(seed_message))
 
     if tasks is None:
         tasks = []
@@ -166,8 +157,8 @@ def simple_evaluate(
         )
 
     if gen_kwargs is not None:
-        gen_kwargs = simple_parse_args_string(gen_kwargs)
-        eval_logger.warning(
+        gen_kwargs = lm_eval.utils.simple_parse_args_string(gen_kwargs)
+        lm_eval.utils.eval_logger.warning(
             "generation_kwargs specified through cli, these settings will update set parameters in yaml tasks. "
             "Ensure 'do_sample=True' for non-greedy decoding!"
         )
@@ -180,18 +171,17 @@ def simple_evaluate(
         if model_args is None:
             model_args = ""
         # replace HFLM.
-        from .models.huggingface import HFLM
-        lm_eval.api.registry.MODEL_REGISTRY["hf-auto"] = HFLM
-        lm_eval.api.registry.MODEL_REGISTRY["hf"] = HFLM
-        lm_eval.api.registry.MODEL_REGISTRY["huggingface"] = HFLM
+        lm_eval.api.registry.MODEL_REGISTRY["hf-auto"] = huggingface.HFLM
+        lm_eval.api.registry.MODEL_REGISTRY["hf"] = huggingface.HFLM
+        lm_eval.api.registry.MODEL_REGISTRY["huggingface"] = huggingface.HFLM
 
         if user_model is not None:
             # use tiny model to built lm.
-            if isinstance(user_model, ORTModelForCausalLM):
+            if isinstance(user_model, optimum.onnxruntime.ORTModelForCausalLM):
                 model_id = "fxmarty/onnx-tiny-random-gpt2-with-merge"
-            elif isinstance(user_model, ORTModelForSeq2SeqLM):
+            elif isinstance(user_model, optimum.onnxruntime.ORTModelForSeq2SeqLM):
                 model_id = "optimum/t5-small"
-            eval_logger.info("We use '{}' to build `LM` instance, the actually run model is user_model you passed.".format(
+            lm_eval.utils.eval_logger.info("We use '{}' to build `LM` instance, the actually run model is user_model you passed.".format(
                 model_id
             ))
             lm = lm_eval.api.registry.get_model(model).create_from_arg_string(
@@ -232,7 +222,7 @@ def simple_evaluate(
         lm = model
 
     if use_cache is not None:
-        eval_logger.info(f"Using cache at {use_cache + '_rank' + str(lm.rank) + '.db'}")
+        lm_eval.utils.eval_logger.info(f"Using cache at {use_cache + '_rank' + str(lm.rank) + '.db'}")
         lm = lm_eval.api.model.CachingLM(
             lm,
             use_cache
@@ -242,9 +232,9 @@ def simple_evaluate(
         )
 
     if task_manager is None:
-        task_manager = TaskManager(verbosity)
+        task_manager = lm_eval.tasks.TaskManager(verbosity)
 
-    task_dict = get_task_dict(tasks, task_manager)
+    task_dict = lm_eval.tasks.get_task_dict(tasks, task_manager)
     for task_name in task_dict.keys():
         task_obj = task_dict[task_name]
         if isinstance(task_obj, tuple):
@@ -260,7 +250,7 @@ def simple_evaluate(
 
         if predict_only:
             log_samples = True
-            eval_logger.info(
+            lm_eval.utils.eval_logger.info(
                 f"Processing {task_name} in output-only mode. Metrics will not be calculated!"
             )
             # we have to change the class properties post-hoc. This is pretty hacky.
@@ -270,12 +260,12 @@ def simple_evaluate(
         # except if tasks have it set to 0 manually in their configs--then we should never overwrite that
         if num_fewshot is not None:
             if (default_num_fewshot := task_obj.get_config("num_fewshot")) == 0:
-                eval_logger.info(
+                lm_eval.utils.eval_logger.info(
                     f"num_fewshot has been set to 0 for {task_name} in its config." + \
                     "Manual configuration will be ignored."
                 )
             else:
-                eval_logger.warning(
+                lm_eval.utils.eval_logger.warning(
                     f"Overwriting default num_fewshot of {task_name} from {default_num_fewshot} to {num_fewshot}"
                 )
                 task_obj.set_config(key="num_fewshot", value=num_fewshot)
@@ -285,7 +275,7 @@ def simple_evaluate(
                 task_obj.set_config(key="num_fewshot", value=0)
 
     if check_integrity:
-        run_task_tests(task_list=tasks)
+        lm_eval.evaluator_utils.run_task_tests(task_list=tasks)
 
     results = evaluate(
         lm=lm,
@@ -321,12 +311,12 @@ def simple_evaluate(
             "bootstrap_iters": bootstrap_iters,
             "gen_kwargs": gen_kwargs,
         }
-        results["git_hash"] = get_git_commit_hash()
+        results["git_hash"] = lm_eval.logging_utils.get_git_commit_hash()
         results["date"] = start_date
         try:
-            add_env_info(results)  # additional environment info to results
+            lm_eval.logging_utils.add_env_info(results)  # additional environment info to results
         except:
-            eval_logger.info(
+            lm_eval.utils.eval_logger.info(
                     f"get env info failed."
                 )
         return results
@@ -334,9 +324,9 @@ def simple_evaluate(
         return None
 
 
-@positional_deprecated
+@lm_eval.utils.positional_deprecated
 def evaluate(
-    lm: "LM",
+    lm: "lm_eval.api.model.LM",
     task_dict,
     limit: Optional[int] = None,
     cache_requests: bool = False,
@@ -371,16 +361,16 @@ def evaluate(
     Returns:
         dict: Dictionary of results
     """
-    eval_logger.setLevel(getattr(logging, f"{verbosity}"))
+    lm_eval.utils.eval_logger.setLevel(getattr(logging, f"{verbosity}"))
 
     # tracks all Instances/requests a model must generate output on.
-    requests = defaultdict(list)
+    requests = collections.defaultdict(list)
     # stores the amount to pad out reqs per req. type so that
     # number of fwd passes per distributed rank is equal
-    padding_requests = defaultdict(int)
+    padding_requests = collections.defaultdict(int)
 
     # get lists of group hierarchy and each type of request
-    task_hierarchy, eval_tasks = get_task_list(task_dict)
+    task_hierarchy, eval_tasks = lm_eval.evaluator_utils.get_task_list(task_dict)
     if not log_samples:
         if not all(
             "bypass" not in getattr(task_output.task, "_metric_fn_list", {}).keys()
@@ -388,8 +378,8 @@ def evaluate(
         ):
             raise ValueError("log_samples must be True for 'bypass' metric-only tasks")
     for task_output in eval_tasks:
-        task: Task = task_output.task
-        limit = get_sample_size(task, limit)
+        task: lm_eval.tasks.Task = task_output.task
+        limit = lm_eval.evaluator_utils.get_sample_size(task, limit)
         task.build_all_requests(
             limit=limit,
             rank=lm.rank,
@@ -397,12 +387,12 @@ def evaluate(
             cache_requests=cache_requests,
             rewrite_requests_cache=rewrite_requests_cache,
         )
-        eval_logger.debug(
+        lm_eval.utils.eval_logger.debug(
             f"Task: {task_output.task_name}; number of requests on this rank: {len(task.instances)}"
         )
 
         if write_out:
-            print_writeout(task)
+            lm_eval.evaluator_utils.print_writeout(task)
         # aggregate Instances by LM method requested to get output.
         for instance in task.instances:
             reqtype = instance.request_type
@@ -427,7 +417,7 @@ def evaluate(
     ### Run LM on inputs, get all outputs ###
     # execute each type of request
     for reqtype, reqs in requests.items():
-        eval_logger.info(f"Running {reqtype} requests")
+        lm_eval.utils.eval_logger.info(f"Running {reqtype} requests")
         # create `K` copies of each request `req` based off `K = req.repeats`
         cloned_reqs = []
         for req in reqs:
@@ -459,7 +449,7 @@ def evaluate(
         # # unpack results and sort back in order and return control to Task
         # TODO: make it possible to use a different metric per filter
         # Pre-process task.instances to group by doc_id
-        instances_by_doc_id = defaultdict(list)
+        instances_by_doc_id = collections.defaultdict(list)
         for instance in task.instances:
             instances_by_doc_id[instance.doc_id].append(instance)
         # Sort instances within each group
@@ -528,7 +518,7 @@ def evaluate(
         # aggregate results ; run bootstrap CIs
         for task_output in eval_tasks:
             task_output.calculate_aggregate_metric(bootstrap_iters=bootstrap_iters)
-        results, samples, configs, versions, num_fewshot = consolidate_results(
+        results, samples, configs, versions, num_fewshot = lm_eval.evaluator_utils.consolidate_results(
             eval_tasks
         )
 
@@ -588,8 +578,8 @@ def evaluate(
 
                     results[group]["samples"] = sum(sizes)
 
-        results_agg = defaultdict(dict)
-        groups_agg = defaultdict(dict)
+        results_agg = collections.defaultdict(dict)
+        groups_agg = collections.defaultdict(dict)
         all_tasks_list = list(task_hierarchy.keys())
         while True:
             add_tasks_list = list(k for k in results_agg.keys())
@@ -600,7 +590,7 @@ def evaluate(
             _task_hierarchy = {
                 k: v for k, v in task_hierarchy.items() if k in left_tasks_list
             }
-            _results_agg, _groups_agg = prepare_print_tasks(_task_hierarchy, results)
+            _results_agg, _groups_agg = lm_eval.evaluator_utils.prepare_print_tasks(_task_hierarchy, results)
 
             results_agg = {**results_agg, **_results_agg}
             groups_agg = {**groups_agg, **_groups_agg}

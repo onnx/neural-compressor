@@ -28,6 +28,7 @@ import numpy as np
 import datasets
 import onnxruntime as ort
 import transformers
+import evaluation
 from torch.nn import functional
 from torch.utils import data
 from optimum import onnxruntime as optimum_ort
@@ -134,8 +135,6 @@ def replace_architectures(json_path):
 
 
 def eval_func(model):
-    import evaluation
-
     model_dir = model
     if isinstance(model, str) and model.endswith(".onnx"):
         model_dir = os.path.dirname(model)
