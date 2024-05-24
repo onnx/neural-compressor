@@ -623,7 +623,6 @@ class HFLM(TemplateLM):
     def tok_encode(
         self, string: str, left_truncate_len=None, add_special_tokens=None
     ) -> List[int]:
-        """"""
         if add_special_tokens is None:
             if self.AUTO_MODEL_CLASS == transformers.AutoModelForCausalLM:
                 add_special_tokens = False or self.add_bos_token
@@ -682,20 +681,24 @@ class HFLM(TemplateLM):
             )
 
     def _model_call(self, inps, attn_mask=None, labels=None):
-        """
-        :param inps: torch.Tensor
-            A torch tensor of shape [batch, (sequence_ctx + sequence_cont)] or of shape
-            [batch, sequence_ctx]. the size of sequence may vary from call to call
-        :param attn_mask: torch.Tensor, optional
-            A torch tensor of shape [batch, (sequence_ctx + sequence_cont)]. Only passed
-            (and must be passed) if self.AUTO_MODEL_CLASS is intel_extension_for_transformers
-        :param labels: torch.Tensor, optional
-            A torch tensor of shape [batch, (sequence_ctx + sequence_cont)]. Only passed
-            (and must be passed) if self.AUTO_MODEL_CLASS is intel_extension_for_transformers.
-            .transformers.AutoModelForSeq2SeqLM
-        :return
-            A torch tensor of shape [batch, sequence, vocab] with the
-        logits returned from the model's decoder
+        """Call model to get logits results.
+
+        Args:
+            inps (torch.Tensor):
+                A torch tensor of shape [batch, (sequence_ctx + sequence_cont)] or of shape
+                [batch, sequence_ctx]. the size of sequence may vary from call to call
+            attn_mask (torch.Tensor, optional):
+                A torch tensor of shape [batch, (sequence_ctx + sequence_cont)]. Only passed
+                (and must be passed) if self.AUTO_MODEL_CLASS is intel_extension_for_transformers.
+                Defaults to None.
+            labels (torch.Tensor, optional):
+                A torch tensor of shape [batch, (sequence_ctx + sequence_cont)]. Only passed
+                (and must be passed) if self.AUTO_MODEL_CLASS is intel_extension_for_transformers.
+                .transformers.AutoModelForSeq2SeqLM. Defaults to None.
+
+        Returns:
+            torch tensor: A torch tensor of shape [batch, sequence, vocab] with the
+            logits returned from the model's decoder
         """
         if attn_mask is not None or labels is not None:
             assert attn_mask is not None and labels is not None

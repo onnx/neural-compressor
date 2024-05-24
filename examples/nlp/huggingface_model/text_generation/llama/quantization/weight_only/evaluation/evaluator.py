@@ -78,57 +78,62 @@ def simple_evaluate(
 ):
     """Instantiate and evaluate a model on a list of tasks.
 
-    :param model: Union[str, LM]
-        Name of model or LM object, see lm_eval.models.get_model
-    :param model_args: Optional[str, dict]
-        String or dict arguments for each model class, see LM.create_from_arg_string and LM.create_from_arg_object.
-        Ignored if `model` argument is a LM object.
-    :param tasks: list[Union[str, dict, Task]]
-        List of task names or Task objects. Task objects will be taken to have name task.EVAL_HARNESS_NAME
-        if defined and type(task).__name__ otherwise.
-    :param num_fewshot: int
-        Number of examples in few-shot context
-    :param batch_size: int or str, optional
-        Batch size for model
-    :param max_batch_size: int, optional
-        Maximal batch size to try with automatic batch size detection
-    :param provider: str, optional
-        ONNXRuntime provider (e.g. "CPUExecutionProvider" or "CUDAExecutionProvider") for running models
-    :param use_cache: str, optional
-        A path to a sqlite db file for caching model responses. `None` if not caching.
-    :param cache_requests: bool, optional
-        Speed up evaluation by caching the building of dataset requests. `None` if not caching.
-    :param rewrite_requests_cache: bool, optional
-        Rewrites all of the request cache if set to `True`. `None` if not desired.
-    :param delete_requests_cache: bool, optional
-        Deletes all of the request cache if set to `True`. `None` if not desired.
-    :param limit: int or float, optional
-        Limit the number of examples per task (only use this for testing), If <1,
-        limit is a percentage of the total number of examples.
-    :param bootstrap_iters:
-        Number of iterations for bootstrap statistics
-    :param check_integrity: bool
-        Whether to run the relevant part of the test suite for the tasks
-    :param write_out: bool
-        If True, write out an example document and model input for checking task integrity
-    :param log_samples: bool
-        If True, write out all model outputs and documents for per-sample measurement and post-hoc analysis
-    :param gen_kwargs: str
-        String arguments for model generation
-        Ignored for all tasks with loglikelihood output_type
-    :param predict_only: bool
-        If true only model outputs will be generated and returned. Metrics will not be evaluated
-    :param random_seed: int
-        Random seed for python's random module. If set to None, the seed will not be set.
-    :param numpy_random_seed: int
-        Random seed for numpy. If set to None, the seed will not be set.
-    :param torch_random_seed: int
-        Random seed for torch. If set to None, the seed will not be set.
+    Args:
+        model (Union[str, LM]): Name of model or LM object, see lm_eval.models.get_model
+        model_args (Optional[Union[str, dict,object]], optional):
+            String or dict arguments for each model class,
+            see LM.create_from_arg_string and LM.create_from_arg_object.
+            Ignored if `model` argument is a LM object. Defaults to None.
+        tasks (Optional[List[Union[str, dict, object]]], optional):
+            List of task names or Task objects. Task objects will be taken to have name task.EVAL_HARNESS_NAME
+            if defined and type(task).__name__ otherwise. Defaults to None.
+        num_fewshot (Optional[int], optional): Number of examples in few-shot context. Defaults to None.
+        batch_size (Optional[int], optional): Batch size for model. Defaults to None.
+        max_batch_size (Optional[int], optional):
+            Maximal batch size to try with automatic batch size detection. Defaults to None.
+        provider (Optional[str], optional):
+            ONNXRuntime provider (e.g. "CPUExecutionProvider" or "CUDAExecutionProvider") for running models.
+            Defaults to None.
+        use_cache (Optional[str], optional):
+            A path to a sqlite db file for caching model responses. `None` if not caching. Defaults to None.
+        cache_requests (bool, optional):
+            Speed up evaluation by caching the building of dataset requests. `None` if not caching.
+            Defaults to False.
+        rewrite_requests_cache (bool, optional):
+            Rewrites all of the request cache if set to `True`. `None` if not desired. Defaults to False.
+        delete_requests_cache (bool, optional):
+            Deletes all of the request cache if set to `True`. `None` if not desired. Defaults to False.
+        limit (Optional[Union[int, float]], optional):
+            Limit the number of examples per task (only use this for testing), If <1,
+            limit is a percentage of the total number of examples. Defaults to None.
+        bootstrap_iters (int, optional): Number of iterations for bootstrap statistics. Defaults to 100000.
+        check_integrity (bool, optional):
+            Whether to run the relevant part of the test suite for the tasks. Defaults to False.
+        write_out (bool, optional):
+            If True, write out an example document and model input for checking task integrity. Defaults to False.
+        log_samples (bool, optional):
+            If True, write out all model outputs and documents for per-sample measurement and post-hoc analysis.
+            Defaults to True.
+        gen_kwargs (Optional[str], optional):
+            String arguments for model generation. Ignored for all tasks with loglikelihood output_type.
+            Defaults to None.
+        task_manager (Optional[TaskManager], optional): _description_. Defaults to None.
+        verbosity (str, optional): logger verbosity. Defaults to "INFO".
+        predict_only (bool, optional):
+            If true only model outputs will be generated and returned. Metrics will not be evaluated.
+            Defaults to False.
+        random_seed (int, optional):
+            Random seed for python's random module. If set to None, the seed will not be set. Defaults to 0.
+        numpy_random_seed (int, optional):
+            Random seed for numpy. If set to None, the seed will not be set. Defaults to 1234.
+        torch_random_seed (int, optional):
+            Random seed for torch. If set to None, the seed will not be set. Defaults to 1234.
+        user_model (Optional[object], optional): user provided model. Defaults to None.
+        tokenizer (Optional[object], optional): user provided tokenizer. Defaults to None.
 
-    :return
-        Dictionary of results
+    Returns:
+        dict: Dictionary of results
     """
-
     eval_logger.setLevel(getattr(logging, f"{verbosity}"))
     start_date = time.time()
 
@@ -341,24 +346,31 @@ def evaluate(
     log_samples: bool = True,
     verbosity: str = "INFO",
 ):
-    """Instantiate and evaluate a model on a list of tasks.
+    """Evaluate a model on a list of tasks.
 
-    :param lm: obj
-        Language Model
-    :param task_dict: dict[str, Task]
-        Dictionary of tasks. Tasks will be taken to have name type(task).config.task .
-    :param limit: int, optional
-        Limit the number of examples per task (only use this for testing)
-    :param bootstrap_iters:
-        Number of iterations for bootstrap statistics
-    :param write_out: bool
-        If True, write out an example document and model input for checking task integrity
-    :param log_samples: bool
-        If True, write out all model outputs and documents for per-sample measurement and post-hoc analysis
-    :return
-        Dictionary of results
+    Args:
+        lm (LM): Language Model
+        task_dict (dict[str, Task]):
+            Dictionary of tasks. Tasks will be taken to have name type(task).config.task. Defaults to None.
+        limit (Optional[int], optional): Limit the number of examples per task (only use this for testing)
+        cache_requests (bool, optional):
+            Speed up evaluation by caching the building of dataset requests. `None` if not caching.
+            Defaults to False.
+        rewrite_requests_cache (bool, optional):
+            Rewrites all of the request cache if set to `True`. `None` if not desired. Defaults to False.
+        bootstrap_iters (Optional[int], optional):
+            Number of iterations for bootstrap statistics. Defaults to 100000.
+        write_out (bool, optional):
+            If True, write out an example document and model input for checking task integrity.
+            Defaults to False.
+        log_samples (bool, optional):
+            If True, write out all model outputs and documents for per-sample measurement and post-hoc analysis.
+            Defaults to True.
+        verbosity (str, optional): logger verbosity. Defaults to "INFO".
+
+    Returns:
+        dict: Dictionary of results
     """
-
     eval_logger.setLevel(getattr(logging, f"{verbosity}"))
 
     # tracks all Instances/requests a model must generate output on.

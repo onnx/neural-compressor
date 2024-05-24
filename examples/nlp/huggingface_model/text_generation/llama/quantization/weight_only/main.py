@@ -30,7 +30,6 @@ import onnxruntime as ort
 import transformers
 from torch.nn import functional
 from torch.utils import data
-from evaluation import evaluate, LMEvalParser
 from optimum import onnxruntime as optimum_ort
 from onnx_neural_compressor.quantization import matmul_nbits_quantizer
 from onnx_neural_compressor import config
@@ -135,13 +134,15 @@ def replace_architectures(json_path):
 
 
 def eval_func(model):
+    import evaluation
+
     model_dir = model
     if isinstance(model, str) and model.endswith(".onnx"):
         model_dir = os.path.dirname(model)
 
     replace_architectures(os.path.join(model_dir, "config.json"))
 
-    eval_args = LMEvalParser(
+    eval_args = evaluation.LMEvalParser(
         model="hf",
         model_args="pretrained=" + model_dir + ",tokenizer=" + args.tokenizer,
         batch_size=args.batch_size,
@@ -150,7 +151,7 @@ def eval_func(model):
         trust_remote_code=args.trust_remote_code,
         limit=10,
     )
-    results = evaluate(eval_args)
+    results = evaluation.evaluate(eval_args)
 
     eval_acc = 0
     for task_name in args.tasks:
