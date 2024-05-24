@@ -33,7 +33,7 @@ import lm_eval.utils
 
 import optimum.onnxruntime
 
-from .models import huggingface
+from evaluation.models import huggingface
 
 if TYPE_CHECKING:
     import lm_eval.api.model

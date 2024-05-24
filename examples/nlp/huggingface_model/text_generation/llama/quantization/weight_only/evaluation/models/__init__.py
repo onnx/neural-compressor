@@ -13,9 +13,7 @@
 # limitations under the License.
 
 
-from . import (
-    huggingface,
-)
+from evaluation.models import huggingface
 
 
 # TODO: implement __all__

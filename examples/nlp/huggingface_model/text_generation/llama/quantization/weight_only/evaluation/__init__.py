@@ -14,5 +14,5 @@
 
 # Refer from https://github.com/intel/intel-extension-for-transformers/tree/main/intel_extension_for_transformers/transformers/llm/evaluation/lm_eval
 
-from .accuracy import cli_evaluate as evaluate
-from .utils import LMEvalParser
+from evaluation.accuracy import cli_evaluate as evaluate
+from evaluation.utils import LMEvalParser

@@ -26,7 +26,7 @@ import lm_eval.logging_utils
 import lm_eval.tasks
 import lm_eval.utils
 
-from . import evaluator
+from evaluation import evaluator
 
 DEFAULT_RESULTS_FILE = "results.json"
 
