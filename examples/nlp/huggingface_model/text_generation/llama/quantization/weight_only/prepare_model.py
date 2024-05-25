@@ -1,6 +1,7 @@
 import argparse
 import os
 import subprocess
+
 import optimum.version
 from packaging import version
 
@@ -16,7 +17,8 @@ def parse_arguments():
         type=str,
         required=False,
         default="text-generation-with-past",
-        choices=["text-generation-with-past", "text-generation"])
+        choices=["text-generation-with-past", "text-generation"],
+    )
     return parser.parse_args()
 
 

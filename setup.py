@@ -49,8 +49,16 @@ if __name__ == "__main__":
         url="",
         packages=setuptools.find_packages(),
         include_package_data=True,
-        install_requires=["onnx", "onnxruntime", "onnxruntime-extensions", "psutil", "numpy",
-                          "py-cpuinfo", "pydantic", "transformers"],
+        install_requires=[
+            "onnx",
+            "onnxruntime",
+            "onnxruntime-extensions",
+            "psutil",
+            "numpy",
+            "py-cpuinfo",
+            "pydantic",
+            "transformers",
+        ],
         python_requires=">=3.8.0",
         classifiers=[
             "Intended Audience :: Science/Research",

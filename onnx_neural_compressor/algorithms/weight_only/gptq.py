@@ -22,6 +22,8 @@ import pathlib
 import numpy as np
 import onnx
 import onnxruntime as ort
+from packaging.version import Version
+
 from onnx_neural_compressor import config
 from onnx_neural_compressor import constants
 from onnx_neural_compressor import data_reader
@@ -29,7 +31,6 @@ from onnx_neural_compressor import onnx_model
 from onnx_neural_compressor import utility
 from onnx_neural_compressor.algorithms.layer_wise import core
 from onnx_neural_compressor.algorithms.weight_only import utility as woq_utility
-from packaging.version import Version
 
 from typing import List, Union  # isort: skip
 
