@@ -277,7 +277,7 @@ class BaseConfig(ABC):
         return result
 
     def get_params_dict(self):
-        result = dict()
+        result = {}
         for param, value in self.__dict__.items():
             if param not in ["_global_config", "_local_config", "_white_list"]:
                 result[param] = value
@@ -448,8 +448,8 @@ class BaseConfig(ABC):
         return config_list
 
     def _get_op_name_op_type_config(self):
-        op_type_config_dict = dict()
-        op_name_config_dict = dict()
+        op_type_config_dict = {}
+        op_name_config_dict = {}
         for name, config in self.local_config.items():
             if self._is_op_type(name):
                 op_type_config_dict[name] = config
@@ -551,7 +551,7 @@ class ComposableConfig(BaseConfig):
         return None
 
     def get_model_info(self, model, *args, **kwargs):
-        model_info_dict = dict()
+        model_info_dict = {}
         for config in self.config_list:
             model_info_dict.update({config.name: config.get_model_info(model, *args, **kwargs)})
         return model_info_dict
@@ -650,7 +650,7 @@ class RTNConfig(BaseConfig):
         self._post_init()
 
     def get_model_params_dict(self):
-        result = dict()
+        result = {}
         for param in self.model_params_list:
             result[param] = getattr(self, param)
         return result
@@ -812,7 +812,7 @@ class GPTQConfig(BaseConfig):
         self._post_init()
 
     def get_model_params_dict(self):
-        result = dict()
+        result = {}
         for param in self.model_params_list:
             result[param] = getattr(self, param)
         return result
@@ -964,7 +964,7 @@ class AWQConfig(BaseConfig):
         self._post_init()
 
     def get_model_params_dict(self):
-        result = dict()
+        result = {}
         for param in self.model_params_list:
             result[param] = getattr(self, param)
         return result
