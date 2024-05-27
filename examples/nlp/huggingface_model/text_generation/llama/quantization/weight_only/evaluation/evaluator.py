@@ -308,7 +308,7 @@ def simple_evaluate(
         try:
             lm_eval.logging_utils.add_env_info(results)  # additional environment info to results
         except:
-            lm_eval.utils.eval_logger.info(f"get env info failed.")
+            lm_eval.utils.eval_logger.info("get env info failed.")
         return results
     else:
         return None
