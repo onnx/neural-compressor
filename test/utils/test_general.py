@@ -2,9 +2,7 @@
 
 import unittest
 
-from onnx_neural_compressor import config
-from onnx_neural_compressor import constants
-from onnx_neural_compressor import logger
+from onnx_neural_compressor import config, constants, logger
 from onnx_neural_compressor.quantization import tuning
 
 from typing import Any, Callable, List, Optional, Tuple, Union  # isort: skip

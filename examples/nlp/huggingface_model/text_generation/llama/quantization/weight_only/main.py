@@ -23,22 +23,18 @@ import random
 import time
 
 import datasets
+import evaluation
 import numpy as np
 import onnx
 import onnxruntime as ort
 import torch
 import transformers
-import evaluation
 from optimum import onnxruntime as optimum_ort
 from torch.nn import functional
 from torch.utils import data
 
-from onnx_neural_compressor import config
-from onnx_neural_compressor import data_reader
-from onnx_neural_compressor import logger
-from onnx_neural_compressor import utility
-from onnx_neural_compressor.quantization import matmul_nbits_quantizer
-from onnx_neural_compressor.quantization import tuning
+from onnx_neural_compressor import config, data_reader, logger, utility
+from onnx_neural_compressor.quantization import matmul_nbits_quantizer, tuning
 
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(name)s -   %(message)s", datefmt="%m/%d/%Y %H:%M:%S", level=logging.WARN
@@ -131,7 +127,7 @@ def eval_func(model):
         model="hf",
         model_args="pretrained=" + model_dir + ",tokenizer=" + args.tokenizer,
         batch_size=args.batch_size,
-        tasks=','.join(args.tasks),
+        tasks=",".join(args.tasks),
         provider="CPUExecutionProvider",
         trust_remote_code=args.trust_remote_code,
     )
@@ -140,12 +136,10 @@ def eval_func(model):
     eval_acc = 0
     for task_name in args.tasks:
         if task_name == "wikitext":
-            print("Accuracy for %s is: %s" %
-                  (task_name, results["results"][task_name]["word_perplexity,none"]))
+            print("Accuracy for %s is: %s" % (task_name, results["results"][task_name]["word_perplexity,none"]))
             eval_acc += results["results"][task_name]["word_perplexity,none"]
         else:
-            print("Accuracy for %s is: %s" %
-                  (task_name, results["results"][task_name]["acc,none"]))
+            print("Accuracy for %s is: %s" % (task_name, results["results"][task_name]["acc,none"]))
             eval_acc += results["results"][task_name]["acc,none"]
 
     if len(args.tasks) != 0:
@@ -268,12 +262,7 @@ class AWQDataloader(data_reader.CalibrationDataReader):
 
 class GPTQDataloader(data_reader.CalibrationDataReader):
 
-    def __init__(self,
-                 model_path,
-                 batch_size=1,
-                 seqlen=2048,
-                 sub_folder="train",
-                 calibration_sampling_size=8):
+    def __init__(self, model_path, batch_size=1, seqlen=2048, sub_folder="train", calibration_sampling_size=8):
         # large `calibration_sampling_size` may result in long GPTQ running time
         # recommend to use smaller `calibration_sampling_size` value
         random.seed(0)

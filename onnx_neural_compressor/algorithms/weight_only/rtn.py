@@ -26,10 +26,7 @@ import onnx
 import onnxruntime as ort
 from packaging import version
 
-from onnx_neural_compressor import config
-from onnx_neural_compressor import constants
-from onnx_neural_compressor import onnx_model
-from onnx_neural_compressor import utility
+from onnx_neural_compressor import config, constants, onnx_model, utility
 from onnx_neural_compressor.algorithms.layer_wise import core
 from onnx_neural_compressor.algorithms.weight_only import utility as woq_utility
 

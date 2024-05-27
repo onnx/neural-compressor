@@ -25,8 +25,7 @@ import onnx
 import psutil
 from onnxruntime.quantization import onnx_model
 
-from onnx_neural_compressor import constants
-from onnx_neural_compressor import logger
+from onnx_neural_compressor import constants, logger
 
 from typing import Callable, Dict, List, Tuple, Union  # isort: skip
 

@@ -23,8 +23,7 @@ import numpy as np
 import onnx
 from optimum.exporters.onnx import main_export
 
-from onnx_neural_compressor import config
-from onnx_neural_compressor import data_reader
+from onnx_neural_compressor import config, data_reader
 from onnx_neural_compressor.quantization import QuantType
 from onnx_neural_compressor.quantization import algorithm_entry as algos
 from onnx_neural_compressor.quantization import quantize

@@ -23,10 +23,7 @@ import numpy as np
 import onnx
 import onnxruntime
 
-from onnx_neural_compressor import data_reader
-from onnx_neural_compressor import logger
-from onnx_neural_compressor import onnx_model
-from onnx_neural_compressor import utility
+from onnx_neural_compressor import data_reader, logger, onnx_model, utility
 
 
 class Calibrator:

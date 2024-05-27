@@ -13,7 +13,6 @@
 # limitations under the License.
 
 
-from onnxruntime.quantization.quant_utils import QuantFormat
-from onnxruntime.quantization.quant_utils import QuantType
+from onnxruntime.quantization.quant_utils import QuantFormat, QuantType
 
 from onnx_neural_compressor.quantization.quantize import quantize

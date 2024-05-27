@@ -17,11 +17,7 @@ from typing import List, Union  # isort: skip
 import onnx
 from onnxruntime.quantization import matmul_4bits_quantizer
 
-from onnx_neural_compressor import config
-from onnx_neural_compressor import data_reader
-from onnx_neural_compressor import logger
-from onnx_neural_compressor import onnx_model
-from onnx_neural_compressor import utility
+from onnx_neural_compressor import config, data_reader, logger, onnx_model, utility
 from onnx_neural_compressor.quantization import algorithm_entry as algos
 
 
