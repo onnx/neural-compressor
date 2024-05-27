@@ -67,10 +67,11 @@ def _apply_awq_scale(model, weight_config, absorb_pairs, output_dicts, num_bits,
         weight = []
         org_out = []
         for node in nodes:
-            if node.name in weight_config and weight_config.get(node.name, "fp32") != "fp32":
-                num_bits = weight_config[node.name]["bits"]
-                group_size = weight_config[node.name]["group_size"]
-                scheme = weight_config[node.name]["scheme"]
+            if (node.name, node.op_type) in weight_config and \
+                weight_config.get((node.name, node.op_type), "fp32") != "fp32":
+                num_bits = weight_config[(node.name, node.op_type)].get("weight_bits", 4)
+                group_size = weight_config[(node.name, node.op_type)].get("weight_group_size", 32)
+                scheme = "sym" if weight_config[(node.name, node.op_type)].get("weight_sym", True) else "asym"
                 break
 
         # search scale
@@ -83,7 +84,7 @@ def _apply_awq_scale(model, weight_config, absorb_pairs, output_dicts, num_bits,
             ratio = ratio * 1 / n_grid
             loss = 0
             for node in nodes:
-                if weight_config.get(node.name, {}) == "fp32":
+                if weight_config.get((node.name, node.op_type), {}) == "fp32":
                     continue
 
                 weight = onnx.numpy_helper.to_array(model.get_initializer(node.input[1]), base_dir)
@@ -126,9 +127,9 @@ def _apply_awq_scale(model, weight_config, absorb_pairs, output_dicts, num_bits,
                 best_scale = scales
 
         for node in nodes:
-            weight_config.setdefault(node.name, {}).update({"bits": num_bits})
-            weight_config.setdefault(node.name, {}).update({"group_size": group_size})
-            weight_config.setdefault(node.name, {}).update({"scheme": scheme})
+            weight_config.setdefault((node.name, node.op_type), {}).update({"weight_bits": num_bits})
+            weight_config.setdefault((node.name, node.op_type), {}).update({"weight_group_size": group_size})
+            weight_config.setdefault((node.name, node.op_type), {}).update({"weight_sym": scheme=="sym"})
 
             init_share_num = model.get_initializer_share_num(node.input[1])
             weight_tensor = model.get_initializer(node.input[1])
@@ -235,10 +236,10 @@ def _apply_awq_clip(model, weight_config, absorb_pairs, output_dicts, num_bits, 
         inp = np.concatenate(output_dicts[nodes[0].input[0]], axis=0)
 
         for node in nodes:
-            if node.name in weight_config:
-                num_bits = weight_config[node.name]["bits"]
-                group_size = weight_config[node.name]["group_size"]
-                scheme = weight_config[node.name]["scheme"]
+            if (node.name, node.op_type) in weight_config:
+                num_bits = weight_config[(node.name, node.op_type)].get("weight_bits", 4)
+                group_size = weight_config[(node.name, node.op_type)].get("weight_group_size", 32)
+                scheme = "sym" if weight_config[(node.name, node.op_type)].get("weight_sym", True) else "asym"
 
             org_weight = onnx.numpy_helper.to_array(model.get_initializer(node.input[1]), base_dir=base_dir)
             org_w_shape = org_weight.shape  # ic, oc

@@ -28,7 +28,7 @@ import onnx
 import onnxruntime as ort
 import torch
 import transformers
-from intel_extension_for_transformers.transformers.llm.evaluation import lm_eval
+import evaluation
 from optimum import onnxruntime as optimum_ort
 from torch.nn import functional
 from torch.utils import data
@@ -95,6 +95,7 @@ parser.add_argument(
 parser.add_argument("--dataset", nargs="?", default="NeelNanda/pile-10k", const="NeelNanda/pile-10k")
 parser.add_argument("--mode", type=str, help="benchmark mode of performance or accuracy")
 parser.add_argument("--intra_op_num_threads", type=int, default=24)
+parser.add_argument("--trust_remote_code", type=bool, default=False)
 args = parser.parse_args()
 
 # load model
@@ -126,22 +127,26 @@ def eval_func(model):
 
     replace_architectures(os.path.join(model_dir, "config.json"))
 
-    results = lm_eval.evaluate(
-        model="hf-causal",
+    eval_args = evaluation.LMEvalParser(
+        model="hf",
         model_args="pretrained=" + model_dir + ",tokenizer=" + args.tokenizer,
         batch_size=args.batch_size,
-        tasks=args.tasks,
-        model_format="onnx",
+        tasks=','.join(args.tasks),
+        provider="CPUExecutionProvider",
+        trust_remote_code=args.trust_remote_code,
     )
+    results = evaluation.evaluate(eval_args)
 
     eval_acc = 0
     for task_name in args.tasks:
         if task_name == "wikitext":
-            print("Accuracy for %s is: %s" % (task_name, results["results"][task_name]["word_perplexity"]))
-            eval_acc += results["results"][task_name]["word_perplexity"]
+            print("Accuracy for %s is: %s" %
+                  (task_name, results["results"][task_name]["word_perplexity,none"]))
+            eval_acc += results["results"][task_name]["word_perplexity,none"]
         else:
-            print("Accuracy for %s is: %s" % (task_name, results["results"][task_name]["acc"]))
-            eval_acc += results["results"][task_name]["acc"]
+            print("Accuracy for %s is: %s" %
+                  (task_name, results["results"][task_name]["acc,none"]))
+            eval_acc += results["results"][task_name]["acc,none"]
 
     if len(args.tasks) != 0:
         eval_acc /= len(args.tasks)
@@ -263,7 +268,14 @@ class AWQDataloader(data_reader.CalibrationDataReader):
 
 class GPTQDataloader(data_reader.CalibrationDataReader):
 
-    def __init__(self, model_path, batch_size=1, seqlen=2048, sub_folder="train", calibration_sampling_size=8):
+    def __init__(self,
+                 model_path,
+                 batch_size=1,
+                 seqlen=2048,
+                 sub_folder="train",
+                 calibration_sampling_size=8):
+        # large `calibration_sampling_size` may result in long GPTQ running time
+        # recommend to use smaller `calibration_sampling_size` value
         random.seed(0)
         self.encoded_list = []
 

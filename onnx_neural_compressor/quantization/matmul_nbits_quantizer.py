@@ -38,7 +38,7 @@ class GPTQWeightOnlyQuantConfig(matmul_4bits_quantizer.GPTQWeightOnlyQuantConfig
         self,
         calibration_data_reader: data_reader.CalibrationDataReader,
         percdamp=0.01,
-        blocksize=128,
+        block_size=128,
         actorder=False,
         mse=False,
         perchannel=True,
@@ -47,7 +47,7 @@ class GPTQWeightOnlyQuantConfig(matmul_4bits_quantizer.GPTQWeightOnlyQuantConfig
         super().__init__(
             calibration_data_reader=calibration_data_reader,
             percdamp=percdamp,
-            blocksize=blocksize,
+            block_size=block_size,
             actorder=actorder,
             mse=mse,
             perchannel=perchannel,
@@ -128,7 +128,7 @@ class MatMulNBitsQuantizer:
             quant_kwargs.update(
                 {
                     "percdamp": self.algo_config.percdamp,
-                    "blocksize": self.algo_config.blocksize,
+                    "blocksize": self.algo_config.block_size,
                     "actorder": self.algo_config.actorder,
                     "mse": self.algo_config.mse,
                     "perchannel": self.algo_config.perchannel,
