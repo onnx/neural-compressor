@@ -5,7 +5,6 @@ pr:
   drafts: false
   branches:
     include:
-      - ONC
       - main
   paths:
     include:
