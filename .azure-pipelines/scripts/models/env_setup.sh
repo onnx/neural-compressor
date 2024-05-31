@@ -1,0 +1,127 @@
+#!/bin/bash
+set -eo pipefail
+source /neural-compressor/.azure-pipelines/scripts/change_color.sh
+
+# get parameters
+PATTERN='[-a-zA-Z0-9_]*='
+
+for i in "$@"; do
+    case $i in
+    --yaml=*)
+        yaml=$(echo $i | sed "s/${PATTERN}//")
+        ;;
+    --framework=*)
+        framework=$(echo $i | sed "s/${PATTERN}//")
+        ;;
+    --fwk_ver=*)
+        fwk_ver=$(echo $i | sed "s/${PATTERN}//")
+        ;;
+    --torch_vision_ver=*)
+        torch_vision_ver=$(echo $i | sed "s/${PATTERN}//")
+        ;;
+    --model=*)
+        model=$(echo $i | sed "s/${PATTERN}//")
+        ;;
+    --model_src_dir=*)
+        model_src_dir=$(echo $i | sed "s/${PATTERN}//")
+        ;;
+    --dataset_location=*)
+        dataset_location=$(echo $i | sed "s/${PATTERN}//")
+        ;;
+    --batch_size=*)
+        batch_size=$(echo $i | sed "s/${PATTERN}//")
+        ;;
+    --strategy=*)
+        strategy=$(echo $i | sed "s/${PATTERN}//")
+        ;;
+    --new_benchmark=*)
+        new_benchmark=$(echo $i | sed "s/${PATTERN}//")
+        ;;
+    --inc_new_api=*)
+        inc_new_api=$(echo $i | sed "s/${PATTERN}//")
+        ;;
+    *)
+        echo "Parameter $i not recognized."
+        exit 1
+        ;;
+    esac
+done
+
+ONNX_VERSION="1.15.0"
+
+SCRIPTS_PATH="/neural-compressor/.azure-pipelines/scripts/models"
+log_dir="/neural-compressor/.azure-pipelines/scripts/models"
+if [[ "${inc_new_api}" == "3x"* ]]; then
+    WORK_SOURCE_DIR="/neural-compressor/examples/3.x_api/${framework}"
+else
+    WORK_SOURCE_DIR="/neural-compressor/examples/${framework}"
+fi
+
+$BOLD_YELLOW && echo "processing ${framework}-${fwk_ver}-${model}" && $RESET
+
+$BOLD_YELLOW && echo "======= creat log_dir =========" && $RESET
+if [ -d "${log_dir}/${model}" ]; then
+    $BOLD_GREEN && echo "${log_dir}/${model} already exists, don't need to mkdir." && $RESET
+else
+    $BOLD_GREEN && echo "no log dir ${log_dir}/${model}, create." && $RESET
+    cd ${log_dir}
+    mkdir ${model}
+fi
+
+$BOLD_YELLOW && echo "====== install requirements ======" && $RESET
+/bin/bash /neural-compressor/.azure-pipelines/scripts/install_nc.sh ${inc_new_api}
+
+mkdir -p ${WORK_SOURCE_DIR}
+cd ${WORK_SOURCE_DIR}
+if [[ "${inc_new_api}" == "false" ]]; then
+    echo "copy old api examples to workspace..."
+    git clone -b old_api_examples https://github.com/intel/neural-compressor.git old-lpot-models
+    cd old-lpot-models
+    git branch
+    cd -
+    rm -rf ${model_src_dir}
+    mkdir -p ${model_src_dir}
+    cp -r old-lpot-models/examples/${framework}/${model_src_dir} ${WORK_SOURCE_DIR}/${model_src_dir}/../
+fi
+
+cd ${model_src_dir}
+
+if [[ "${fwk_ver}" != "latest" ]]; then
+    pip install ruamel.yaml==0.17.40
+    pip install psutil
+    pip install protobuf==4.23.4
+    pip install onnx==${ONNX_VERSION}
+    pip install onnxruntime==${fwk_ver}
+fi
+
+if [ -f "requirements.txt" ]; then
+    sed -i '/neural-compressor/d' requirements.txt
+    if [ "${framework}" == "onnxrt" ]; then
+        sed -i '/^onnx>=/d;/^onnx==/d;/^onnxruntime>=/d;/^onnxruntime==/d' requirements.txt
+    fi
+    n=0
+    until [ "$n" -ge 5 ]; do
+        python -m pip install -r requirements.txt && break
+        n=$((n + 1))
+        sleep 5
+    done
+    pip list
+else
+    $BOLD_RED && echo "Not found requirements.txt file." && $RESET
+fi
+
+if [[ "${inc_new_api}" == "false" ]]; then
+    $BOLD_YELLOW && echo "======== update yaml config ========" && $RESET
+    $BOLD_YELLOW && echo -e "\nPrint origin yaml..." && $RESET
+    cat ${yaml}
+    python ${SCRIPTS_PATH}/update_yaml_config.py \
+        --yaml=${yaml} \
+        --framework=${framework} \
+        --dataset_location=${dataset_location} \
+        --batch_size=${batch_size} \
+        --strategy=${strategy} \
+        --new_benchmark=${new_benchmark} \
+        --multi_instance='true'
+    $BOLD_YELLOW && echo -e "\nPrint updated yaml... " && $RESET
+    cat ${yaml}
+fi
