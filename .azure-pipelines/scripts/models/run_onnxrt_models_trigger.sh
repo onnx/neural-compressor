@@ -28,9 +28,9 @@ for i in "$@"; do
 done
 
 echo "specify FWs version..."
-source /neural-compressor/.azure-pipelines/scripts/fwk_version.sh 'latest'
+
 FRAMEWORK="onnxrt"
-FRAMEWORK_VERSION=${onnxruntime_version}
+FRAMEWORK_VERSION='1.17.1'
 
 inc_new_api=false
 # ======== set up config for onnxrt models ========
