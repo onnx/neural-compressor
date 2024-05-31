@@ -5,7 +5,7 @@ pr:
   drafts: false
   branches:
     include:
-      - master
+      - main
   paths:
     include:
       - onnx_neural_compressor
@@ -22,10 +22,6 @@ variables:
   SCRIPT_PATH: /neural_compressor/.azure-pipelines/scripts
 
 parameters:
-  - name: ONNX_Model
-    displayName: Run ONNX models?
-    type: boolean
-    default: true
   - name: ONNXModelList
     type: object
     default:
@@ -36,7 +32,6 @@ stages:
     displayName: Run ONNX Model
     pool: MODEL_PERF_TEST
     dependsOn: []
-    condition: and(succeeded(), eq('${{ parameters.ONNX_Model }}', 'true'))
     jobs:
       - ${{ each model in parameters.ONNXModelList }}:
           - job:
