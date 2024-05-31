@@ -23,7 +23,7 @@ cd /neural-compressor
 cp -r /neural-compressor/.azure-pipelines .azure-pipelines-pr
 git config --global --add safe.directory /neural-compressor
 git fetch
-git checkout ONC
+git checkout main
 rm -rf build dist *egg-info
 echo y | pip uninstall onnx_neural_compressor
 cd /neural-compressor/.azure-pipelines-pr/scripts && bash install_nc.sh

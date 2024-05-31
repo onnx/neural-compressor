@@ -54,8 +54,8 @@ steps:
           git clone ${{ parameters.repo }} ${BUILD_SOURCESDIRECTORY}
           git config --global --add safe.directory ${BUILD_SOURCESDIRECTORY}
           cd ${BUILD_SOURCESDIRECTORY}
-          git checkout ONC
-        displayName: "Checkout out ONC"
+          git checkout main
+        displayName: "Checkout out main"
 
   - script: |
       if [[ ! $(docker images | grep -i ${{ parameters.repoName }}:${{ parameters.repoTag }}) ]]; then
