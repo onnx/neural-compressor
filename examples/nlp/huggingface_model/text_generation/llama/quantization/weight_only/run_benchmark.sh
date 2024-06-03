@@ -35,7 +35,7 @@ function init_params {
 
 # run_benchmark
 function run_benchmark {
-    
+
     # Check if the input_model ends with the filename extension ".onnx"
     if [[ $input_model =~ \.onnx$ ]]; then
         # If the string ends with the filename extension, get the path of the file
@@ -50,7 +50,7 @@ function run_benchmark {
             --mode=${mode} \
             --intra_op_num_threads=${intra_op_num_threads-24} \
             --benchmark
-            
+
 }
 
 main "$@"

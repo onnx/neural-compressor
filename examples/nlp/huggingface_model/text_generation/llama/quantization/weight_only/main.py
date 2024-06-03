@@ -23,7 +23,6 @@ import random
 import torch
 import logging
 import argparse
-import random
 import numpy as np
 import datasets
 import onnxruntime as ort

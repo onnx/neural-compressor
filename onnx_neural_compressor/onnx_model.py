@@ -1000,8 +1000,8 @@ class ONNXModel(onnx_model.ONNXModel):
     def merge_split_models(self, to_merge_model):
         """Merge two split model into final model."""
         to_merge_model.write_external_data_to_new_location()
-        self.add_nodes([node for node in to_merge_model.nodes()])
-        self.add_initializers([init for init in to_merge_model.initializer()])
+        self.add_nodes(list(to_merge_model.nodes()))
+        self.add_initializers(list(to_merge_model.initializer()))
         self.update()
 
         # add new output
