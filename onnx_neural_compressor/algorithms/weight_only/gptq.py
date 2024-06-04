@@ -420,7 +420,7 @@ def apply_gptq_on_model(
             quant_func=gptq_quantize,
             weight_config=quant_config,
             data_reader=calibration_data_reader,
-            **quant_kwargs
+            **quant_kwargs,
         )
     else:
         quantized_model = gptq_quantize(

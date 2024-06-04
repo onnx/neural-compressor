@@ -16,6 +16,7 @@ from __future__ import annotations
 import copy
 import os
 import pathlib
+import sys
 import tempfile
 import uuid
 
@@ -24,7 +25,6 @@ import onnx
 from onnx_neural_compressor import config, data_reader, logger, utility
 
 from typing import Any, Callable, Dict, Generator, Iterator, List, Sized  # isort: skip
-import sys
 
 
 class EvaluationFuncWrapper:
@@ -306,9 +306,7 @@ class TuningMonitor:
         self.tuning_history: list[_TrialRecord] = []
         self.baseline = None
 
-    def add_trial_result(
-        self, trial_index: int, trial_result: int | float, quant_config: config.BaseConfig
-    ) -> None:
+    def add_trial_result(self, trial_index: int, trial_result: int | float, quant_config: config.BaseConfig) -> None:
         self.trial_cnt += 1
         trial_record = _TrialRecord(trial_index, trial_result, quant_config)
         self.tuning_history.append(trial_record)

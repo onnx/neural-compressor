@@ -16,6 +16,7 @@ import importlib
 import pathlib
 import subprocess
 import time
+from typing import Callable, Dict, List, Optional, Tuple, Union
 
 import cpuinfo
 import numpy as np
@@ -24,8 +25,6 @@ import psutil
 from onnxruntime.quantization import onnx_model
 
 from onnx_neural_compressor import constants, logger
-
-from typing import Callable, Dict, List, Tuple, Union, Optional
 
 # Dictionary to store a mapping between algorithm names and corresponding algo implementation(function)
 algos_mapping: Dict[str, Callable] = {}

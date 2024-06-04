@@ -5,9 +5,9 @@ import unittest
 
 import onnx
 import onnxruntime as ort
-from onnxruntime.tools import symbolic_shape_infer
 import torch
 import transformers
+from onnxruntime.tools import symbolic_shape_infer
 from optimum.exporters.onnx import main_export
 
 from onnx_neural_compressor import config, data_reader, logger

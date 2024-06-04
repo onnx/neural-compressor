@@ -35,7 +35,7 @@ def layer_wise_quant(
     weight_config: dict,
     data_reader: data_reader.CalibrationDataReader = None,
     *args,
-    **kwargs
+    **kwargs,
 ) -> onnx_model.ONNXModel:
     """Quantize model layer by layer to save memory.
 
@@ -131,7 +131,7 @@ def layer_wise_quant(
                 weight_config=weight_config,
                 data_reader=current_data_reader,
                 return_modelproto=False,
-                **kwargs
+                **kwargs,
             )
         else:
             # perform quantization
@@ -175,7 +175,7 @@ def layer_wise_quant(
                     weight_config=weight_config,
                     data_reader=current_data_reader,
                     return_modelproto=False,
-                    **kwargs
+                    **kwargs,
                 )
             else:
                 # perform quantization

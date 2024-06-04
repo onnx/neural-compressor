@@ -1,4 +1,5 @@
 """Tests for general components."""
+
 from __future__ import annotations
 
 import unittest

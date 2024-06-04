@@ -58,9 +58,7 @@ def cli_evaluate(args) -> None:
     task_manager = lm_eval.tasks.TaskManager(args.verbosity, include_path=args.include_path)
 
     if args.limit:
-        eval_logger.warning(
-            " --limit SHOULD ONLY BE USED FOR TESTING.REAL METRICS SHOULD NOT BE COMPUTED USING LIMIT."
-        )
+        eval_logger.warning(" --limit SHOULD ONLY BE USED FOR TESTING.REAL METRICS SHOULD NOT BE COMPUTED USING LIMIT.")
 
     if args.tasks is None:
         eval_logger.error("Need to specify task to evaluate.")

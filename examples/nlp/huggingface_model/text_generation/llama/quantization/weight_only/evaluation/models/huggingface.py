@@ -129,9 +129,7 @@ class HFLM(lm_eval.api.model.TemplateLM):
         elif getattr(self.config, "model_type", None) == "qwen":
             # Qwen's trust_remote_code tokenizer does not allow for adding special tokens
             self.tokenizer.pad_token = "<|endoftext|>"
-        elif (
-            self.tokenizer.__class__.__name__ in ("RWKVWorldTokenizer", "Rwkv5Tokenizer")
-        ):
+        elif self.tokenizer.__class__.__name__ in ("RWKVWorldTokenizer", "Rwkv5Tokenizer"):
             # The RWKV world tokenizer, does not allow for adding special tokens /
             # setting the pad token (which is set as 0)
             # The additional tokenizer name check is needed, as there exists rwkv4 models with neox tokenizer
@@ -241,18 +239,12 @@ class HFLM(lm_eval.api.model.TemplateLM):
             elif backend == "seq2seq":
                 self.AUTO_MODEL_CLASS = transformers.AutoModelForSeq2SeqLM
             eval_logger.info(f"Overrode HF model backend type, and using type '{backend}'")
-        elif (
-            config.model_type
-            in transformers.models.auto.modeling_auto.MODEL_FOR_SEQ_TO_SEQ_CAUSAL_LM_MAPPING_NAMES
-        ):
+        elif config.model_type in transformers.models.auto.modeling_auto.MODEL_FOR_SEQ_TO_SEQ_CAUSAL_LM_MAPPING_NAMES:
             # first check if model type is listed under seq2seq models, since some
             # models like MBart are listed in both seq2seq and causal mistakenly in HF transformers.
             # these special cases should be treated as seq2seq models.
             self.AUTO_MODEL_CLASS = transformers.AutoModelForSeq2SeqLM
-        elif (
-            self.config.model_type
-            in transformers.models.auto.modeling_auto.MODEL_FOR_CAUSAL_LM_MAPPING_NAMES
-        ):
+        elif self.config.model_type in transformers.models.auto.modeling_auto.MODEL_FOR_CAUSAL_LM_MAPPING_NAMES:
             self.AUTO_MODEL_CLASS = transformers.AutoModelForCausalLM
         else:
             if not trust_remote_code:
@@ -397,8 +389,7 @@ class HFLM(lm_eval.api.model.TemplateLM):
                 and not os.path.exists(os.path.join(pretrained, "decoder_model_merged.onnx"))
             ):
                 raise ValueError(
-                    "Please ensure encoder_model.onnx and "
-                    f"decoder_model(_merged).onnx are under {pretrained}."
+                    "Please ensure encoder_model.onnx and " f"decoder_model(_merged).onnx are under {pretrained}."
                 )
 
             sess_options = onnxruntime.SessionOptions()
@@ -446,7 +437,6 @@ class HFLM(lm_eval.api.model.TemplateLM):
                     use_cache=False,
                     use_io_binding=False,
                 )
-
 
     def _create_tokenizer(
         self,
@@ -672,7 +662,9 @@ class HFLM(lm_eval.api.model.TemplateLM):
             **generation_kwargs,
         )
 
-    def _select_cont_toks(self, logits: torch.Tensor, contlen: int | None = None, inplen: int | None = None) -> torch.Tensor:
+    def _select_cont_toks(
+        self, logits: torch.Tensor, contlen: int | None = None, inplen: int | None = None
+    ) -> torch.Tensor:
         if transformers.AutoModelForCausalLM == self.AUTO_MODEL_CLASS:
             assert contlen and inplen, "Must pass input len and cont. len to select scored logits for causal LM"
             # discard right-padding.

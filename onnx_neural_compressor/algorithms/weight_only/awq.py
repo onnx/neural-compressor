@@ -30,7 +30,6 @@ from onnx_neural_compressor.algorithms.weight_only import rtn
 from onnx_neural_compressor.algorithms.weight_only import utility as woq_utility
 
 
-
 def _get_weight_scale(weight, group_size):
     """Get the scale of weight."""
     org_shape = weight.shape

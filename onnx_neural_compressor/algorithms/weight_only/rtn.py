@@ -31,7 +31,6 @@ from onnx_neural_compressor.algorithms.layer_wise import core
 from onnx_neural_compressor.algorithms.weight_only import utility as woq_utility
 
 
-
 def rtn_quantize(
     model: onnx.ModelProto | onnx_model.ONNXModel | pathlib.Path | str,
     weight_config: dict | None = None,
