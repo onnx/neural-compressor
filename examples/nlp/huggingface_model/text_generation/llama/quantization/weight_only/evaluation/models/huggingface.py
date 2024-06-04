@@ -11,12 +11,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+from __future__ import annotations
 
 import copy
 import os
 import tempfile
-from typing import List, Literal, Optional, Tuple, Union
+from typing import Literal
 
 import accelerate
 import huggingface_hub
@@ -47,26 +47,20 @@ class HFLM(lm_eval.api.model.TemplateLM):
 
     def __init__(
         self,
-        pretrained: Optional[Union[str, transformers.PreTrainedModel]] = "gpt2",
-        backend: Optional[Literal["default", "causal", "seq2seq"]] = "default",
+        pretrained: str | transformers.PreTrainedModel | None = "gpt2",
+        backend: Literal["default", "causal", "seq2seq"] | None = "default",
         # override whether the model should be treated as decoder-only (causal) or encoder-decoder (seq2seq)
-        revision: Optional[str] = "main",
-        tokenizer: Optional[
-            Union[
-                str,
-                transformers.PreTrainedTokenizer,
-                transformers.PreTrainedTokenizerFast,
-            ]
-        ] = None,
-        truncation: Optional[bool] = False,
+        revision: str | None = "main",
+        tokenizer: str | transformers.PreTrainedTokenizer | transformers.PreTrainedTokenizerFast | None = None,
+        truncation: bool | None = False,
         logits_cache: bool = True,
-        max_length: Optional[int] = None,
-        provider: Optional[str] = "CPUExecutionProvider",
-        batch_size: Optional[Union[int, str]] = 1,
-        max_batch_size: Optional[int] = 64,
-        trust_remote_code: Optional[bool] = False,
-        use_fast_tokenizer: Optional[bool] = True,
-        add_bos_token: Optional[bool] = False,
+        max_length: int | None = None,
+        provider: str | None = "CPUExecutionProvider",
+        batch_size: int | str | None = 1,
+        max_batch_size: int | None = 64,
+        trust_remote_code: bool | None = False,
+        use_fast_tokenizer: bool | None = True,
+        add_bos_token: bool | None = False,
         **kwargs,
     ) -> None:
         super().__init__()
@@ -136,8 +130,7 @@ class HFLM(lm_eval.api.model.TemplateLM):
             # Qwen's trust_remote_code tokenizer does not allow for adding special tokens
             self.tokenizer.pad_token = "<|endoftext|>"
         elif (
-            self.tokenizer.__class__.__name__ == "RWKVWorldTokenizer"
-            or self.tokenizer.__class__.__name__ == "Rwkv5Tokenizer"
+            self.tokenizer.__class__.__name__ in ("RWKVWorldTokenizer", "Rwkv5Tokenizer")
         ):
             # The RWKV world tokenizer, does not allow for adding special tokens /
             # setting the pad token (which is set as 0)
@@ -231,9 +224,9 @@ class HFLM(lm_eval.api.model.TemplateLM):
 
     def _get_backend(
         self,
-        config: Union[transformers.PretrainedConfig, transformers.AutoConfig],
-        backend: Optional[Literal["default", "causal", "seq2seq"]] = "default",
-        trust_remote_code: Optional[bool] = False,
+        config: transformers.PretrainedConfig | transformers.AutoConfig,
+        backend: Literal["default", "causal", "seq2seq"] | None = "default",
+        trust_remote_code: bool | None = False,
     ) -> None:
         """Helper method during initialization.
 
@@ -299,8 +292,8 @@ class HFLM(lm_eval.api.model.TemplateLM):
                 local_dir = tempfile.TemporaryDirectory().name
                 huggingface_hub.snapshot_download(pretrained, local_dir=local_dir)
                 pretrained = local_dir
-            except Exception as e:
-                raise e
+            except Exception:
+                raise
 
         if transformers.AutoModelForCausalLM == self.AUTO_MODEL_CLASS:
             if (
@@ -329,8 +322,8 @@ class HFLM(lm_eval.api.model.TemplateLM):
                     self._model = optimum.onnxruntime.ORTModelForCausalLM(
                         session,
                         self.config,
-                        use_cache=True if use_cache else False,
-                        use_io_binding=True if use_cache else False,
+                        use_cache=bool(use_cache),
+                        use_io_binding=bool(use_cache),
                     )
                 elif os.path.exists(os.path.join(pretrained, "decoder_model_merged.onnx")):
                     session = optimum.onnxruntime.ORTModelForCausalLM.load_model(
@@ -367,8 +360,8 @@ class HFLM(lm_eval.api.model.TemplateLM):
                     session[0],
                     self.config,
                     pretrained,
-                    use_cache=True if use_cache else False,
-                    use_io_binding=True if use_cache else False,
+                    use_cache=bool(use_cache),
+                    use_io_binding=bool(use_cache),
                 )
             elif os.path.exists(os.path.join(pretrained, "decoder_model_merged.onnx")):
                 sessions = optimum.onnxruntime.ORTModelForCausalLM.load_model(
@@ -457,17 +450,11 @@ class HFLM(lm_eval.api.model.TemplateLM):
 
     def _create_tokenizer(
         self,
-        pretrained: Union[str, transformers.PreTrainedModel],
-        tokenizer: Optional[
-            Union[
-                str,
-                transformers.PreTrainedTokenizer,
-                transformers.PreTrainedTokenizerFast,
-            ]
-        ],
-        revision: Optional[str] = "main",
-        trust_remote_code: Optional[bool] = False,
-        use_fast_tokenizer: Optional[bool] = True,
+        pretrained: str | transformers.PreTrainedModel,
+        tokenizer: str | transformers.PreTrainedTokenizer | transformers.PreTrainedTokenizerFast | None,
+        revision: str | None = "main",
+        trust_remote_code: bool | None = False,
+        use_fast_tokenizer: bool | None = True,
     ) -> None:
         """Helper method during initialization.
 
@@ -523,7 +510,7 @@ class HFLM(lm_eval.api.model.TemplateLM):
                 call_kwargs = {}
                 test_batch = torch.ones((batch_size, max_length), device=self._device).long()
             for _ in range(5):
-                out = F.log_softmax(self._model_call(test_batch, **call_kwargs), dim=-1)
+                F.log_softmax(self._model_call(test_batch, **call_kwargs), dim=-1)
 
             return batch_size
 
@@ -546,7 +533,7 @@ class HFLM(lm_eval.api.model.TemplateLM):
         lm_eval.models.utils.clear_torch_cache()
         return batch_size
 
-    def tok_encode(self, string: str, left_truncate_len=None, add_special_tokens=None) -> List[int]:
+    def tok_encode(self, string: str, left_truncate_len=None, add_special_tokens=None) -> list[int]:
         if add_special_tokens is None:
             if transformers.AutoModelForCausalLM == self.AUTO_MODEL_CLASS:
                 add_special_tokens = False or self.add_bos_token
@@ -564,11 +551,11 @@ class HFLM(lm_eval.api.model.TemplateLM):
 
     def tok_batch_encode(
         self,
-        strings: List[str],
+        strings: list[str],
         padding_side: str = "left",
-        left_truncate_len: int = None,
+        left_truncate_len: int | None = None,
         truncation: bool = False,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         # encode a batch of strings. converts to tensors and pads automatically, unlike tok_encode.
         old_padding_side = self.tokenizer.padding_side
         self.tokenizer.padding_side = padding_side
@@ -685,7 +672,7 @@ class HFLM(lm_eval.api.model.TemplateLM):
             **generation_kwargs,
         )
 
-    def _select_cont_toks(self, logits: torch.Tensor, contlen: int = None, inplen: int = None) -> torch.Tensor:
+    def _select_cont_toks(self, logits: torch.Tensor, contlen: int | None = None, inplen: int | None = None) -> torch.Tensor:
         if transformers.AutoModelForCausalLM == self.AUTO_MODEL_CLASS:
             assert contlen and inplen, "Must pass input len and cont. len to select scored logits for causal LM"
             # discard right-padding.
@@ -700,8 +687,8 @@ class HFLM(lm_eval.api.model.TemplateLM):
         return logits
 
     def loglikelihood_rolling(
-        self, requests: List[lm_eval.api.instance.Instance], disable_tqdm: bool = False
-    ) -> List[float]:
+        self, requests: list[lm_eval.api.instance.Instance], disable_tqdm: bool = False
+    ) -> list[float]:
         loglikelihoods = []
 
         adaptive_batch_size = None
@@ -727,7 +714,7 @@ class HFLM(lm_eval.api.model.TemplateLM):
 
             # TODO: Right now,
             # we pass single EOT token to the Encoder and the full context to the decoder, in seq2seq case
-            rolling_token_windows = [(None,) + x for x in rolling_token_windows]
+            rolling_token_windows = [(None, *x) for x in rolling_token_windows]
 
             pad_amnt = 0
             if self.world_size > 1:
@@ -771,15 +758,15 @@ class HFLM(lm_eval.api.model.TemplateLM):
 
     def _loglikelihood_tokens(
         self,
-        requests: List[Tuple[Tuple[str, str], List[int], List[int]]],
+        requests: list[tuple[tuple[str, str], list[int], list[int]]],
         disable_tqdm: bool = False,
-        override_bs: int = None,
-    ) -> List[Tuple[float, bool]]:
+        override_bs: int | None = None,
+    ) -> list[tuple[float, bool]]:
         # TODO:
         # implement some kind of efficient-request-middleware that lumps together requests with the same context
         res = []
 
-        def _collate(req: Tuple[Tuple[str, str], List[int], List[int]]):
+        def _collate(req: tuple[tuple[str, str], list[int], list[int]]):
             """Defines the key for the sorted method."""
             # the negative sign on len(toks) sorts descending - this has a few advantages:
             # - time estimates will always be over not underestimates, which is more useful for planning
@@ -791,7 +778,7 @@ class HFLM(lm_eval.api.model.TemplateLM):
             toks = req[1] + req[2]
             return -len(toks), tuple(toks)
 
-        def _lookup_one_token_cont(req: Tuple[Tuple[str, str], List[int], List[int]]):
+        def _lookup_one_token_cont(req: tuple[tuple[str, str], list[int], list[int]]):
             """Defines the key to group and lookup one-token continuations."""
             # Use with group_by="contexts" (optional)"
             # allows for the creation of a lookup, so we can reuse logits in case of one-token continuations.
@@ -962,10 +949,10 @@ class HFLM(lm_eval.api.model.TemplateLM):
 
         return re_ord.get_original(res)
 
-    def generate_until(self, requests: List[lm_eval.api.instance.Instance], disable_tqdm: bool = False) -> List[str]:
+    def generate_until(self, requests: list[lm_eval.api.instance.Instance], disable_tqdm: bool = False) -> list[str]:
         res = []
 
-        def _collate(req: Tuple[str, dict]):
+        def _collate(req: tuple[str, dict]):
             """Defines the key for the sorted method."""
             # the negative sign on len(toks) sorts descending - this has a few advantages:
             # - time estimates will always be over not underestimates, which is more useful for planning
@@ -1016,7 +1003,7 @@ class HFLM(lm_eval.api.model.TemplateLM):
             until = None
             if isinstance(gen_kwargs, dict):
                 kwargs = copy.deepcopy(gen_kwargs)  # edge case for repeats > 1
-                if "until" in kwargs.keys():
+                if "until" in kwargs:
                     until = kwargs.pop("until")
                     if isinstance(until, str):
                         until = [kwargs]
@@ -1030,7 +1017,7 @@ class HFLM(lm_eval.api.model.TemplateLM):
                 until = [eos]
             else:
                 until.append(eos)
-            if "max_gen_toks" in kwargs.keys():
+            if "max_gen_toks" in kwargs:
                 max_gen_toks = kwargs.pop("max_gen_toks")
             else:
                 max_gen_toks = self.max_gen_toks

@@ -11,10 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from __future__ import annotations
 
 import pathlib
 import tempfile
-from typing import Union
 
 import onnx
 from onnxruntime import quantization
@@ -27,13 +27,13 @@ from onnx_neural_compressor.algorithms.weight_only import awq, gptq, rtn
 ###################### SmoothQuant Entry ##################################
 @utility.register_algo(name=constants.SMOOTH_QUANT)
 def smooth_quant_entry(
-    model: Union[pathlib.Path, str],
+    model: pathlib.Path | str,
     quant_config: config.SmoothQuantConfig,
     calibration_data_reader: data_reader.CalibrationDataReader,
-    model_output: Union[pathlib.Path, str] = None,
+    model_output: pathlib.Path | str | None = None,
     *args,
     **kwargs
-) -> Union[pathlib.Path, str, onnx.ModelProto]:
+) -> pathlib.Path | str | onnx.ModelProto:
     """Apply smooth quant."""
     assert calibration_data_reader is not None, "Please provide calibration_data_reader"
     assert isinstance(
@@ -81,7 +81,7 @@ def smooth_quant_entry(
 ###################### RTN Algo Entry ##################################
 @utility.register_algo(name=constants.RTN)
 def rtn_quantize_entry(
-    model: Union[pathlib.Path, str], quant_config: config.RTNConfig, *args, **kwargs
+    model: pathlib.Path | str, quant_config: config.RTNConfig, *args, **kwargs
 ) -> onnx.ModelProto:
     """The main entry to apply rtn quantization."""
     # map config to each op
@@ -95,7 +95,7 @@ def rtn_quantize_entry(
 ###################### GPTQ Algo Entry ##################################
 @utility.register_algo(name=constants.GPTQ)
 def gptq_quantize_entry(
-    model: Union[pathlib.Path, str],
+    model: pathlib.Path | str,
     quant_config: config.GPTQConfig,
     calibration_data_reader: data_reader.CalibrationDataReader,
     *args,
@@ -121,7 +121,7 @@ def gptq_quantize_entry(
 ###################### AWQ Algo Entry ##################################
 @utility.register_algo(name=constants.AWQ)
 def awq_quantize_entry(
-    model: Union[pathlib.Path, str],
+    model: pathlib.Path | str,
     quant_config: config.AWQConfig,
     calibration_data_reader: data_reader.CalibrationDataReader,
     *args,

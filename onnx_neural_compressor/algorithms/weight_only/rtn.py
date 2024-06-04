@@ -16,6 +16,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from __future__ import annotations
 
 import os
 import pathlib
@@ -29,18 +30,17 @@ from onnx_neural_compressor import config, constants, onnx_model, utility
 from onnx_neural_compressor.algorithms.layer_wise import core
 from onnx_neural_compressor.algorithms.weight_only import utility as woq_utility
 
-from typing import List, Union  # isort: skip
 
 
 def rtn_quantize(
-    model: Union[onnx.ModelProto, onnx_model.ONNXModel, pathlib.Path, str],
-    weight_config: dict = {},
+    model: onnx.ModelProto | onnx_model.ONNXModel | pathlib.Path | str,
+    weight_config: dict | None = None,
     num_bits: int = 4,
     group_size: int = 32,
     scheme: str = "asym",
-    ratios: dict = {},
+    ratios: dict | None = None,
     accuracy_level: int = 0,
-    providers: List[str] = ["CPUExecutionProvider"],
+    providers: list[str] | None = None,
     return_modelproto: bool = True,
 ):
     """Quantize the model with round to nearst method.
@@ -73,6 +73,12 @@ def rtn_quantize(
     Returns:
         onnx.ModelProto: quantized onnx model.
     """
+    if providers is None:
+        providers = ["CPUExecutionProvider"]
+    if ratios is None:
+        ratios = {}
+    if weight_config is None:
+        weight_config = {}
     if not isinstance(model, onnx_model.ONNXModel):
         model = onnx_model.ONNXModel(model)
     base_dir = os.path.dirname(model.model_path) if model.model_path is not None else ""
@@ -177,7 +183,7 @@ def rtn_quantize(
 
 
 def apply_rtn_on_model(
-    model: Union[onnx.ModelProto, onnx_model.ONNXModel, pathlib.Path, str], quant_config: dict
+    model: onnx.ModelProto | onnx_model.ONNXModel | pathlib.Path | str, quant_config: dict
 ) -> onnx.ModelProto:
     """Apply RTN on onnx model.
 

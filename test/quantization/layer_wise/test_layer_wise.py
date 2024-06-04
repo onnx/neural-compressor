@@ -17,7 +17,7 @@ from onnx_neural_compressor.quantization import matmul_4bits_quantizer
 
 def find_onnx_file(folder_path):
     # return first .onnx file path in folder_path
-    for root, dirs, files in os.walk(folder_path):
+    for root, _dirs, files in os.walk(folder_path):
         for file in files:
             if file.endswith(".onnx"):
                 return os.path.join(root, file)

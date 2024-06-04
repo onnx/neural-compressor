@@ -12,12 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Calibration for smooth quant."""
+from __future__ import annotations
 
 import importlib.util
 import pathlib
 import sys
 import tempfile
-from typing import List
 
 import numpy as np
 import onnx
@@ -33,8 +33,8 @@ class Calibrator:
         self,
         model: onnx_model.ONNXModel,
         dataloader: data_reader.CalibrationDataReader,
-        iterations: List[int] = [],
-        providers: List[str] = ["CPUExecutionProvider"],
+        iterations: list[int] | None = None,
+        providers: list[str] | None = None,
         **kwargs,
     ):
         """Initialize a Calibrator to dump information.
@@ -45,6 +45,10 @@ class Calibrator:
             iterations (List[int], optional): tensor of which iteration will be collected. Defaults to [].
             providers (List[str], optional): execution provider for onnxruntime. Defaults to ["CPUExecutionProvider"].
         """
+        if providers is None:
+            providers = ["CPUExecutionProvider"]
+        if iterations is None:
+            iterations = []
         self.model_wrapper = model
         self.dataloader = dataloader
         self.augmented_model = None
@@ -82,7 +86,7 @@ class Calibrator:
                     return True
         return False
 
-    def _get_input_tensor_of_ops(self, op_types: List[str] = ["MatMul", "Gemm", "Conv", "FusedConv"]):
+    def _get_input_tensor_of_ops(self, op_types: list[str] | None = None):
         """Traverse the graph and get all the data tensors flowing into layers of {op_types}.
 
         Group conv is excluded.
@@ -95,6 +99,8 @@ class Calibrator:
         Returns:
             dict: A dict of dumped tensor to node info
         """
+        if op_types is None:
+            op_types = ["MatMul", "Gemm", "Conv", "FusedConv"]
         tensors_to_node = {}
         initializers = {i.name: i for i in self.model_wrapper.initializer()}
 
@@ -129,7 +135,7 @@ class Calibrator:
             elif len(data.shape) == 2:
                 permute_datas.append(np.abs(data))
             else:
-                assert False, "not supported"
+                raise AssertionError("not supported")
         permute_datas = np.stack(permute_datas, axis=0)
         permute_datas = permute_datas.reshape(-1, permute_datas.shape[-1])
         max_per_channels = np.percentile(permute_datas, percentile, axis=0)

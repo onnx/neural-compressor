@@ -28,7 +28,7 @@ from onnx_neural_compressor import config, constants, data_reader, onnx_model, u
 from onnx_neural_compressor.algorithms.layer_wise import core
 from onnx_neural_compressor.algorithms.weight_only import utility as woq_utility
 
-from typing import List, Union  # isort: skip
+from typing import List, Union, Optional  # isort: skip
 
 
 def _gptq(
@@ -60,7 +60,6 @@ def _gptq(
     Returns:
         Q: fake quantized weight
     """
-    Qs = []
     maxq = 2**num_bits - 1
     grid = 100
     maxshrink = 0.8
@@ -114,8 +113,6 @@ def _gptq(
         zero = np.reshape(zero, shape)
         return scale, zero
 
-    scales = []
-    zps = []
     shape = W.shape
     scale, zp = find_params(W)
     dead = np.diag(H) == 0
@@ -177,7 +174,7 @@ def _gptq(
 def gptq_quantize(
     model: Union[onnx.ModelProto, onnx_model.ONNXModel, pathlib.Path, str],
     data_reader: data_reader.CalibrationDataReader,
-    weight_config: dict = {},
+    weight_config: Optional[dict] = None,
     num_bits: int = 4,
     group_size: int = 32,
     scheme: str = "asym",
@@ -187,7 +184,7 @@ def gptq_quantize(
     mse: bool = False,
     perchannel: bool = True,
     accuracy_level: int = 0,
-    providers: List[str] = ["CPUExecutionProvider"],
+    providers: Optional[List[str]] = None,
     return_modelproto: bool = True,
 ):
     """Quant the model with GPTQ method.
@@ -226,6 +223,10 @@ def gptq_quantize(
     Returns:
         onnx.ModelProto: quantized onnx model
     """
+    if providers is None:
+        providers = ["CPUExecutionProvider"]
+    if weight_config is None:
+        weight_config = {}
     if not isinstance(model, onnx_model.ONNXModel):
         model = onnx_model.ONNXModel(model)
     base_dir = os.path.dirname(model.model_path) if model.model_path is not None else ""

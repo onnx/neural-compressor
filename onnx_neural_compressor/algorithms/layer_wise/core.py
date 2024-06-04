@@ -15,6 +15,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from __future__ import annotations
 
 import copy
 import os
@@ -25,11 +26,11 @@ import onnxruntime as ort
 
 from onnx_neural_compressor import data_reader, logger, onnx_model, utility
 
-from typing import Callable, List, Union  # isort: skip
+from typing import Callable  # isort: skip
 
 
 def layer_wise_quant(
-    model: Union[onnx.ModelProto, onnx_model.ONNXModel, pathlib.Path, str],
+    model: onnx.ModelProto | onnx_model.ONNXModel | pathlib.Path | str,
     quant_func: Callable,
     weight_config: dict,
     data_reader: data_reader.CalibrationDataReader = None,
@@ -103,7 +104,7 @@ def layer_wise_quant(
             current_data_reader = lwq_data_reader.pop(0)
 
         # if no remaining split nodes, it means this is the last split, and the two split models will be saved.
-        save_both_split_models = True if len(split_nodes) == 0 else False
+        save_both_split_models = len(split_nodes) == 0
 
         # split model with given split node
         split_model_part_1, split_model_part_2 = split_model.split_model_with_node(
@@ -141,12 +142,12 @@ def layer_wise_quant(
         # check split model is valid
         try:
             ort.InferenceSession(split_model_part_1_quantized.model.SerializeToString(), providers=providers)
-        except Exception as e:
+        except Exception:
             logger.error(
                 f"Layer-wise quantized model {split_idx} can't be inferred correctly. "
                 "Please check the raise exception"
             )
-            raise e
+            raise
 
         # merge split quantized model
         if quantized_model_merged is None:
@@ -185,12 +186,12 @@ def layer_wise_quant(
             # check split model is valid
             try:
                 ort.InferenceSession(split_model_part_2_quantized.model.SerializeToString(), providers=providers)
-            except Exception as e:
+            except Exception:
                 logger.error(
                     f"Layer-wise quantized model {split_idx} can't be inferred correctly. "
                     "Please check the raise exception"
                 )
-                raise e
+                raise
 
             # merge split quantized model
             if quantized_model_merged is None:
@@ -247,7 +248,7 @@ def _filter_data_reader_for_current_split_model(model: onnx.ModelProto, data_rea
 def _prepare_data_reader_for_next_split_model(
     model_path: str,
     data_reader: data_reader.CalibrationDataReader,
-    providers: List[str] = ["CPUExecutionProvider"],
+    providers: list[str] | None = None,
 ):
     """Prepare data reader for next split model.
 
@@ -261,6 +262,8 @@ def _prepare_data_reader_for_next_split_model(
     Returns:
         data_reader.CalibrationDataReader: data reader for next split model.
     """
+    if providers is None:
+        providers = ["CPUExecutionProvider"]
     data_reader = copy.deepcopy(data_reader)
 
     data_reader_for_next_split_model = []
@@ -271,6 +274,6 @@ def _prepare_data_reader_for_next_split_model(
         if not inputs:
             break
         out = session.run(None, inputs)
-        inputs.update({name: value for name, value in zip(output_names, out)})
+        inputs.update(dict(zip(output_names, out)))
         data_reader_for_next_split_model.append(inputs)
     return DataReader(data_reader_for_next_split_model)

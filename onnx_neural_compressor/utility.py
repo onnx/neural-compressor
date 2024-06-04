@@ -25,7 +25,7 @@ from onnxruntime.quantization import onnx_model
 
 from onnx_neural_compressor import constants, logger
 
-from typing import Callable, Dict, List, Tuple, Union  # isort: skip
+from typing import Callable, Dict, List, Tuple, Union, Optional
 
 # Dictionary to store a mapping between algorithm names and corresponding algo implementation(function)
 algos_mapping: Dict[str, Callable] = {}
@@ -36,31 +36,34 @@ algos_mapping: Dict[str, Callable] = {}
 #######################################################
 
 
-def check_value(name, src, supported_type, supported_value=[]):
+def check_value(name, src, supported_type, supported_value=None):
     """Check if the given object is the given supported type and in the given supported value.
 
     Example::
 
         from onnx_neural_compressor import utility
 
+
         def datatype(self, datatype):
             if utility.check_value("datatype", datatype, list, ["fp32", "bf16", "uint8", "int8"]):
                 self._datatype = datatype
     """
-    if isinstance(src, list) and any([not isinstance(i, supported_type) for i in src]):
-        assert False, f"Type of {name} items should be {supported_type!s} but not {[type(i) for i in src]}"
+    if supported_value is None:
+        supported_value = []
+    if isinstance(src, list) and any(not isinstance(i, supported_type) for i in src):
+        raise AssertionError(f"Type of {name} items should be {supported_type!s} but not {[type(i) for i in src]}")
     elif not isinstance(src, list) and not isinstance(src, supported_type):
-        assert False, f"Type of {name} should be {supported_type!s} but not {type(src)}"
+        raise AssertionError(f"Type of {name} should be {supported_type!s} but not {type(src)}")
 
     if len(supported_value) > 0:
         if isinstance(src, str) and src not in supported_value:
-            assert False, f"{src} is not in supported {name}: {supported_value!s}. Skip setting it."
+            raise AssertionError(f"{src} is not in supported {name}: {supported_value!s}. Skip setting it.")
         elif (
             isinstance(src, list)
-            and all([isinstance(i, str) for i in src])
-            and any([i not in supported_value for i in src])
+            and all(isinstance(i, str) for i in src)
+            and any(i not in supported_value for i in src)
         ):
-            assert False, f"{src} is not in supported {name}: {supported_value!s}. Skip setting it."
+            raise AssertionError(f"{src} is not in supported {name}: {supported_value!s}. Skip setting it.")
 
     return True
 
@@ -90,6 +93,7 @@ class Options:
         from onnx_neural_compressor import set_random_seed
         from onnx_neural_compressor import set_workspace
         from onnx_neural_compressor import set_resume_from
+
         set_random_seed(2022)
         set_workspace("workspace_path")
         set_resume_from("workspace_path")
@@ -149,7 +153,7 @@ class TuningLogger:
         logger.info("Tuning started.")
 
     @classmethod
-    def trial_start(cls, trial_index: int = None) -> None:
+    def trial_start(cls, trial_index: Optional[int] = None) -> None:
         logger.info("%d-trail started.", trial_index)
 
     @classmethod
@@ -169,7 +173,7 @@ class TuningLogger:
         logger.info("Evaluation end.")
 
     @classmethod
-    def trial_end(cls, trial_index: int = None) -> None:
+    def trial_end(cls, trial_index: Optional[int] = None) -> None:
         logger.info("%d-trail end.", trial_index)
 
     @classmethod
@@ -236,13 +240,13 @@ class CpuInfo:
             max_extension_support = cpuid.get_max_extension_support()
             if max_extension_support >= 7:
                 ecx = cpuid._run_asm(
-                    b"\x31\xC9",  # xor ecx, ecx
-                    b"\xB8\x07\x00\x00\x00\x0f\xa2\x89\xC8\xC3",  # mov eax, 7  # cpuid  # mov ax, cx  # ret
+                    b"\x31\xc9",  # xor ecx, ecx
+                    b"\xb8\x07\x00\x00\x00\x0f\xa2\x89\xc8\xc3",  # mov eax, 7  # cpuid  # mov ax, cx  # ret
                 )
                 self._vnni = bool(ecx & (1 << 11))
                 eax = cpuid._run_asm(
-                    b"\xB9\x01\x00\x00\x00",  # mov ecx, 1
-                    b"\xB8\x07\x00\x00\x00\x0f\xa2\xC3",  # mov eax, 7  # cpuid  # ret
+                    b"\xb9\x01\x00\x00\x00",  # mov ecx, 1
+                    b"\xb8\x07\x00\x00\x00\x0f\xa2\xc3",  # mov eax, 7  # cpuid  # ret
                 )
                 self._bf16 = bool(eax & (1 << 5))
         # TODO: The implementation will be refined in the future.
@@ -299,14 +303,12 @@ def dump_elapsed_time(customized_msg=""):
     """
 
     def f(func):
-
         def fi(*args, **kwargs):
             start = time.time()
             res = func(*args, **kwargs)
             end = time.time()
             logger.info(
-                "%s elapsed time: %s ms"
-                % (customized_msg if customized_msg else func.__qualname__, round((end - start) * 1000, 2))
+                f"{customized_msg if customized_msg else func.__qualname__} elapsed time: {round((end - start) * 1000, 2)} ms"
             )
             return res
 
@@ -551,8 +553,8 @@ def quantize_data(data, quantize_range, qType, scheme):
         qType (int): data type to quantize to. Supported types UINT8 and INT8
         scheme (string): sym or asym quantization.
     """
-    rmin = min(min(data), 0)
-    rmax = max(max(data), 0)
+    rmin = min(*data, 0)
+    rmax = max(*data, 0)
 
     scale, zero_point = _calculate_scale_zp(rmin, rmax, quantize_range, qType, scheme)
     quantized_data = _quantize_data_with_scale_zero(data, qType, scheme, scale, zero_point)

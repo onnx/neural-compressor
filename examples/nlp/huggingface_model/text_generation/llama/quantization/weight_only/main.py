@@ -136,10 +136,10 @@ def eval_func(model):
     eval_acc = 0
     for task_name in args.tasks:
         if task_name == "wikitext":
-            print("Accuracy for %s is: %s" % (task_name, results["results"][task_name]["word_perplexity,none"]))
+            print("Accuracy for {} is: {}".format(task_name, results["results"][task_name]["word_perplexity,none"]))
             eval_acc += results["results"][task_name]["word_perplexity,none"]
         else:
-            print("Accuracy for %s is: %s" % (task_name, results["results"][task_name]["acc,none"]))
+            print("Accuracy for {} is: {}".format(task_name, results["results"][task_name]["acc,none"]))
             eval_acc += results["results"][task_name]["acc,none"]
 
     if len(args.tasks) != 0:
@@ -162,8 +162,8 @@ def benchmark(model):
     model = optimum_ort.ORTModelForCausalLM(
         session,  # pylint: disable=E1121
         model_config,
-        use_cache=True if use_cache else False,
-        use_io_binding=True if use_cache else False,
+        use_cache=bool(use_cache),
+        use_io_binding=bool(use_cache),
     )
 
     max_new_tokens = 32
@@ -177,7 +177,6 @@ def benchmark(model):
     num_warmup = 10
     batch_size = 1
     prompt = [prompt] * batch_size
-    total_list = []
 
     for i in range(num_iter):
         tic = time.time()
@@ -325,7 +324,7 @@ if __name__ == "__main__":
         elif args.mode == "accuracy":
             acc_result = eval_func(args.model_path)
             print("Batch size = %d" % args.batch_size)
-            print("Accuracy: %.5f" % acc_result)
+            print(f"Accuracy: {acc_result:.5f}")
 
     if args.tune:
         model_name = "model.onnx"  # require optimum >= 1.14.0

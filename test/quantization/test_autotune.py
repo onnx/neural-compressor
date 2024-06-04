@@ -12,6 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from __future__ import annotations
 
 import functools
 import glob
@@ -28,7 +29,7 @@ from optimum.exporters.onnx import main_export
 from onnx_neural_compressor import config, data_reader
 from onnx_neural_compressor.quantization import tuning
 
-from typing import Callable, Dict, List, Optional, Union  # isort: skip
+from typing import Callable  # isort: skip
 
 
 def fake_eval(model, eval_result_lst):
@@ -36,7 +37,7 @@ def fake_eval(model, eval_result_lst):
     return acc
 
 
-def _create_evaluator_for_eval_fns(eval_fns: Optional[Union[Callable, Dict, List[Dict]]] = None) -> tuning.Evaluator:
+def _create_evaluator_for_eval_fns(eval_fns: Callable | dict | list[dict] | None = None) -> tuning.Evaluator:
     evaluator = tuning.Evaluator()
     evaluator.set_eval_fn_registry(eval_fns)
     return evaluator
@@ -90,14 +91,14 @@ class TestONNXRT3xAutoTune(unittest.TestCase):
         acc_data = iter([1.0, 0.8, 0.99, 1.0, 0.99, 0.99])
 
         def eval_acc_fn(model) -> float:
-            session = ort.InferenceSession(model.SerializeToString(), providers=["CPUExecutionProvider"])
+            ort.InferenceSession(model.SerializeToString(), providers=["CPUExecutionProvider"])
             return next(acc_data)
 
         custom_tune_config = tuning.TuningConfig(
             config_set=[config.SmoothQuantConfig(alpha=0.5), config.SmoothQuantConfig(alpha=0.6)]
         )
         with self.assertRaises(SystemExit):
-            best_model = tuning.autotune(
+            tuning.autotune(
                 model_input=self.gptj,
                 tune_config=custom_tune_config,
                 eval_fn=eval_acc_fn,

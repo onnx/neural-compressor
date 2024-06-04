@@ -12,7 +12,7 @@ from onnx_neural_compressor.quantization import algorithm_entry as algos
 
 def find_onnx_file(folder_path):
     # return first .onnx file path in folder_path
-    for root, dirs, files in os.walk(folder_path):
+    for root, _dirs, files in os.walk(folder_path):
         for file in files:
             if file.endswith(".onnx"):
                 return os.path.join(root, file)
@@ -21,8 +21,8 @@ def find_onnx_file(folder_path):
 
 def build_simple_onnx_model():
     A = onnx.helper.make_tensor_value_info("A", onnx.TensorProto.FLOAT, [1, 5, 5])
-    C = onnx.helper.make_tensor_value_info("C", onnx.TensorProto.FLOAT, [1, 5, 2])
-    D = onnx.helper.make_tensor_value_info("D", onnx.TensorProto.FLOAT, [1, 5, 2])
+    onnx.helper.make_tensor_value_info("C", onnx.TensorProto.FLOAT, [1, 5, 2])
+    onnx.helper.make_tensor_value_info("D", onnx.TensorProto.FLOAT, [1, 5, 2])
     H = onnx.helper.make_tensor_value_info("H", onnx.TensorProto.FLOAT, [1, 5, 2])
 
     e_value = np.random.randint(2, size=(10)).astype(np.float32)
@@ -32,7 +32,7 @@ def build_simple_onnx_model():
     matmul_node = onnx.helper.make_node("MatMul", ["A", "B"], ["C"], name="Matmul")
     add = onnx.helper.make_node("Add", ["C", "E"], ["D"], name="add")
 
-    f_value = np.random.randint(2, size=(10)).astype(np.float32)
+    np.random.randint(2, size=(10)).astype(np.float32)
     F_init = onnx.helper.make_tensor("F", onnx.TensorProto.FLOAT, [1, 5, 2], e_value.reshape(10).tolist())
     add2 = onnx.helper.make_node("Add", ["D", "F"], ["H"], name="add2")
 
@@ -67,7 +67,7 @@ class TestQuantizationConfig(unittest.TestCase):
 
     def _check_node_is_quantized(self, model, node_name):
         for node in model.graph.node:
-            if (node.name == node_name or node.name == node_name + "_Q4") and node.op_type in [
+            if (node.name in (node_name, node_name + "_Q4")) and node.op_type in [
                 "MatMulNBits",
                 "MatMulFpQ4",
             ]:

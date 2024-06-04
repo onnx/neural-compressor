@@ -13,7 +13,7 @@ from onnx_neural_compressor.quantization import matmul_4bits_quantizer, matmul_n
 
 def find_onnx_file(folder_path):
     # return first .onnx file path in folder_path
-    for root, dirs, files in os.walk(folder_path):
+    for root, _dirs, files in os.walk(folder_path):
         for file in files:
             if file.endswith(".onnx"):
                 return os.path.join(root, file)
@@ -44,7 +44,7 @@ class TestRTNQuant(unittest.TestCase):
 
     def _check_node_is_quantized(self, model, node_name):
         for node in model.graph.node:
-            if (node.name == node_name or node.name == node_name + "_Q4") and node.op_type in [
+            if (node.name in (node_name, node_name + "_Q4")) and node.op_type in [
                 "MatMulNBits",
                 "MatMulFpQ4",
             ]:

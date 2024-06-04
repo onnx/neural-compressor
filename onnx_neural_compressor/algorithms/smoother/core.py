@@ -24,7 +24,7 @@ import onnxruntime as ort
 from onnx_neural_compressor import data_reader, logger, onnx_model, utility
 from onnx_neural_compressor.algorithms.smoother import calibrator
 
-from typing import List, Union  # isort: skip
+from typing import List, Union, Optional  # isort: skip
 
 
 _dtype_map = {
@@ -102,9 +102,11 @@ class Smoother:
         self,
         model: Union[onnx.ModelProto, onnx_model.ONNXModel, pathlib.Path, str],
         dataloader: data_reader.CalibrationDataReader,
-        providers: List[str] = ["CPUExecutionProvider"],
+        providers: Optional[List[str]] = None,
     ):
         """Initialize the attributes of class."""
+        if providers is None:
+            providers = ["CPUExecutionProvider"]
         self.model = (
             model if isinstance(model, onnx_model.ONNXModel) else onnx_model.ONNXModel(model, load_external_data=True)
         )
@@ -130,10 +132,10 @@ class Smoother:
         alpha: Union[float, str] = 0.5,
         folding: bool = True,
         percentile: float = 99.999,
-        op_types: List[str] = ["Gemm", "Conv", "MatMul", "FusedConv"],
+        op_types: Optional[List[str]] = None,
         scales_per_op: bool = True,
         calib_iter: int = 100,
-        auto_alpha_args: dict = {"alpha_min": 0.3, "alpha_max": 0.7, "alpha_step": 0.05, "attn_method": "min"},
+        auto_alpha_args: Optional[dict] = None,
         *args,
         **kwargs
     ):
@@ -159,6 +161,10 @@ class Smoother:
             onnx.ModelProto: A FP32 model with the same architecture as the orig model
                 but with different weight which will be benefit to quantization
         """
+        if auto_alpha_args is None:
+            auto_alpha_args = {"alpha_min": 0.3, "alpha_max": 0.7, "alpha_step": 0.05, "attn_method": "min"}
+        if op_types is None:
+            op_types = ["Gemm", "Conv", "MatMul", "FusedConv"]
         self.scales_per_op = scales_per_op
         self.clean()
         if isinstance(alpha, float) and (alpha < 0 or alpha > 1):
@@ -277,7 +283,7 @@ class Smoother:
             return True
 
         def mul(node, scale):  # pragma: no cover
-            if all([self.model.get_initializer(inp) is None for inp in node.input]):
+            if all(self.model.get_initializer(inp) is None for inp in node.input):
                 return False
             for inp in node.input:
                 if self.model.get_initializer(inp) is not None:
@@ -492,7 +498,7 @@ class Smoother:
             os.remove(os.path.join(os.path.dirname(self.model.model_path), "weights.pb"))
         return optimal_alphas
 
-    def _get_smooth_scales(self, alpha, target_list=[]):
+    def _get_smooth_scales(self, alpha, target_list=None):
         """Get the smooth scales for.
 
         The ops with the same input will share one mul layer.
@@ -505,6 +511,8 @@ class Smoother:
         Returns:
             the smooth scales for weights, currently one input tensor only have one scale
         """
+        if target_list is None:
+            target_list = []
         logger.info("Start smooth scales collection.")
         scales = {}
         for tensor, nodes in self.tensors_to_node.items():
@@ -571,7 +579,7 @@ class Smoother:
         Args:
             scales (dict): The smooth scales
         """
-        for key in scales.keys():
+        for key in scales:
             input_name = key if not self.scales_per_op else self.model.get_node(key).input[0]
             weight_name = (
                 self.tensors_to_node[key][0][1][1] if not self.scales_per_op else self.model.get_node(key).input[1]
@@ -584,8 +592,8 @@ class Smoother:
             elif len(self.shape_info[weight_name]) == 4:
                 scale_factor = np.reshape(scale_factor, (1, -1, 1, 1))
             else:
-                assert False, "not support"
-            name = key + "_" + "smooth_scale"
+                raise AssertionError("not support")
+            key + "_" + "smooth_scale"
             scale_tensor = onnx.helper.make_tensor(
                 name=key + "_" + "smooth_scale",
                 data_type=onnx.onnx_pb.TensorProto.FLOAT,
@@ -648,7 +656,7 @@ class Smoother:
                         scale = np.reshape(scales[key], (1, -1, 1, 1))
                     new_weight = weight * scale
                 else:
-                    assert False, "not support"
+                    raise AssertionError("not support")
                 self.tensor_scales_info[key] = 1.0 / scale
 
                 new_tensor = onnx.numpy_helper.from_array(new_weight, input)
