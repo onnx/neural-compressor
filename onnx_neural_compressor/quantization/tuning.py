@@ -68,7 +68,7 @@ class Evaluator:
     EVAL_FN = "eval_fn"
     WEIGHT = "weight"
     FN_NAME = "name"
-    EVAL_FN_TEMPLATE: dict[str, Any] = {EVAL_FN: None, WEIGHT: 1.0, FN_NAME: None}
+    EVAL_FN_TEMPLATE: dict[str, Any] = {EVAL_FN: None, WEIGHT: 1.0, FN_NAME: None}  # noqa: RUF012
 
     def __init__(self) -> None:
         self.eval_fn_registry: list[dict[str, Any]] = []
@@ -462,7 +462,7 @@ def autotune(
     config_loader, tuning_logger, tuning_monitor = init_tuning(tuning_config=tune_config)
     try:
         baseline: float = eval_func_wrapper.evaluate(model_input)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         print(e)
         if "'str' object has no attribute 'SerializeToString'" in str(e):
             logger.warning("Please refine your eval_fn to accept model path (str) as input.")

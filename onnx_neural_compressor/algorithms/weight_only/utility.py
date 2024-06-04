@@ -186,7 +186,7 @@ def make_matmul_weight_only_node(
     return matmul_weight_only_node, new_inits
 
 
-def prepare_inputs(model, data_reader, providers):
+def prepare_inputs(model, data_reader, providers):  # noqa: ARG001
     """Prepare inputs for weight only quantization.
 
     Args:

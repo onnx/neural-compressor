@@ -118,10 +118,10 @@ def rtn_quantize(
 
             weight = woq_utility.pad_tensor(weight, group_size, k_blocks)
 
-            satisfy_MatMulNBits_condition = (
+            satisfy_MatMulNBits_condition = (  # noqa: N806
                 version.Version(ort.__version__) > constants.ONNXRT1161_VERSION and num_bits == 4
             )
-            satisfy_MatMulFpQ4_condition = (
+            satisfy_MatMulFpQ4_condition = (  # noqa: N806
                 version.Version(ort.__version__) >= constants.ONNXRT116_VERSION and num_bits == 4 and group_size == 32
             )
             if ("CUDAExecutionProvider" in providers and satisfy_MatMulNBits_condition) or (

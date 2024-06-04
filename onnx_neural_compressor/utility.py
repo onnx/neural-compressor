@@ -211,7 +211,7 @@ class LazyImport:
         try:
             self.module = importlib.import_module(self.module_name)
             mod = getattr(self.module, name)
-        except:
+        except:  # noqa: E722
             spec = importlib.util.find_spec(str(self.module_name + "." + name))
             mod = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(mod)
@@ -433,15 +433,15 @@ def get_model_info(
     return filter_result
 
 
-def is_B_transposed(node):
+def is_B_transposed(node):  # noqa: N802
     """Whether inuput B is transposed."""
-    transB = [attr for attr in node.attribute if attr.name == "transB"]
+    transB = [attr for attr in node.attribute if attr.name == "transB"]  # noqa: N806
     if len(transB):
         return onnx.helper.get_attribute_value(transB[0]) > 0
     return False
 
 
-def get_qrange_for_qType(qType, reduce_range=False):
+def get_qrange_for_qType(qType, reduce_range=False):  # noqa: N802, N803
     """Helper function to get the quantization range for a type.
 
     Args:
@@ -457,7 +457,7 @@ def get_qrange_for_qType(qType, reduce_range=False):
         raise ValueError("unsupported quantization data type")
 
 
-def _quantize_data_with_scale_zero(data, qType, scheme, scale, zero_point):
+def _quantize_data_with_scale_zero(data, qType, scheme, scale, zero_point):  # noqa: N803
     """Quantize data with scale and zero point.
 
     To pack weights, we compute a linear transformation
@@ -483,7 +483,7 @@ def _quantize_data_with_scale_zero(data, qType, scheme, scale, zero_point):
     return quantized_data
 
 
-def _calculate_scale_zp(rmin, rmax, quantize_range, qType, scheme):
+def _calculate_scale_zp(rmin, rmax, quantize_range, qType, scheme):  # noqa: N803
     """Calculate scale and zero point."""
     if isinstance(rmax, np.ndarray):
         if scheme == "sym":
@@ -533,7 +533,7 @@ def _calculate_scale_zp(rmin, rmax, quantize_range, qType, scheme):
     return scale, zero_point
 
 
-def quantize_data(data, quantize_range, qType, scheme):
+def quantize_data(data, quantize_range, qType, scheme):  # noqa: N803
     """Quantize data.
 
     To pack weights, we compute a linear transformation

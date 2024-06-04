@@ -74,7 +74,7 @@ def _apply_awq_scale(model, weight_config, absorb_pairs, output_dicts, num_bits,
         n_grid = 20
 
         for ratio in range(n_grid):
-            ratio = ratio * 1 / n_grid
+            ratio = ratio * 1 / n_grid  # noqa: PLW2901
             loss = 0
             for node in nodes:
                 if weight_config.get((node.name, node.op_type), {}) == "fp32":
@@ -143,7 +143,7 @@ def _apply_awq_scale(model, weight_config, absorb_pairs, output_dicts, num_bits,
             if init_share_num == 1:
                 model.remove_initializer(weight_tensor)
 
-        parent = model.get_node(parent)
+        parent = model.get_node(parent)  # noqa: PLW2901
         if parent.name in updated_nodes:
             continue
 
@@ -200,7 +200,7 @@ def _apply_awq_scale(model, weight_config, absorb_pairs, output_dicts, num_bits,
             )
             new_added_mul_nodes.append(mul_node)
             for node in nodes:
-                replace_input.append([node, node.input[0], mul_node.output[0]])
+                replace_input.append([node, node.input[0], mul_node.output[0]])  # noqa: PERF401
             updated_nodes.append(parent.name)
             output_dicts[mul_node.output[0]] = output_dicts[mul_node.input[0]] / np.reshape(best_scale, (1, -1))
 
@@ -343,7 +343,7 @@ def awq_quantize(
                 and model.get_initializer(node.input[1]) is not None
                 and weight_config.get((node.name, node.op_type), {}).get("weight_dtype", "fp32") != "fp32"
             ):
-                output_names.append(node.input[0])
+                output_names.append(node.input[0])  # noqa: PERF401
         output_names = list(set(output_names))
         model.add_tensors_to_outputs(output_names)
         if model.is_large_model:

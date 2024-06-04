@@ -29,7 +29,7 @@ from onnx_neural_compressor import constants, logger, utility
 class ONNXModel(onnx_model.ONNXModel):
     """Build ONNX model."""
 
-    def __init__(self, model, **kwargs):
+    def __init__(self, model, **kwargs):  # noqa: D417
         """Initialize an ONNX model.
 
         Args:
@@ -217,7 +217,7 @@ class ONNXModel(onnx_model.ONNXModel):
         for parent in self.get_parents(node):
             for child in self.get_children(parent):
                 if child.name != node.name:
-                    siblings.append(child)
+                    siblings.append(child)  # noqa: PERF401
         return siblings
 
     def get_scale_zero(self, tensor):
@@ -338,7 +338,7 @@ class ONNXModel(onnx_model.ONNXModel):
                     if output in self._input_name_to_nodes or output in self.output():
                         unused = False
                         break
-                for input in node.input:
+                for input in node.input:  # noqa: A001
                     if self.get_initializer(input) is not None:
                         continue
                     elif input in self._output_name_to_node or input in self.input():
@@ -423,7 +423,7 @@ class ONNXModel(onnx_model.ONNXModel):
             elif isinstance(node, onnx.NodeProto):
                 start_node.append(node.name)
             else:
-                raise AssertionError("'get_nodes_chain' function only support list[string]or list[NodeProto] params")
+                raise AssertionError("'get_nodes_chain' function only support list[string]or list[NodeProto] params")  # noqa: TRY004
 
         # process stop node list
         stop_node = []
@@ -433,7 +433,7 @@ class ONNXModel(onnx_model.ONNXModel):
             elif isinstance(node, onnx.NodeProto):
                 stop_node.append(node.name)
             else:
-                raise AssertionError("'get_nodes_chain' function only support list[string]or list[NodeProto] params")
+                raise AssertionError("'get_nodes_chain' function only support list[string]or list[NodeProto] params")  # noqa: TRY004
 
         while start_node:
             node_name = start_node.popleft()
@@ -595,7 +595,7 @@ class ONNXModel(onnx_model.ONNXModel):
                 continue
             qkv_nodes = [qkv for qkv in qkv_nodes_list if qkv is not None][-1]
             other_inputs = []
-            for input in start_node.input:
+            for input in start_node.input:  # noqa: A001
                 if input not in self._output_name_to_node:
                     continue
                 if input == qkv_nodes[0].output[0]:
@@ -660,11 +660,11 @@ class ONNXModel(onnx_model.ONNXModel):
         removed_outputs = []
         for tensor in tensor_names:
             if tensor in self.output():
-                removed_outputs.append(self.model.graph.output[self.output().index(tensor)])
+                removed_outputs.append(self.model.graph.output[self.output().index(tensor)])  # noqa: PERF401
         for output in removed_outputs:
             self.model.graph.output.remove(output)
 
-    def match_first_parent(self, node, parent_op_type, output_name_to_node_dict, exclude=None):
+    def match_first_parent(self, node, parent_op_type, output_name_to_node_dict, exclude=None):  # noqa: D417
         """Find parent node based on constraints on op_type.
 
         Args:
@@ -679,14 +679,14 @@ class ONNXModel(onnx_model.ONNXModel):
         """
         if exclude is None:
             exclude = []
-        for i, input in enumerate(node.input):
+        for i, input in enumerate(node.input):  # noqa: A001
             if input in output_name_to_node_dict:
                 parent = output_name_to_node_dict[input]
                 if parent.op_type == parent_op_type and parent not in exclude:
                     return parent, i
         return None, None
 
-    def match_parent(
+    def match_parent(  # noqa: D417
         self,
         node,
         parent_op_type,
@@ -733,7 +733,7 @@ class ONNXModel(onnx_model.ONNXModel):
 
         return None
 
-    def match_parent_path(
+    def match_parent_path(  # noqa: D417
         self,
         node,
         parent_op_types,
@@ -883,7 +883,7 @@ class ONNXModel(onnx_model.ONNXModel):
             split_model_part_1.model.graph.output.append(output)
 
         # insert model 2 input
-        for input in insert_input_for_model_2:
+        for input in insert_input_for_model_2:  # noqa: A001
             split_model_part_2.model.graph.input.append(input)
 
         # remove unused init
@@ -959,15 +959,15 @@ class ONNXModel(onnx_model.ONNXModel):
             self._input_name_to_nodes = self.input_name_to_nodes()
         for output in self.model.graph.output:
             if output.name not in self._output_name_to_node:
-                remove_outputs.append(output)
+                remove_outputs.append(output)  # noqa: PERF401
 
-        for input in self.model.graph.input:
+        for input in self.model.graph.input:  # noqa: A001
             if input.name not in self._input_name_to_nodes:
-                remove_inputs.append(input)
+                remove_inputs.append(input)  # noqa: PERF401
 
         for output in remove_outputs:
             self.model.graph.output.remove(output)
-        for input in remove_inputs:
+        for input in remove_inputs:  # noqa: A001
             self.model.graph.input.remove(input)
 
     def remove_unused_init(self):
@@ -977,7 +977,7 @@ class ONNXModel(onnx_model.ONNXModel):
             self._input_name_to_nodes = self.input_name_to_nodes()
         for init in self.model.graph.initializer:
             if init.name not in self._input_name_to_nodes:
-                remov_inits.append(init)
+                remov_inits.append(init)  # noqa: PERF401
         self.remove_initializers(remov_inits)
 
     def load_model_initializer_by_tensor(self, data_path=None):
@@ -1023,12 +1023,12 @@ class ONNXModel(onnx_model.ONNXModel):
         remove_output = []
         for output in self.model.graph.output:
             if output.name in to_merge_model.input():
-                remove_output.append(output)
+                remove_output.append(output)  # noqa: PERF401
         for output in remove_output:
             self.model.graph.output.remove(output)
 
         # add new input
-        for input in to_merge_model.graph().input:
+        for input in to_merge_model.graph().input:  # noqa: A001
             if (
                 input.name not in self.input()
                 and input.name not in self.output()

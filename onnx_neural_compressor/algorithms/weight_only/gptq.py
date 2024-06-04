@@ -31,8 +31,8 @@ from onnx_neural_compressor.algorithms.weight_only import utility as woq_utility
 
 
 def _gptq(
-    W: np.array,
-    H: np.array,
+    W: np.array,  # noqa: N803
+    H: np.array,  # noqa: N803
     num_bits: int = 4,
     group_size: int = 32,
     scheme: str = "asym",
@@ -121,24 +121,24 @@ def _gptq(
     # rearrange considering the diag's value
     if actorder:
         perm = np.argsort(np.diag(H))[::-1]
-        W = W[perm, :]
-        H = H[perm, :][:, perm]
-    Losses = np.zeros_like(W)
-    Q = np.zeros_like(W)
+        W = W[perm, :]  # noqa: N806
+        H = H[perm, :][:, perm]  # noqa: N806
+    Losses = np.zeros_like(W)  # noqa: N806
+    Q = np.zeros_like(W)  # noqa: N806
     damp = percdamp * np.mean(np.diag(H))
     diag = np.arange(shape[0])
     H[diag, diag] += damp  # add a average value of
-    H = np.linalg.cholesky(np.linalg.inv(H)).T
-    Hinv = H
+    H = np.linalg.cholesky(np.linalg.inv(H)).T  # noqa: N806
+    Hinv = H  # noqa: N806
     for i1 in range(0, shape[0], blocksize):
         i2 = min(i1 + blocksize, shape[0])
         count = i2 - i1
 
-        W1 = copy.deepcopy(W[i1:i2, :])
-        Q1 = np.zeros_like(W1)
-        Err1 = np.zeros_like(W1)
-        Losses1 = np.zeros_like(W1)
-        Hinv1 = Hinv[i1:i2, i1:i2]
+        W1 = copy.deepcopy(W[i1:i2, :])  # noqa: N806
+        Q1 = np.zeros_like(W1)  # noqa: N806
+        Err1 = np.zeros_like(W1)  # noqa: N806
+        Losses1 = np.zeros_like(W1)  # noqa: N806
+        Hinv1 = Hinv[i1:i2, i1:i2]  # noqa: N806
 
         for i in range(count):  # within a block, channel wise
             w = W1[i, :]
@@ -163,9 +163,9 @@ def _gptq(
 
     if actorder:
         invperm = np.argsort(perm)
-        Q = Q[invperm, :]
+        Q = Q[invperm, :]  # noqa: N806
 
-    Q = np.reshape(Q, W.shape)
+    Q = np.reshape(Q, W.shape)  # noqa: N806
     del W
     return Q
 
@@ -244,7 +244,7 @@ def gptq_quantize(
             and model.get_initializer(node.input[1]) is not None
             and weight_config.get((node.name, node.op_type), {}).get("weight_dtype", "fp32") != "fp32"
         ):
-            output_names.append(node.input[0])
+            output_names.append(node.input[0])  # noqa: PERF401
     output_names = list(set(output_names))
     model.add_tensors_to_outputs(output_names)
     if model.is_large_model:
@@ -288,21 +288,21 @@ def gptq_quantize(
         if len(weights) == 0:
             continue
 
-        Hs = [np.zeros((i.shape[0], i.shape[0])) for i in weights]
+        Hs = [np.zeros((i.shape[0], i.shape[0])) for i in weights]  # noqa: N806
         nsamples = 0
         for data in inputs:
             inp = session.run([input_name], data)[0]
             tmp = inp.shape[0]
             inp = np.reshape(inp, (-1, inp.shape[-1]))
-            Hs = [i * (nsamples / (nsamples + tmp)) for i in Hs]
+            Hs = [i * (nsamples / (nsamples + tmp)) for i in Hs]  # noqa: N806
             nsamples += tmp
             inp = np.sqrt(2 / nsamples) * inp
-            Hs = [i + np.matmul(inp.T, inp) for i in Hs]
+            Hs = [i + np.matmul(inp.T, inp) for i in Hs]  # noqa: N806
 
         for (
             node,
             weight,
-            H,
+            H,  # noqa: N806
         ) in zip(node_list, weights, Hs):
             if (node.name, node.op_type) in weight_config:
                 num_bits = weight_config[(node.name, node.op_type)].get("weight_bits", 4)
@@ -328,8 +328,8 @@ def gptq_quantize(
             weight_tensor = model.get_initializer(node.input[1])
             init_share_num = model.get_initializer_share_num(node.input[1])
 
-            satisfy_MatMulNBits_condition = Version(ort.__version__) > constants.ONNXRT1161_VERSION and num_bits == 4
-            satisfy_MatMulFpQ4_condition = (
+            satisfy_MatMulNBits_condition = Version(ort.__version__) > constants.ONNXRT1161_VERSION and num_bits == 4  # noqa: N806
+            satisfy_MatMulFpQ4_condition = (  # noqa: N806
                 Version(ort.__version__) >= constants.ONNXRT116_VERSION and num_bits == 4 and group_size == 32
             )
             if ("CUDAExecutionProvider" in providers and satisfy_MatMulNBits_condition) or (

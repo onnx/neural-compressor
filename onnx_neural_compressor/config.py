@@ -103,18 +103,18 @@ class TuningParam:
         # Use `Pydantic` to validate the input_args.
         # TODO: refine the implementation in further.
         assert isinstance(self.tunable_type, _GenericAlias), f"Expected a type hint, got {self.tunable_type} instead."
-        DynamicInputArgsModel = TuningParam.create_input_args_model(self.tunable_type)
+        DynamicInputArgsModel = TuningParam.create_input_args_model(self.tunable_type)  # noqa: N806
         try:
             DynamicInputArgsModel(input_args=value)
-            return True
-        except Exception as e:
+            return True  # noqa: TRY300
+        except Exception as e:  # noqa: BLE001
             logger.debug(f"Failed to validate the input_args: {e}")
             return False
 
 
 # Config registry to store all registered configs.
 class ConfigRegistry:
-    registered_configs = {}
+    registered_configs = {}  # noqa: RUF012
     _config_registry = None
 
     def __new__(cls) -> Self:
@@ -168,7 +168,7 @@ class ConfigRegistry:
     def get_all_config_cls(cls) -> list[type[BaseConfig]]:
         configs_cls = []
         for config_pairs in cls.registered_configs.values():
-            configs_cls.append(config_pairs["cls"])
+            configs_cls.append(config_pairs["cls"])  # noqa: PERF401
         return configs_cls
 
 
@@ -197,7 +197,7 @@ class BaseConfig(ABC):
     """The base config for all algorithm configs."""
 
     name = constants.BASE_CONFIG
-    params_list: list[str | TuningParam] = []
+    params_list: list[str | TuningParam] = []  # noqa: RUF012
 
     def __init__(
         self,
@@ -299,7 +299,7 @@ class BaseConfig(ABC):
             return config
 
     @classmethod
-    def to_diff_dict(cls, instance) -> dict[str, Any]:
+    def to_diff_dict(cls, instance) -> dict[str, Any]:  # noqa: ARG003
         # TODO (Yi) to implement it
         return {}
 
@@ -332,7 +332,7 @@ class BaseConfig(ABC):
             config_dict = self.to_dict()
         try:
             return json.dumps(config_dict, indent=2) + "\n"
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             logger.error("Failed to serialize the config to JSON string: %s", e)
             return config_dict
 
@@ -345,7 +345,7 @@ class BaseConfig(ABC):
         """Add all supported configs."""
         raise NotImplementedError
 
-    @classmethod
+    @classmethod  # noqa: B027
     def validate(cls, user_config: BaseConfig):
         # TODO validate the user config
         pass
@@ -417,7 +417,7 @@ class BaseConfig(ABC):
             elif isinstance(param, TuningParam):
                 tuning_param = param
             else:
-                raise ValueError(f"Unsupported param type: {param}")
+                raise ValueError(f"Unsupported param type: {param}")  # noqa: TRY004
             # Assign the options to the `tuning.TuningParam` instance
             param_val = getattr(config, tuning_param.name)
             if param_val is not None:
@@ -513,14 +513,14 @@ class ComposableConfig(BaseConfig):
             config += config_registry[name].from_dict(value)
         return config
 
-    def to_json_string(self, use_diff: bool = False) -> str:
+    def to_json_string(self, use_diff: bool = False) -> str:  # noqa: ARG002
         return json.dumps(self.to_dict(), indent=2) + "\n"
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__} {self.to_json_string()}"
 
     def to_config_mapping(
-        self, config_list: list[BaseConfig] | None = None, model_info: dict[str, Any] | None = None
+        self, config_list: list[BaseConfig] | None = None, model_info: dict[str, Any] | None = None  # noqa: ARG002
     ) -> OrderedDict[str, BaseConfig]:
         config_mapping = OrderedDict()
         for config in self.config_list:
@@ -555,7 +555,7 @@ def get_all_config_set_from_config_registry() -> list[BaseConfig]:
     all_registered_config_cls: list[type[BaseConfig]] = config_registry.get_all_config_cls()
     config_set = []
     for config_cls in all_registered_config_cls:
-        config_set.append(config_cls.get_config_set_for_tuning())
+        config_set.append(config_cls.get_config_set_for_tuning())  # noqa: PERF401
     return config_set
 
 
@@ -569,7 +569,7 @@ def register_supported_configs():
 class _OperatorConfig(NamedTuple):
     config: BaseConfig
     operators: list[str | Callable]
-    valid_func_list: list[Callable] = []
+    valid_func_list: list[Callable] = []  # noqa: RUF012
 
 
 ######################## RNT Config ###############################
@@ -579,8 +579,8 @@ class _OperatorConfig(NamedTuple):
 class RTNConfig(BaseConfig):
     """Config class for round-to-nearest weight-only quantization."""
 
-    supported_configs: list[_OperatorConfig] = []
-    params_list: list[str | TuningParam] = [
+    supported_configs: list[_OperatorConfig] = []  # noqa: RUF012
+    params_list: list[str | TuningParam] = [  # noqa: RUF012
         "weight_dtype",
         "weight_bits",
         "weight_group_size",
@@ -589,7 +589,7 @@ class RTNConfig(BaseConfig):
         "accuracy_level",
         "ratios",
     ]
-    model_params_list: list[str] = [
+    model_params_list: list[str] = [  # noqa: RUF012
         "providers",
         "layer_wise_quant",
     ]
@@ -727,8 +727,8 @@ def get_default_rtn_config() -> RTNConfig:
 class GPTQConfig(BaseConfig):
     """Config class for gptq weight-only quantization."""
 
-    supported_configs: list[_OperatorConfig] = []
-    params_list: list[str | TuningParam] = [
+    supported_configs: list[_OperatorConfig] = []  # noqa: RUF012
+    params_list: list[str | TuningParam] = [  # noqa: RUF012
         "weight_dtype",
         "weight_bits",
         "weight_group_size",
@@ -736,7 +736,7 @@ class GPTQConfig(BaseConfig):
         "act_dtype",
         "accuracy_level",
     ]
-    model_params_list: list[str | TuningParam] = [
+    model_params_list: list[str | TuningParam] = [  # noqa: RUF012
         "percdamp",
         "blocksize",
         "actorder",
@@ -900,8 +900,8 @@ def get_default_gptq_config() -> GPTQConfig:
 class AWQConfig(BaseConfig):
     """Config class for awq weight-only quantization."""
 
-    supported_configs: list[_OperatorConfig] = []
-    params_list: list[str] = [
+    supported_configs: list[_OperatorConfig] = []  # noqa: RUF012
+    params_list: list[str] = [  # noqa: RUF012
         "weight_dtype",
         "weight_bits",
         "weight_group_size",
@@ -909,7 +909,7 @@ class AWQConfig(BaseConfig):
         "act_dtype",
         "accuracy_level",
     ]
-    model_params_list: list[str] = [
+    model_params_list: list[str] = [  # noqa: RUF012
         "enable_auto_scale",
         "enable_mse_search",
         "providers",
@@ -1052,8 +1052,8 @@ def get_default_awq_config() -> AWQConfig:
 class SmoothQuantConfig(BaseConfig, quantization.StaticQuantConfig):
     """Smooth quant quantization config."""
 
-    supported_configs: list[_OperatorConfig] = []
-    params_list: list[str] = [
+    supported_configs: list[_OperatorConfig] = []  # noqa: RUF012
+    params_list: list[str] = [  # noqa: RUF012
         # smooth parameters
         "alpha",
         "folding",
@@ -1174,11 +1174,11 @@ def get_woq_tuning_config() -> list:
     Returns:
         the list of WOQ quant config.
     """
-    RTN_G32ASYM = RTNConfig(weight_sym=False)
-    GPTQ_G32ASYM = GPTQConfig(weight_sym=False)
-    GPTQ_G32ASYM_DISABLE_LAST_MATMUL = GPTQConfig(weight_sym=False, quant_last_matmul=False)
-    GPTQ_G128ASYM = GPTQConfig(weight_group_size=128, weight_sym=False)
-    AWQ_G32ASYM = AWQConfig(weight_sym=False)
+    RTN_G32ASYM = RTNConfig(weight_sym=False)  # noqa: N806
+    GPTQ_G32ASYM = GPTQConfig(weight_sym=False)  # noqa: N806
+    GPTQ_G32ASYM_DISABLE_LAST_MATMUL = GPTQConfig(weight_sym=False, quant_last_matmul=False)  # noqa: N806
+    GPTQ_G128ASYM = GPTQConfig(weight_group_size=128, weight_sym=False)  # noqa: N806
+    AWQ_G32ASYM = AWQConfig(weight_sym=False)  # noqa: N806
     return [RTN_G32ASYM, GPTQ_G32ASYM, GPTQ_G32ASYM_DISABLE_LAST_MATMUL, GPTQ_G128ASYM, AWQ_G32ASYM]
 
 
@@ -1218,7 +1218,7 @@ class StaticQuantConfig(quantization.StaticQuantConfig):
                 If enabled, each op will have an individual scale, mainlyfor accuracy.
                 If not enabled,  ops with the same input will share a scale, mainly for performance.
         """
-        super().__init__(calibration_data_reader=calibration_data_reader, extra_options=extra_options, *args, **kwargs)
+        super().__init__(calibration_data_reader=calibration_data_reader, extra_options=extra_options, *args, **kwargs)  # noqa: B026
 
     def to_dict(self):
         return self.__dict__

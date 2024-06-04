@@ -29,13 +29,13 @@ from onnx_neural_compressor import data_reader, logger, onnx_model
 class Calibrator:
     """Dump information for smooth quant."""
 
-    def __init__(
+    def __init__(  # noqa: D417
         self,
         model: onnx_model.ONNXModel,
         dataloader: data_reader.CalibrationDataReader,
         iterations: list[int] | None = None,
         providers: list[str] | None = None,
-        **kwargs,
+        **kwargs,  # noqa: ARG002
     ):
         """Initialize a Calibrator to dump information.
 

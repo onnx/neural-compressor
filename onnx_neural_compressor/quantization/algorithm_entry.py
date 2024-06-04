@@ -31,8 +31,8 @@ def smooth_quant_entry(
     quant_config: config.SmoothQuantConfig,
     calibration_data_reader: data_reader.CalibrationDataReader,
     model_output: pathlib.Path | str | None = None,
-    *args,
-    **kwargs,
+    *args,  # noqa: ARG001
+    **kwargs,  # noqa: ARG001
 ) -> pathlib.Path | str | onnx.ModelProto:
     """Apply smooth quant."""
     assert calibration_data_reader is not None, "Please provide calibration_data_reader"
@@ -80,7 +80,7 @@ def smooth_quant_entry(
 
 ###################### RTN Algo Entry ##################################
 @utility.register_algo(name=constants.RTN)
-def rtn_quantize_entry(model: pathlib.Path | str, quant_config: config.RTNConfig, *args, **kwargs) -> onnx.ModelProto:
+def rtn_quantize_entry(model: pathlib.Path | str, quant_config: config.RTNConfig, *args, **kwargs) -> onnx.ModelProto:  # noqa: ARG001
     """The main entry to apply rtn quantization."""
     # map config to each op
     model_info = quant_config.get_model_info(model=model)
@@ -96,8 +96,8 @@ def gptq_quantize_entry(
     model: pathlib.Path | str,
     quant_config: config.GPTQConfig,
     calibration_data_reader: data_reader.CalibrationDataReader,
-    *args,
-    **kwargs,
+    *args,  # noqa: ARG001
+    **kwargs,  # noqa: ARG001
 ) -> onnx.ModelProto:
     """The main entry to apply gptq quantization."""
     assert calibration_data_reader is not None, "Please provide calibration_data_reader"
@@ -122,8 +122,8 @@ def awq_quantize_entry(
     model: pathlib.Path | str,
     quant_config: config.AWQConfig,
     calibration_data_reader: data_reader.CalibrationDataReader,
-    *args,
-    **kwargs,
+    *args,  # noqa: ARG001
+    **kwargs,  # noqa: ARG001
 ) -> onnx.ModelProto:
     """The main entry to apply awq quantization."""
     assert calibration_data_reader is not None, "Please provide calibration_data_reader"

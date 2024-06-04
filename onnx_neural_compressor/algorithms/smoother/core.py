@@ -63,7 +63,7 @@ def _make_sub_graph(node, inits, input_data, output_data, opset, ir_version):
         opset (object): opset of the model
         ir_version (object): ir_version of the model
     """
-    input = onnx.helper.make_tensor_value_info(node.input[0], _dtype_map[input_data.dtype], input_data.shape)
+    input = onnx.helper.make_tensor_value_info(node.input[0], _dtype_map[input_data.dtype], input_data.shape)  # noqa: A001
     output = onnx.helper.make_tensor_value_info(node.output[0], _dtype_map[output_data.dtype], output_data.shape)
     graph = onnx.helper.make_graph([node], "sub_graph", [input], [output], inits)
     model = onnx.helper.make_model(graph, opset_imports=opset)
@@ -71,7 +71,7 @@ def _make_sub_graph(node, inits, input_data, output_data, opset, ir_version):
     return model
 
 
-def _quant_dequant_data(data, qType=3, scheme="sym"):
+def _quant_dequant_data(data, qType=3, scheme="sym"):  # noqa: N803
     """Quantize and then dequantize data.
 
     Args:
@@ -125,7 +125,7 @@ class Smoother:
         self.tensors_to_node = None
         self._build_absorb_function()
 
-    def transform(
+    def transform(  # noqa: D417
         self,
         alpha: float | str = 0.5,
         folding: bool = True,
@@ -134,8 +134,8 @@ class Smoother:
         scales_per_op: bool = True,
         calib_iter: int = 100,
         auto_alpha_args: dict | None = None,
-        *args,
-        **kwargs,
+        *args,  # noqa: ARG002
+        **kwargs,  # noqa: ARG002
     ):
         """The main entry of smooth quant.
 
@@ -230,7 +230,7 @@ class Smoother:
                 key = node_info[0] if self.scales_per_op else tensor_name
                 if key not in self.tensor_scales_info:
                     continue
-                input = node_info[1][1]
+                input = node_info[1][1]  # noqa: A001
                 weight = onnx.numpy_helper.to_array(
                     self.model.get_initializer(input),
                     base_dir=os.path.dirname(self.model.model_path) if self.model.model_path is not None else "",
@@ -435,7 +435,7 @@ class Smoother:
         alpha_min: float = 0.3,
         alpha_max: float = 0.7,
         alpha_step: float = 0.05,
-        attn_method: str = "min",
+        attn_method: str = "min",  # noqa: ARG002
     ):
         """Perform alpha-tuning to obtain layer-wise optimal alpha values and adjust parameters accordingly.
 
@@ -629,7 +629,7 @@ class Smoother:
                 key = node_info[0] if self.scales_per_op else tensor_name
                 if key not in scales:
                     continue
-                input = node_info[1][1]
+                input = node_info[1][1]  # noqa: A001
                 node = self.model.get_node_by_weight(input)
                 weight = onnx.numpy_helper.to_array(
                     self.model.get_initializer(input),

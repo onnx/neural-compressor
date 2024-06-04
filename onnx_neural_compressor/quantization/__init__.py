@@ -13,6 +13,6 @@
 # limitations under the License.
 
 
-from onnxruntime.quantization.quant_utils import QuantFormat, QuantType
+from onnxruntime.quantization.quant_utils import QuantFormat, QuantType  # noqa: F401
 
-from onnx_neural_compressor.quantization.quantize import quantize
+from onnx_neural_compressor.quantization.quantize import quantize  # noqa: F401

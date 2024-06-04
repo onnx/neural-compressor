@@ -28,12 +28,12 @@ import onnxruntime as ort
 from onnx_neural_compressor import data_reader, logger, onnx_model, utility
 
 
-def layer_wise_quant(
+def layer_wise_quant(  # noqa: D417
     model: onnx.ModelProto | onnx_model.ONNXModel | pathlib.Path | str,
     quant_func: Callable,
     weight_config: dict,
     data_reader: data_reader.CalibrationDataReader = None,
-    *args,
+    *args,  # noqa: ARG001
     **kwargs,
 ) -> onnx_model.ONNXModel:
     """Quantize model layer by layer to save memory.
@@ -232,7 +232,7 @@ def _filter_data_reader_for_current_split_model(model: onnx.ModelProto, data_rea
         data_reader.CalibrationDataReader: filtered data reader.
     """
     filter_inputs = []
-    input_names = [input.name for input in model.graph.input]
+    input_names = [input.name for input in model.graph.input]  # noqa: A001
     while True:
         inputs = data_reader.get_next()
         if not inputs:
@@ -244,7 +244,7 @@ def _filter_data_reader_for_current_split_model(model: onnx.ModelProto, data_rea
     return DataReader(filter_inputs)
 
 
-def _prepare_data_reader_for_next_split_model(
+def _prepare_data_reader_for_next_split_model(  # noqa: D417
     model_path: str,
     data_reader: data_reader.CalibrationDataReader,
     providers: list[str] | None = None,
