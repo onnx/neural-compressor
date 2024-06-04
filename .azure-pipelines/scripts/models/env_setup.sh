@@ -15,3 +15,5 @@ log_dir="/neural-compressor/.azure-pipelines/scripts/models"
 
 $BOLD_YELLOW && echo "====== install requirements ======" && $RESET
 /bin/bash /neural-compressor/.azure-pipelines/scripts/install_nc.sh
+cd "/neural-compressor/examples/nlp/huggingface_model/text_generation/llama/quantization/weight_only"
+pip install -r requirements.txt
