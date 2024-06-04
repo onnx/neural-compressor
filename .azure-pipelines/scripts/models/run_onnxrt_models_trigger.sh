@@ -21,9 +21,7 @@ done
 model_src_dir="/neural-compressor/examples/nlp/huggingface_model/text_generation/llama/quantization/weight_only"
 batch_size=16
 function run_prepare_model() {
-    python prepare_model.py --input_model="$model" \
-        --output_model="./model_export" \
-        --task=text-generation-with-past \
+    python prepare_model.py --input_model="$model" --output_model="./model_export" --task=text-generation-with-past
 }
 
 function run_quantize() {
