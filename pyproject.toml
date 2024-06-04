@@ -88,7 +88,6 @@ select = [
 ignore = [
     "D1", # D1 is for missing docstrings, which is not yet enforced.
     "E501", # Line length controlled by formatter
-    "N803", # Some variables are uppercase
     "NPY002", # np.random.Generator may not be preferred in all cases
     "PLR09", # Ignore the pylint "too-many-*" rules
     "PLR2004", # Magic numbers

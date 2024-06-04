@@ -14,6 +14,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from __future__ import annotations
 
 import copy
 import os
@@ -27,8 +28,6 @@ from packaging.version import Version
 from onnx_neural_compressor import config, constants, data_reader, onnx_model, utility
 from onnx_neural_compressor.algorithms.layer_wise import core
 from onnx_neural_compressor.algorithms.weight_only import utility as woq_utility
-
-from typing import List, Union, Optional  # isort: skip
 
 
 def _gptq(
@@ -172,9 +171,9 @@ def _gptq(
 
 
 def gptq_quantize(
-    model: Union[onnx.ModelProto, onnx_model.ONNXModel, pathlib.Path, str],
+    model: onnx.ModelProto | onnx_model.ONNXModel | pathlib.Path | str,
     data_reader: data_reader.CalibrationDataReader,
-    weight_config: Optional[dict] = None,
+    weight_config: dict | None = None,
     num_bits: int = 4,
     group_size: int = 32,
     scheme: str = "asym",
@@ -184,7 +183,7 @@ def gptq_quantize(
     mse: bool = False,
     perchannel: bool = True,
     accuracy_level: int = 0,
-    providers: Optional[List[str]] = None,
+    providers: list[str] | None = None,
     return_modelproto: bool = True,
 ):
     """Quant the model with GPTQ method.
@@ -389,7 +388,7 @@ def gptq_quantize(
 
 
 def apply_gptq_on_model(
-    model: Union[onnx.ModelProto, onnx_model.ONNXModel, pathlib.Path, str],
+    model: onnx.ModelProto | onnx_model.ONNXModel | pathlib.Path | str,
     quant_config: dict,
     calibration_data_reader: data_reader.CalibrationDataReader,
 ) -> onnx.ModelProto:

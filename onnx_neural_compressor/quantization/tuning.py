@@ -19,12 +19,11 @@ import pathlib
 import sys
 import tempfile
 import uuid
+from typing import Any, Callable, Dict, Generator, Iterator, List, Sized
 
 import onnx
 
 from onnx_neural_compressor import config, data_reader, logger, utility
-
-from typing import Any, Callable, Dict, Generator, Iterator, List, Sized  # isort: skip
 
 
 class EvaluationFuncWrapper:

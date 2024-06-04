@@ -45,7 +45,7 @@ def cli_evaluate(args) -> None:
 
     eval_logger = lm_eval.utils.eval_logger
     eval_logger.setLevel(getattr(logging, f"{args.verbosity}"))
-    eval_logger.info(f"Verbosity set to {args.verbosity}")
+    eval_logger.info("Verbosity set to %s", args.verbosity)
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
     if args.predict_only:

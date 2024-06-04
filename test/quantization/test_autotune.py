@@ -19,6 +19,7 @@ import glob
 import os
 import shutil
 import unittest
+from typing import Callable
 from unittest import mock
 
 import numpy as np
@@ -28,8 +29,6 @@ from optimum.exporters.onnx import main_export
 
 from onnx_neural_compressor import config, data_reader
 from onnx_neural_compressor.quantization import tuning
-
-from typing import Callable  # isort: skip
 
 
 def fake_eval(model, eval_result_lst):

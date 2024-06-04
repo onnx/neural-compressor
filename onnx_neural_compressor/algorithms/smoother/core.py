@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Smoother for onnxrt."""
+from __future__ import annotations
 
 import copy
 import os
@@ -23,9 +24,6 @@ import onnxruntime as ort
 
 from onnx_neural_compressor import data_reader, logger, onnx_model, utility
 from onnx_neural_compressor.algorithms.smoother import calibrator
-
-from typing import List, Union, Optional  # isort: skip
-
 
 _dtype_map = {
     np.dtype("float32"): 1,
@@ -100,9 +98,9 @@ class Smoother:
 
     def __init__(
         self,
-        model: Union[onnx.ModelProto, onnx_model.ONNXModel, pathlib.Path, str],
+        model: onnx.ModelProto | onnx_model.ONNXModel | pathlib.Path | str,
         dataloader: data_reader.CalibrationDataReader,
-        providers: Optional[List[str]] = None,
+        providers: list[str] | None = None,
     ):
         """Initialize the attributes of class."""
         if providers is None:
@@ -129,15 +127,15 @@ class Smoother:
 
     def transform(
         self,
-        alpha: Union[float, str] = 0.5,
+        alpha: float | str = 0.5,
         folding: bool = True,
         percentile: float = 99.999,
-        op_types: Optional[List[str]] = None,
+        op_types: list[str] | None = None,
         scales_per_op: bool = True,
         calib_iter: int = 100,
-        auto_alpha_args: Optional[dict] = None,
+        auto_alpha_args: dict | None = None,
         *args,
-        **kwargs
+        **kwargs,
     ):
         """The main entry of smooth quant.
 

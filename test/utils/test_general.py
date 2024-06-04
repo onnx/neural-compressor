@@ -3,12 +3,10 @@
 from __future__ import annotations
 
 import unittest
+from typing import Any, Callable, List
 
 from onnx_neural_compressor import config, constants, logger
 from onnx_neural_compressor.quantization import tuning
-
-from typing import Any, Callable, List  # isort: skip
-
 
 PRIORITY_FAKE_ALGO = 100
 FAKE_CONFIG_NAME = "fake"

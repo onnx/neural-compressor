@@ -20,13 +20,12 @@ from __future__ import annotations
 import copy
 import os
 import pathlib
+from typing import Callable
 
 import onnx
 import onnxruntime as ort
 
 from onnx_neural_compressor import data_reader, logger, onnx_model, utility
-
-from typing import Callable  # isort: skip
 
 
 def layer_wise_quant(

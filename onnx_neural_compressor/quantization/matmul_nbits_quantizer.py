@@ -11,8 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-from typing import List, Union, Optional  # isort: skip
+from __future__ import annotations
 
 import onnx
 from onnxruntime.quantization import matmul_4bits_quantizer
@@ -76,14 +75,14 @@ class MatMulNBitsQuantizer:
 
     def __init__(
         self,
-        model: Union[onnx.ModelProto, str],
+        model: onnx.ModelProto | str,
         block_size: int = 128,
         is_symmetric: bool = False,
         accuracy_level: int = 0,
-        nodes_to_exclude: Optional[List[str]] = None,
+        nodes_to_exclude: list[str] | None = None,
         algo_config: matmul_4bits_quantizer.WeightOnlyQuantConfig = None,
         n_bits: int = 4,
-        providers: Optional[List[str]] = None,
+        providers: list[str] | None = None,
     ):
         if providers is None:
             providers = ["CPUExecutionProvider"]

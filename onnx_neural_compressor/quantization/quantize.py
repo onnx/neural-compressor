@@ -11,9 +11,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from __future__ import annotations
 
 import pathlib
-from typing import Union
 
 import onnx
 from onnxruntime.quantization.quantize import QuantConfig
@@ -24,8 +24,8 @@ from onnx_neural_compressor.quantization import algorithm_entry as algos
 
 # ORT-like user-facing API
 def quantize(
-    model_input: Union[str, pathlib.Path, onnx.ModelProto],
-    model_output: Union[str, pathlib.Path],
+    model_input: str | pathlib.Path | onnx.ModelProto,
+    model_output: str | pathlib.Path,
     quant_config: QuantConfig,
 ):
     if isinstance(quant_config, config.StaticQuantConfig):

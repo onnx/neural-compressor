@@ -23,6 +23,8 @@ import json
 import pathlib
 import re
 from abc import ABC, abstractmethod
+from collections import OrderedDict
+from typing import Any, Callable, List, NamedTuple, _GenericAlias
 
 import numpy as np
 import onnx
@@ -31,9 +33,6 @@ from onnxruntime import quantization
 from typing_extensions import Self
 
 from onnx_neural_compressor import constants, data_reader, logger
-
-from collections import OrderedDict  # isort: skip
-from typing import Any, Callable, List, NamedTuple, _GenericAlias  # isort: skip
 
 
 class ParamLevel(enum.Enum):

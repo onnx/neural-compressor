@@ -11,12 +11,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from __future__ import annotations
 
 import importlib
 import pathlib
 import subprocess
 import time
-from typing import Callable, Dict, List, Optional, Tuple, Union
+from typing import Callable
 
 import cpuinfo
 import numpy as np
@@ -27,7 +28,7 @@ from onnxruntime.quantization import onnx_model
 from onnx_neural_compressor import constants, logger
 
 # Dictionary to store a mapping between algorithm names and corresponding algo implementation(function)
-algos_mapping: Dict[str, Callable] = {}
+algos_mapping: dict[str, Callable] = {}
 
 
 #######################################################
@@ -152,7 +153,7 @@ class TuningLogger:
         logger.info("Tuning started.")
 
     @classmethod
-    def trial_start(cls, trial_index: Optional[int] = None) -> None:
+    def trial_start(cls, trial_index: int | None = None) -> None:
         logger.info("%d-trail started.", trial_index)
 
     @classmethod
@@ -172,7 +173,7 @@ class TuningLogger:
         logger.info("Evaluation end.")
 
     @classmethod
-    def trial_end(cls, trial_index: Optional[int] = None) -> None:
+    def trial_end(cls, trial_index: int | None = None) -> None:
         logger.info("%d-trail end.", trial_index)
 
     @classmethod
@@ -416,8 +417,8 @@ def register_algo(name):
 
 
 def get_model_info(
-    model: Union[onnx.ModelProto, pathlib.Path, str], white_op_type_list: List[Callable]
-) -> List[Tuple[str, Callable]]:
+    model: onnx.ModelProto | pathlib.Path | str, white_op_type_list: list[Callable]
+) -> list[tuple[str, Callable]]:
     if not isinstance(model, onnx.ModelProto):
         model = onnx.load(model)
     filter_result = []
