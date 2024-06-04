@@ -26,7 +26,7 @@ if [ $model == "meta-llama/Llama-2-7b-hf" ]; then
 fi
 
 function run_prepare_model() {
-    python prepare_model.py --input_model="$model" --output_model="./model_export" --task=text-generation-with-past
+    python prepare_model.py --input_model="$model_save_path" --output_model="./model_export" --task=text-generation-with-past
 }
 
 function run_quantize() {
