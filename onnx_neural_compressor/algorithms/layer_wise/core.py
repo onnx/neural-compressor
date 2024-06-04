@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 #
 # Copyright (c) 2023 MIT HAN Lab
 # This source code is licensed under the MIT license
@@ -82,12 +81,10 @@ def layer_wise_quant(
         )
         raise ValueError("Fail to run layer-wise quantization.")
     logger.info(
-        "Will split model into {} parts to do layer-wise quantization".format(
-            len([node.name for node in split_nodes]) + 1
-        )
+        f"Will split model into {len([node.name for node in split_nodes]) + 1} parts to do layer-wise quantization"
     )
     logger.debug(
-        "Will split model with these nodes for layer-wise quantization: {}".format([node.name for node in split_nodes])
+        f"Will split model with these nodes for layer-wise quantization: {[node.name for node in split_nodes]}"
     )
 
     split_idx = 1
@@ -116,7 +113,7 @@ def layer_wise_quant(
             # append split_model_part_2 to do next split
             model_to_split.append(split_model_part_2)
 
-        logger.info("Quantize split model {}".format(split_idx))
+        logger.info(f"Quantize split model {split_idx}")
         if require_data_reader:
             # process data_reader for current split and next split
             current_data_reader = _filter_data_reader_for_current_split_model(
@@ -146,8 +143,8 @@ def layer_wise_quant(
             ort.InferenceSession(split_model_part_1_quantized.model.SerializeToString(), providers=providers)
         except Exception as e:
             logger.error(
-                "Layer-wise quantized model {} can't be inferred correctly. "
-                "Please check the raise exception".format(split_idx)
+                f"Layer-wise quantized model {split_idx} can't be inferred correctly. "
+                "Please check the raise exception"
             )
             raise e
 
@@ -161,7 +158,7 @@ def layer_wise_quant(
         split_idx += 1
         # if this is the last split, quantize the last split model
         if save_both_split_models:
-            logger.info("Quantize split model {}".format(split_idx))
+            logger.info(f"Quantize split model {split_idx}")
 
             # quantize split model
             if require_data_reader:
@@ -190,8 +187,8 @@ def layer_wise_quant(
                 ort.InferenceSession(split_model_part_2_quantized.model.SerializeToString(), providers=providers)
             except Exception as e:
                 logger.error(
-                    "Layer-wise quantized model {} can't be inferred correctly. "
-                    "Please check the raise exception".format(split_idx)
+                    f"Layer-wise quantized model {split_idx} can't be inferred correctly. "
+                    "Please check the raise exception"
                 )
                 raise e
 

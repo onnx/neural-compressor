@@ -1,4 +1,3 @@
-import copy
 import os
 import shutil
 import unittest
@@ -39,7 +38,7 @@ def build_simple_onnx_model():
 
     graph = onnx.helper.make_graph([matmul_node, add, add2], "test_graph_1", [A], [H], [B_init, E_init, F_init])
     model = onnx.helper.make_model(graph)
-    model = onnx.helper.make_model(graph, **{"opset_imports": [onnx.helper.make_opsetid("", 13)]})
+    model = onnx.helper.make_model(graph, opset_imports=[onnx.helper.make_opsetid("", 13)])
     return model
 
 
@@ -79,7 +78,7 @@ class TestQuantizationConfig(unittest.TestCase):
         op_names = [
             i.name
             for i in q_model.graph.node
-            if i.op_type.startswith("MatMul") and i.input[1].endswith("_Q{}G{}".format(bits, group_size))
+            if i.op_type.startswith("MatMul") and i.input[1].endswith(f"_Q{bits}G{group_size}")
         ]
         return len(op_names)
 

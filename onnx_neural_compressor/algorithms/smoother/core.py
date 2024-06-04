@@ -203,7 +203,7 @@ class Smoother:
         sq_calibrator = calibrator.Calibrator(
             self.model,
             self.dataloader,
-            iterations=list(range(0, iterations)),
+            iterations=list(range(iterations)),
             backend=self.providers,
         )
 

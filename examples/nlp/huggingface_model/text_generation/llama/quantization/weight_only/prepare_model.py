@@ -39,7 +39,7 @@ def prepare_model(input_model, output_model, task):
             f"{output_model}",
         ],
         stdout=subprocess.PIPE,
-        text=True,
+        text=True, check=False,
     )
 
     assert os.path.exists(output_model), f"{output_model} doesn't exist!"

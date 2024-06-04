@@ -23,7 +23,7 @@ import numpy as np
 import onnx
 import onnxruntime
 
-from onnx_neural_compressor import data_reader, logger, onnx_model, utility
+from onnx_neural_compressor import data_reader, logger, onnx_model
 
 
 class Calibrator:
@@ -103,7 +103,7 @@ class Calibrator:
                 if node.op_type in ["Conv", "FusedConv"] and self._check_is_group_conv(node):
                     continue
                 # also need to check whether the layer has weight
-                if len(node.input) >= 2 and node.input[1] in initializers.keys():
+                if len(node.input) >= 2 and node.input[1] in initializers:
                     tensors_to_node.setdefault(node.input[0], []).append([node.name, node.input, node.output])
         return tensors_to_node
 
@@ -175,7 +175,7 @@ class Calibrator:
                 node = output_name_to_node[data_name]
             elif data_name in input_name_to_nodes:
                 node = input_name_to_nodes[data_name][0]
-            assert node, "{} is neither an input nor an output of nodes in augmented model.".format(data_name)
+            assert node, f"{data_name} is neither an input nor an output of nodes in augmented model."
             name_to_node[data_name] = node.name
 
         def _collect_data(ort_inputs):

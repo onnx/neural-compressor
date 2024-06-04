@@ -360,7 +360,7 @@ def gptq_quantize(
                 model.add_node(q_matmul_node)
             else:
                 q_weight_tensor = onnx.helper.make_tensor(
-                    name=node.input[1] + "_Q{}G{}".format(str(num_bits), str(group_size)),
+                    name=node.input[1] + f"_Q{num_bits!s}G{group_size!s}",
                     data_type=utility.dtype_mapping[str(dtype)],
                     dims=q_weight.shape,
                     vals=q_weight.astype(dtype).tobytes(),

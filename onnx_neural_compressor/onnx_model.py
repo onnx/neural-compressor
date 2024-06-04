@@ -163,8 +163,8 @@ class ONNXModel(onnx_model.ONNXModel):
             onnx.save(self.model, root)
 
         if self._config is not None:
-            model_type = "" if not hasattr(self._config, "model_type") else getattr(self._config, "model_type")
-            setattr(self._config.__class__, "model_type", model_type)
+            model_type = "" if not hasattr(self._config, "model_type") else self._config.model_type
+            self._config.__class__.model_type = model_type
             output_config_file = pathlib.Path(root).parent.joinpath("config.json").as_posix()
             self._config.to_json_file(output_config_file, use_diff=False)
 
@@ -194,7 +194,7 @@ class ONNXModel(onnx_model.ONNXModel):
         if len(nodes) == 1:
             return nodes[0]
         elif len(nodes) == 0:
-            raise ValueError("{} is not used by any node in this model.".format(weight_name))
+            raise ValueError(f"{weight_name} is not used by any node in this model.")
         else:
             raise NotImplementedError("Models with shared weights is not supported.")
 
@@ -223,7 +223,7 @@ class ONNXModel(onnx_model.ONNXModel):
     def get_scale_zero(self, tensor):
         """Help function to get scale and zero_point."""
         if not tensor.endswith("_quantized"):
-            logger.debug("Find {} in the quantized graph is not quantized.".format(tensor))
+            logger.debug(f"Find {tensor} in the quantized graph is not quantized.")
             return None, None
 
         if len(self._input_name_to_nodes) == 0:
@@ -273,8 +273,8 @@ class ONNXModel(onnx_model.ONNXModel):
             return None, None
         else:
             scale_tensor, zo_tensor = _searcher(tensor)
-            assert scale_tensor, "missing scale for tensor {}".format(tensor)
-            assert zo_tensor, "missing zero point for tensor {}".format(tensor)
+            assert scale_tensor, f"missing scale for tensor {tensor}"
+            assert zo_tensor, f"missing zero point for tensor {tensor}"
             return scale_tensor, zo_tensor
 
     def replace_input_of_all_nodes(self, old_input_name, new_input_name, white_optype=[], black_optype=[]):
@@ -413,7 +413,7 @@ class ONNXModel(onnx_model.ONNXModel):
             elif isinstance(node, onnx.NodeProto):
                 start_node.append(node.name)
             else:
-                assert False, "'get_nodes_chain' function only support list[string]" "or list[NodeProto] params"
+                assert False, "'get_nodes_chain' function only support list[string]or list[NodeProto] params"
 
         # process stop node list
         stop_node = []
@@ -423,7 +423,7 @@ class ONNXModel(onnx_model.ONNXModel):
             elif isinstance(node, onnx.NodeProto):
                 stop_node.append(node.name)
             else:
-                assert False, "'get_nodes_chain' function only support list[string]" "or list[NodeProto] params"
+                assert False, "'get_nodes_chain' function only support list[string]or list[NodeProto] params"
 
         while start_node:
             node_name = start_node.popleft()
@@ -839,7 +839,7 @@ class ONNXModel(onnx_model.ONNXModel):
 
         assert len(split_node_output) == 1, (
             "Only support split at node with 1 output tensor, while "
-            "current split node {} has {} output tensors".format(split_node_name, len(split_node_output))
+            f"current split node {split_node_name} has {len(split_node_output)} output tensors"
         )
         split_tensor_name = split_node_output[0]
 
@@ -889,7 +889,7 @@ class ONNXModel(onnx_model.ONNXModel):
         split_model_part_1.model_path = split_model_part_1_path
         split_model_part_1._save_split_model(split_model_part_1_path)
         split_model_part_1.check_is_large_model()
-        logger.debug("save split model part 1 to {} for layer wise quantization".format(split_model_part_1_path))
+        logger.debug(f"save split model part 1 to {split_model_part_1_path} for layer wise quantization")
 
         if save_both_split_models:
             split_model_part_2.load_model_initializer_by_tensor(dir_of_model_to_split)
@@ -897,7 +897,7 @@ class ONNXModel(onnx_model.ONNXModel):
             split_model_part_2.model_path = split_model_part_2_path
             split_model_part_2._save_split_model(split_model_part_2_path)
             split_model_part_2.check_is_large_model()
-            logger.debug("save split model part 2 to {} for layer wise quantization".format(split_model_part_2_path))
+            logger.debug(f"save split model part 2 to {split_model_part_2_path} for layer wise quantization")
             return split_model_part_1, split_model_part_2
         else:
             return split_model_part_1, split_model_part_2

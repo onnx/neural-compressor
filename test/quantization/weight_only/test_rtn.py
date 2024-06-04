@@ -55,7 +55,7 @@ class TestRTNQuant(unittest.TestCase):
         op_names = [
             i.name
             for i in q_model.graph.node
-            if i.op_type.startswith("MatMul") and i.input[1].endswith("_Q{}G{}".format(bits, group_size))
+            if i.op_type.startswith("MatMul") and i.input[1].endswith(f"_Q{bits}G{group_size}")
         ]
         return len(op_names)
 

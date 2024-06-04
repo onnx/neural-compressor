@@ -89,6 +89,7 @@ ignore = [
     "D1", # D1 is for missing docstrings, which is not yet enforced.
     "E501", # Line length controlled by formatter
     "NPY002", # np.random.Generator may not be preferred in all cases
+    "PLR09", # Ignore the pylint "too-many-*" rules
     "PYI011", # Allow protobuf enums as defaults to function arguments
     "PYI021", # Allow docstrings in pyi files
     "PYI041", # int | float is sometimes more clear than float

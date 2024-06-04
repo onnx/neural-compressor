@@ -37,7 +37,7 @@ from onnx_neural_compressor import config, data_reader, logger, utility
 from onnx_neural_compressor.quantization import matmul_nbits_quantizer, tuning
 
 logging.basicConfig(
-    format="%(asctime)s - %(levelname)s - %(name)s -   %(message)s", datefmt="%m/%d/%Y %H:%M:%S", level=logging.WARN
+    format="%(asctime)s - %(levelname)s - %(name)s -   %(message)s", datefmt="%m/%d/%Y %H:%M:%S", level=logging.WARNING
 )
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -108,7 +108,7 @@ def replace_architectures(json_path):
     # replace 'LLaMATokenizer' to lowercase 'LlamaTokenizer'
     # to avoid bug 'Tokenizer class LLaMATokenizer does not exist or is not currently imported.'
     # refer to https://github.com/huggingface/transformers/issues/22222#issuecomment-1477171703
-    with open(json_path, "r") as file:
+    with open(json_path) as file:
         data = json.load(file)
         data["architectures"] = ["LlamaForCausalLM"]
 
@@ -193,7 +193,7 @@ def benchmark(model):
     print("\n", "-" * 10, "Summary:", "-" * 10)
     print(args)
     throughput = (num_iter - num_warmup) / total_time
-    print("Throughput: {} samples/s".format(throughput))
+    print(f"Throughput: {throughput} samples/s")
 
 
 class AWQDataloader(data_reader.CalibrationDataReader):

@@ -178,7 +178,8 @@ class ConfigSet:
 
         Args:
             fwk_configs: A single config or a list of configs.
-                Examples:
+
+        Examples:
                     1) single config: config.RTNConfig(weight_group_size=32)
                     2) single expandable config: config.RTNConfig(weight_group_size=[32, 64])
                     3) mixed 1) and 2): [config.RTNConfig(weight_group_size=32), config.RTNConfig(weight_group_size=[32, 64])]
@@ -331,7 +332,6 @@ class TuningMonitor:
         Returns:
             stop_flag: True if need to stop, otherwise False.
         """
-
         # reach max trials
         reach_max_trials = self.trial_cnt >= self.tuning_config.max_trials
         # reach accuracy goal
@@ -475,7 +475,7 @@ def autotune(
             calibration_data_reader.rewind()
         tuning_logger.trial_start(trial_index=trial_index)
         tuning_logger.quantization_start()
-        logger.debug("quant config: {}".format(quant_config))
+        logger.debug(f"quant config: {quant_config}")
         q_model = _quantize(model_input, quant_config=quant_config, calibration_data_reader=calibration_data_reader)
         tuning_logger.quantization_end()
         tuning_logger.evaluation_start()

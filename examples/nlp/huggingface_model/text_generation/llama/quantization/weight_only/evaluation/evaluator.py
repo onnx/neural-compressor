@@ -178,7 +178,7 @@ def simple_evaluate(
             elif isinstance(user_model, optimum.onnxruntime.ORTModelForSeq2SeqLM):
                 model_id = "optimum/t5-small"
             lm_eval.utils.eval_logger.info(
-                "We use '{}' to build `LM` instance, the actually run model is user_model you passed.".format(model_id)
+                f"We use '{model_id}' to build `LM` instance, the actually run model is user_model you passed."
             )
             lm = lm_eval.api.registry.get_model(model).create_from_arg_string(
                 "pretrained=" + model_id,
@@ -263,10 +263,8 @@ def simple_evaluate(
                     f"Overwriting default num_fewshot of {task_name} from {default_num_fewshot} to {num_fewshot}"
                 )
                 task_obj.set_config(key="num_fewshot", value=num_fewshot)
-        else:
-            # if num_fewshot not provided, and the task does not define a default one, default to 0
-            if (default_num_fewshot := task_obj.get_config("num_fewshot")) is None:
-                task_obj.set_config(key="num_fewshot", value=0)
+        elif (default_num_fewshot := task_obj.get_config("num_fewshot")) is None:
+            task_obj.set_config(key="num_fewshot", value=0)
 
     if check_integrity:
         lm_eval.evaluator_utils.run_task_tests(task_list=tasks)

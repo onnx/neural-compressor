@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 #
 # Copyright (c) 2023 Intel Corporation
 #
@@ -204,7 +203,7 @@ class TestONNXRT3xAutoTune(unittest.TestCase):
         op_names = [
             i.name
             for i in best_model.graph.node
-            if i.op_type.startswith("MatMul") and i.input[1].endswith("_Q{}G{}".format(4, 32))
+            if i.op_type.startswith("MatMul") and i.input[1].endswith(f"_Q{4}G{32}")
         ]
         self.assertTrue(len(op_names) > 0)
 
@@ -256,7 +255,7 @@ class TestONNXRT3xAutoTune(unittest.TestCase):
         op_names = [
             i.name
             for i in best_model.graph.node
-            if i.op_type.startswith("MatMul") and i.input[1].endswith("_Q{}G{}".format(4, 32))
+            if i.op_type.startswith("MatMul") and i.input[1].endswith(f"_Q{4}G{32}")
         ]
         self.assertTrue(len(op_names) > 0)
 
@@ -307,7 +306,7 @@ class TestONNXRT3xAutoTune(unittest.TestCase):
         op_names = [
             i.name
             for i in best_model.graph.node
-            if i.op_type.startswith("MatMul") and i.input[1].endswith("_Q{}G{}".format(4, 32))
+            if i.op_type.startswith("MatMul") and i.input[1].endswith(f"_Q{4}G{32}")
         ]
         self.assertTrue(len(op_names) > 0)
 
@@ -327,7 +326,7 @@ class TestONNXRT3xAutoTune(unittest.TestCase):
         op_names = [
             i.name
             for i in best_model.graph.node
-            if i.op_type.startswith("MatMul") and i.input[1].endswith("_Q{}G{}".format(8, 32))
+            if i.op_type.startswith("MatMul") and i.input[1].endswith(f"_Q{8}G{32}")
         ]
         self.assertTrue(len(op_names) > 0)
 
@@ -347,7 +346,7 @@ class TestONNXRT3xAutoTune(unittest.TestCase):
                 [
                     i.name
                     for i in best_model.graph.node
-                    if i.op_type.startswith("MatMul") and i.input[1].endswith("_Q{}G{}".format(4, 32))
+                    if i.op_type.startswith("MatMul") and i.input[1].endswith(f"_Q{4}G{32}")
                 ]
             )
             + 1,
@@ -366,7 +365,7 @@ class TestONNXRT3xAutoTune(unittest.TestCase):
         op_names = [
             i.name
             for i in best_model.graph.node
-            if i.op_type.startswith("MatMul") and i.input[1].endswith("_Q{}G{}".format(4, 128))
+            if i.op_type.startswith("MatMul") and i.input[1].endswith(f"_Q{4}G{128}")
         ]
         self.assertTrue(len(op_names) > 0)
 

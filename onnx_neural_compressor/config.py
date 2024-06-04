@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 #
 # Copyright (c) 2023 Intel Corporation
 #
@@ -31,7 +30,7 @@ import pydantic
 from onnxruntime import quantization
 from typing_extensions import Self
 
-from onnx_neural_compressor import constants, data_reader, logger, utility
+from onnx_neural_compressor import constants, data_reader, logger
 
 from collections import OrderedDict  # isort: skip
 from typing import Any, Callable, Dict, List, NamedTuple, Optional, Tuple, Type, Union, _GenericAlias  # isort: skip
@@ -115,7 +114,7 @@ class TuningParam:
 
 
 # Config registry to store all registered configs.
-class ConfigRegistry(object):
+class ConfigRegistry:
     registered_configs = {}
     _config_registry = None
 
@@ -192,7 +191,6 @@ def register_config(algo_name: str, priority: Union[float, int] = 0):
         priority: the priority of the configuration. A larger number indicates a higher priority,
             which will be tried first at the auto-tune stage. Defaults to 0.
     """
-
     return config_registry.register_config_impl(algo_name=algo_name, priority=priority)
 
 
@@ -308,7 +306,7 @@ class BaseConfig(ABC):
 
     @classmethod
     def from_json_file(cls, filename):
-        with open(filename, "r", encoding="utf-8") as file:
+        with open(filename, encoding="utf-8") as file:
             config_dict = json.load(file)
         return cls.from_dict(**config_dict)
 
@@ -706,7 +704,7 @@ class RTNConfig(BaseConfig):
         return filter_result
 
     @classmethod
-    def get_config_set_for_tuning(cls) -> Union[None, "RTNConfig", List["RTNConfig"]]:  # pragma: no cover
+    def get_config_set_for_tuning(cls) -> Union[None, RTNConfig, List[RTNConfig]]:  # pragma: no cover
         return RTNConfig(weight_bits=[4, 8], weight_sym=[True, False])
 
 
@@ -871,7 +869,7 @@ class GPTQConfig(BaseConfig):
         return filter_result
 
     @classmethod
-    def get_config_set_for_tuning(cls) -> Union[None, "GPTQConfig", List["GPTQConfig"]]:  # pragma: no cover
+    def get_config_set_for_tuning(cls) -> Union[None, GPTQConfig, List[GPTQConfig]]:  # pragma: no cover
         return GPTQConfig(
             weight_bits=[4, 8],
             weight_sym=[True, False],
@@ -1022,7 +1020,7 @@ class AWQConfig(BaseConfig):
         return filter_result
 
     @classmethod
-    def get_config_set_for_tuning(cls) -> Union[None, "AWQConfig", List["AWQConfig"]]:  # pragma: no cover
+    def get_config_set_for_tuning(cls) -> Union[None, AWQConfig, List[AWQConfig]]:  # pragma: no cover
         return AWQConfig(
             weight_bits=[4, 8],
             weight_sym=[True, False],
@@ -1134,7 +1132,7 @@ class SmoothQuantConfig(BaseConfig, quantization.StaticQuantConfig):
     @classmethod
     def get_config_set_for_tuning(
         cls,
-    ) -> Union[None, "SmoothQuantConfig", List["SmoothQuantConfig"]]:  # pragma: no cover
+    ) -> Union[None, SmoothQuantConfig, List[SmoothQuantConfig]]:  # pragma: no cover
         return SmoothQuantConfig(alpha=np.arange(0.3, 0.7, 0.05))
 
     def convert_to_ort_config(self):

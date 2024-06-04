@@ -5,7 +5,7 @@ import unittest
 
 import onnx
 import onnxruntime as ort
-import onnxruntime.tools.symbolic_shape_infer as symbolic_shape_infer
+from onnxruntime.tools import symbolic_shape_infer
 import torch
 import transformers
 from optimum.exporters.onnx import main_export

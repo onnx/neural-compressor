@@ -17,7 +17,7 @@ from typing import List, Union  # isort: skip
 import onnx
 from onnxruntime.quantization import matmul_4bits_quantizer
 
-from onnx_neural_compressor import config, data_reader, logger, onnx_model, utility
+from onnx_neural_compressor import config, data_reader, logger, onnx_model
 from onnx_neural_compressor.quantization import algorithm_entry as algos
 
 
@@ -102,7 +102,7 @@ class MatMulNBitsQuantizer:
             "RTN",
             "AWQ",
             "GPTQ",
-        ], "Only RTN, GPTQ and AWQ algorithms are supported, but get {} algorithm".format(self.algorithm)
+        ], f"Only RTN, GPTQ and AWQ algorithms are supported, but get {self.algorithm} algorithm"
 
     def _generate_nc_config(self):
         config_class = config.config_registry.get_cls_configs()[self.algorithm.lower()]

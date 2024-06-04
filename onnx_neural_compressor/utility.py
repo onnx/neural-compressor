@@ -13,8 +13,6 @@
 # limitations under the License.
 
 import importlib
-import logging
-import os
 import pathlib
 import subprocess
 import time
@@ -50,21 +48,19 @@ def check_value(name, src, supported_type, supported_value=[]):
                 self._datatype = datatype
     """
     if isinstance(src, list) and any([not isinstance(i, supported_type) for i in src]):
-        assert False, "Type of {} items should be {} but not {}".format(
-            name, str(supported_type), [type(i) for i in src]
-        )
+        assert False, f"Type of {name} items should be {supported_type!s} but not {[type(i) for i in src]}"
     elif not isinstance(src, list) and not isinstance(src, supported_type):
-        assert False, "Type of {} should be {} but not {}".format(name, str(supported_type), type(src))
+        assert False, f"Type of {name} should be {supported_type!s} but not {type(src)}"
 
     if len(supported_value) > 0:
         if isinstance(src, str) and src not in supported_value:
-            assert False, "{} is not in supported {}: {}. Skip setting it.".format(src, name, str(supported_value))
+            assert False, f"{src} is not in supported {name}: {supported_value!s}. Skip setting it."
         elif (
             isinstance(src, list)
             and all([isinstance(i, str) for i in src])
             and any([i not in supported_value for i in src])
         ):
-            assert False, "{} is not in supported {}: {}. Skip setting it.".format(src, name, str(supported_value))
+            assert False, f"{src} is not in supported {name}: {supported_value!s}. Skip setting it."
 
     return True
 
@@ -183,7 +179,6 @@ class TuningLogger:
 
 def singleton(cls):
     """Singleton decorator."""
-
     instances = {}
 
     def _singleton(*args, **kw):
@@ -195,7 +190,7 @@ def singleton(cls):
     return _singleton
 
 
-class LazyImport(object):
+class LazyImport:
     """Lazy import python module till use."""
 
     def __init__(self, module_name):
@@ -228,7 +223,7 @@ class LazyImport(object):
 
 
 @singleton
-class CpuInfo(object):
+class CpuInfo:
     """CPU info collection."""
 
     def __init__(self):
@@ -242,12 +237,12 @@ class CpuInfo(object):
             if max_extension_support >= 7:
                 ecx = cpuid._run_asm(
                     b"\x31\xC9",  # xor ecx, ecx
-                    b"\xB8\x07\x00\x00\x00" b"\x0f\xa2" b"\x89\xC8" b"\xC3",  # mov eax, 7  # cpuid  # mov ax, cx  # ret
+                    b"\xB8\x07\x00\x00\x00\x0f\xa2\x89\xC8\xC3",  # mov eax, 7  # cpuid  # mov ax, cx  # ret
                 )
                 self._vnni = bool(ecx & (1 << 11))
                 eax = cpuid._run_asm(
                     b"\xB9\x01\x00\x00\x00",  # mov ecx, 1
-                    b"\xB8\x07\x00\x00\x00" b"\x0f\xa2" b"\xC3",  # mov eax, 7  # cpuid  # ret
+                    b"\xB8\x07\x00\x00\x00\x0f\xa2\xC3",  # mov eax, 7  # cpuid  # ret
                 )
                 self._bf16 = bool(eax & (1 << 5))
         # TODO: The implementation will be refined in the future.
@@ -377,7 +372,7 @@ def find_by_name(name, item_list):
     """Helper function to find item by name in a list."""
     items = []
     for item in item_list:
-        assert hasattr(item, "name"), "{} should have a 'name' attribute defined".format(item)  # pragma: no cover
+        assert hasattr(item, "name"), f"{item} should have a 'name' attribute defined"  # pragma: no cover
         if item.name == name:
             items.append(item)
     if len(items) > 0:
@@ -440,7 +435,7 @@ def is_B_transposed(node):
     """Whether inuput B is transposed."""
     transB = [attr for attr in node.attribute if attr.name == "transB"]
     if len(transB):
-        return 0 < onnx.helper.get_attribute_value(transB[0])
+        return onnx.helper.get_attribute_value(transB[0]) > 0
     return False
 
 
@@ -482,7 +477,7 @@ def _quantize_data_with_scale_zero(data, qType, scheme, scale, zero_point):
     elif qType == onnx.onnx_pb.TensorProto.UINT8 and scheme == "asym":
         quantized_data = ((data.astype(np.float32) / scale).round() + zero_point).astype("B")
     else:
-        raise ValueError("Unexpected combination of data type {} and scheme {}.".format(qType, scheme))
+        raise ValueError(f"Unexpected combination of data type {qType} and scheme {scheme}.")
     return quantized_data
 
 

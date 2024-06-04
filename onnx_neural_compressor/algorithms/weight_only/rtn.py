@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 #
 # Copyright (c) 2023 MIT HAN Lab
 # This source code is licensed under the MIT license
@@ -152,7 +151,7 @@ def rtn_quantize(
                 q_weight = np.transpose(q_weight)
                 q_weight = q_weight[: org_w_shape[0], :].astype(dtype)
                 q_weight_tensor = onnx.helper.make_tensor(
-                    name=node.input[1] + "_Q{}G{}".format(str(num_bits), str(group_size)),
+                    name=node.input[1] + f"_Q{num_bits!s}G{group_size!s}",
                     data_type=utility.dtype_mapping[str(dtype)],
                     dims=weight.shape,
                     vals=q_weight.tobytes(),

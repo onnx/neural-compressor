@@ -31,7 +31,7 @@ DEFAULT_RESULTS_FILE = "results.json"
 
 
 def _handle_non_serializable(o):
-    if isinstance(o, np.int64) or isinstance(o, np.int32):
+    if isinstance(o, (np.int32, np.int64)):
         return int(o)
     elif isinstance(o, set):
         return list(o)
@@ -59,7 +59,7 @@ def cli_evaluate(args) -> None:
 
     if args.limit:
         eval_logger.warning(
-            " --limit SHOULD ONLY BE USED FOR TESTING." "REAL METRICS SHOULD NOT BE COMPUTED USING LIMIT."
+            " --limit SHOULD ONLY BE USED FOR TESTING.REAL METRICS SHOULD NOT BE COMPUTED USING LIMIT."
         )
 
     if args.tasks is None:
@@ -68,34 +68,33 @@ def cli_evaluate(args) -> None:
     elif args.tasks == "list":
         eval_logger.info("Available Tasks:\n - {}".format("\n - ".join(task_manager.all_tasks)))
         sys.exit()
+    elif os.path.isdir(args.tasks):
+        task_names = []
+        yaml_path = os.path.join(args.tasks, "*.yaml")
+        for yaml_file in glob.glob(yaml_path):
+            config = lm_eval.utils.load_yaml_config(yaml_file)
+            task_names.append(config)
     else:
-        if os.path.isdir(args.tasks):
-            task_names = []
-            yaml_path = os.path.join(args.tasks, "*.yaml")
-            for yaml_file in glob.glob(yaml_path):
-                config = lm_eval.utils.load_yaml_config(yaml_file)
+        task_list = args.tasks.split(",")
+        task_names = task_manager.match_tasks(task_list)
+        for task in [task for task in task_list if task not in task_names]:
+            if os.path.isfile(task):
+                config = lm_eval.utils.load_yaml_config(task)
                 task_names.append(config)
-        else:
-            task_list = args.tasks.split(",")
-            task_names = task_manager.match_tasks(task_list)
-            for task in [task for task in task_list if task not in task_names]:
-                if os.path.isfile(task):
-                    config = lm_eval.utils.load_yaml_config(task)
-                    task_names.append(config)
-            task_missing = [
-                task for task in task_list if task not in task_names and "*" not in task
-            ]  # we don't want errors if a wildcard ("*") task name was used
+        task_missing = [
+            task for task in task_list if task not in task_names and "*" not in task
+        ]  # we don't want errors if a wildcard ("*") task name was used
 
-            if task_missing:
-                missing = ", ".join(task_missing)
-                eval_logger.error(
-                    f"Tasks were not found: {missing}\n"
-                    f"{lm_eval.utils.SPACING}Try `lm-eval --tasks list` for list of available tasks",
-                )
-                raise ValueError(
-                    f"Tasks not found: {missing}. Try `lm-eval --tasks list` for list of available tasks,"
-                    + " or '--verbosity DEBUG' to troubleshoot task registration issues."
-                )
+        if task_missing:
+            missing = ", ".join(task_missing)
+            eval_logger.error(
+                f"Tasks were not found: {missing}\n"
+                f"{lm_eval.utils.SPACING}Try `lm-eval --tasks list` for list of available tasks",
+            )
+            raise ValueError(
+                f"Tasks not found: {missing}. Try `lm-eval --tasks list` for list of available tasks,"
+                + " or '--verbosity DEBUG' to troubleshoot task registration issues."
+            )
 
     if args.output_path:
         path = Path(args.output_path)
