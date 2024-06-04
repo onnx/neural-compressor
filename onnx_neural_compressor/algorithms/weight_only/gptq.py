@@ -328,13 +328,13 @@ def gptq_quantize(
             weight_tensor = model.get_initializer(node.input[1])
             init_share_num = model.get_initializer_share_num(node.input[1])
 
-            satisfy_MatMulNBits_condition = Version(ort.__version__) > constants.ONNXRT1161_VERSION and num_bits == 4  # noqa: N806
-            satisfy_MatMulFpQ4_condition = (  # noqa: N806
+            satisfy_matmul_nbits_condition = Version(ort.__version__) > constants.ONNXRT1161_VERSION and num_bits == 4
+            satisfy_matmul_fpq4_condition = (
                 Version(ort.__version__) >= constants.ONNXRT116_VERSION and num_bits == 4 and group_size == 32
             )
-            if ("CUDAExecutionProvider" in providers and satisfy_MatMulNBits_condition) or (
+            if ("CUDAExecutionProvider" in providers and satisfy_matmul_nbits_condition) or (
                 "CUDAExecutionProvider" not in providers
-                and (satisfy_MatMulFpQ4_condition or satisfy_MatMulNBits_condition)
+                and (satisfy_matmul_fpq4_condition or satisfy_matmul_nbits_condition)
             ):  # pragma: no cover
                 # MatMulFpQ4 support 4 bits and 32 group_size with ort 1.16.0 and 1.16.1 versions, supported by CPU EP
                 # MatMulNBits supports 4 bits and 2^n group_size with ort > 1.16.1, supported by CPU EP AND CUDA EP

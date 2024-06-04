@@ -73,7 +73,7 @@ class HFLM(lm_eval.api.model.TemplateLM):
         # optionally: take in an already-initialized ORTModel
         if not isinstance(pretrained, str):
             eval_logger.warning(
-                "`pretrained` model kwarg is not of type `str`. " + "Many other model arguments may be ignored. "  # noqa: G003
+                "`pretrained` model kwarg is not of type `str`. Many other model arguments may be ignored. "
             )
             self._model = pretrained
             self._config = self._model.config
@@ -295,7 +295,8 @@ class HFLM(lm_eval.api.model.TemplateLM):
                 and not os.path.exists(os.path.join(pretrained, "model.onnx"))
             ):
                 raise ValueError(
-                    "Couldn't find any ONNX model name in " + "['decoder_model.onnx', 'decoder_with_past_model.onnx', "  # noqa: ISC003
+                    "Couldn't find any ONNX model name in "
+                    "['decoder_model.onnx', 'decoder_with_past_model.onnx', "
                     f"'decoder_model_merged.onnx', 'model.onnx'] in {pretrained}."
                 )
 
@@ -389,7 +390,7 @@ class HFLM(lm_eval.api.model.TemplateLM):
                 and not os.path.exists(os.path.join(pretrained, "decoder_model_merged.onnx"))
             ):
                 raise ValueError(
-                    "Please ensure encoder_model.onnx and " f"decoder_model(_merged).onnx are under {pretrained}."  # noqa: ISC001
+                    f"Please ensure encoder_model.onnx and decoder_model(_merged).onnx are under {pretrained}."
                 )
 
             sess_options = onnxruntime.SessionOptions()
@@ -922,7 +923,11 @@ class HFLM(lm_eval.api.model.TemplateLM):
                     cont_toks=cont_toks,
                     logits=logits,
                 ):
-                    cont_toks = torch.tensor(cont_toks, dtype=torch.long, device=self._device).unsqueeze(0)  # [1, seq]  # noqa: PLW2901
+                    cont_toks = torch.tensor(  # noqa: PLW2901
+                        cont_toks, dtype=torch.long, device=self._device
+                    ).unsqueeze(
+                        0
+                    )  # [1, seq]
                     max_equal = (greedy_tokens == cont_toks).all()
 
                     # Obtain log-probs at the corresponding continuation token indices

@@ -1218,7 +1218,9 @@ class StaticQuantConfig(quantization.StaticQuantConfig):
                 If enabled, each op will have an individual scale, mainlyfor accuracy.
                 If not enabled,  ops with the same input will share a scale, mainly for performance.
         """
-        super().__init__(calibration_data_reader=calibration_data_reader, extra_options=extra_options, *args, **kwargs)  # noqa: B026
+        super().__init__(
+            calibration_data_reader=calibration_data_reader, extra_options=extra_options, *args, **kwargs  # noqa: B026
+        )
 
     def to_dict(self):
         return self.__dict__

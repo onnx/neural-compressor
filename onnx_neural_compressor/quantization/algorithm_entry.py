@@ -80,8 +80,9 @@ def smooth_quant_entry(
 
 ###################### RTN Algo Entry ##################################
 @utility.register_algo(name=constants.RTN)
-def rtn_quantize_entry(model: pathlib.Path | str, quant_config: config.RTNConfig, *args, **kwargs) -> onnx.ModelProto:  # noqa: ARG001
+def rtn_quantize_entry(model: pathlib.Path | str, quant_config: config.RTNConfig, *args, **kwargs) -> onnx.ModelProto:
     """The main entry to apply rtn quantization."""
+    del args, kwargs  # unused
     # map config to each op
     model_info = quant_config.get_model_info(model=model)
     configs_mapping = quant_config.to_config_mapping(model_info=model_info)

@@ -423,7 +423,7 @@ class ONNXModel(onnx_model.ONNXModel):
             elif isinstance(node, onnx.NodeProto):
                 start_node.append(node.name)
             else:
-                raise AssertionError("'get_nodes_chain' function only support list[string]or list[NodeProto] params")  # noqa: TRY004
+                raise TypeError("'get_nodes_chain' function only support list[string]or list[NodeProto] params")
 
         # process stop node list
         stop_node = []
@@ -433,7 +433,7 @@ class ONNXModel(onnx_model.ONNXModel):
             elif isinstance(node, onnx.NodeProto):
                 stop_node.append(node.name)
             else:
-                raise AssertionError("'get_nodes_chain' function only support list[string]or list[NodeProto] params")  # noqa: TRY004
+                raise TypeError("'get_nodes_chain' function only support list[string]or list[NodeProto] params")
 
         while start_node:
             node_name = start_node.popleft()

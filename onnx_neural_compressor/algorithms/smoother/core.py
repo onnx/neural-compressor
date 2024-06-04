@@ -63,7 +63,9 @@ def _make_sub_graph(node, inits, input_data, output_data, opset, ir_version):
         opset (object): opset of the model
         ir_version (object): ir_version of the model
     """
-    input = onnx.helper.make_tensor_value_info(node.input[0], _dtype_map[input_data.dtype], input_data.shape)  # noqa: A001
+    input = onnx.helper.make_tensor_value_info(  # noqa: A001
+        node.input[0], _dtype_map[input_data.dtype], input_data.shape
+    )
     output = onnx.helper.make_tensor_value_info(node.output[0], _dtype_map[output_data.dtype], output_data.shape)
     graph = onnx.helper.make_graph([node], "sub_graph", [input], [output], inits)
     model = onnx.helper.make_model(graph, opset_imports=opset)
