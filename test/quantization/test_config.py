@@ -5,11 +5,10 @@ import unittest
 
 import numpy as np
 import onnx
-from onnx_neural_compressor import config
-from onnx_neural_compressor import logger
-from onnx_neural_compressor import utility
-from onnx_neural_compressor.quantization import algorithm_entry as algos
 from optimum.exporters.onnx import main_export
+
+from onnx_neural_compressor import config, logger, utility
+from onnx_neural_compressor.quantization import algorithm_entry as algos
 
 
 def find_onnx_file(folder_path):

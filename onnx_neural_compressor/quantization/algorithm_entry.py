@@ -17,16 +17,11 @@ import tempfile
 from typing import Union
 
 import onnx
-from onnx_neural_compressor import config
-from onnx_neural_compressor import constants
-from onnx_neural_compressor import data_reader
-from onnx_neural_compressor import logger
-from onnx_neural_compressor import utility
-from onnx_neural_compressor.algorithms.smoother import core
-from onnx_neural_compressor.algorithms.weight_only import awq
-from onnx_neural_compressor.algorithms.weight_only import gptq
-from onnx_neural_compressor.algorithms.weight_only import rtn
 from onnxruntime import quantization
+
+from onnx_neural_compressor import config, constants, data_reader, logger, utility
+from onnx_neural_compressor.algorithms.smoother import core
+from onnx_neural_compressor.algorithms.weight_only import awq, gptq, rtn
 
 
 ###################### SmoothQuant Entry ##################################

@@ -19,10 +19,8 @@ import tempfile
 import uuid
 
 import onnx
-from onnx_neural_compressor import config
-from onnx_neural_compressor import data_reader
-from onnx_neural_compressor import logger
-from onnx_neural_compressor import utility
+
+from onnx_neural_compressor import config, data_reader, logger, utility
 
 from typing import Any, Callable, Dict, Generator, Iterator, List, Optional, Sized, Tuple, Union  # isort: skip
 

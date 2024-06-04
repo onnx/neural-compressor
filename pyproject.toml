@@ -1,14 +1,10 @@
 [tool.isort]
 profile = "black"
 line_length = 120
-known_first_party = ["neural_compressor"]
 extend_skip_glob = ["**/__init__.py"]
-force_single_line = true
-
 
 [tool.black]
 line-length = 120
-
 
 [tool.codespell]
 skip = '*.po,*.ts,*.js,*.map,*.js.map,*.css.map,.azure-pipelines/scripts/codeScan/codespell/inc_dict.txt'

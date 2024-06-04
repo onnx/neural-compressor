@@ -22,15 +22,11 @@ import pathlib
 import numpy as np
 import onnx
 import onnxruntime as ort
-from onnx_neural_compressor import config
-from onnx_neural_compressor import constants
-from onnx_neural_compressor import data_reader
-from onnx_neural_compressor import logger
-from onnx_neural_compressor import onnx_model
-from onnx_neural_compressor import utility
+from packaging import version
+
+from onnx_neural_compressor import config, constants, data_reader, logger, onnx_model, utility
 from onnx_neural_compressor.algorithms.weight_only import rtn
 from onnx_neural_compressor.algorithms.weight_only import utility as woq_utility
-from packaging import version
 
 from typing import List, Union  # isort: skip
 
@@ -66,8 +62,9 @@ def _apply_awq_scale(model, weight_config, absorb_pairs, output_dicts, num_bits,
         weight = []
         org_out = []
         for node in nodes:
-            if (node.name, node.op_type) in weight_config and \
-                weight_config.get((node.name, node.op_type), "fp32") != "fp32":
+            if (node.name, node.op_type) in weight_config and weight_config.get(
+                (node.name, node.op_type), "fp32"
+            ) != "fp32":
                 num_bits = weight_config[(node.name, node.op_type)].get("weight_bits", 4)
                 group_size = weight_config[(node.name, node.op_type)].get("weight_group_size", 32)
                 scheme = "sym" if weight_config[(node.name, node.op_type)].get("weight_sym", True) else "asym"
@@ -128,7 +125,7 @@ def _apply_awq_scale(model, weight_config, absorb_pairs, output_dicts, num_bits,
         for node in nodes:
             weight_config.setdefault((node.name, node.op_type), {}).update({"weight_bits": num_bits})
             weight_config.setdefault((node.name, node.op_type), {}).update({"weight_group_size": group_size})
-            weight_config.setdefault((node.name, node.op_type), {}).update({"weight_sym": scheme=="sym"})
+            weight_config.setdefault((node.name, node.op_type), {}).update({"weight_sym": scheme == "sym"})
 
             init_share_num = model.get_initializer_share_num(node.input[1])
             weight_tensor = model.get_initializer(node.input[1])

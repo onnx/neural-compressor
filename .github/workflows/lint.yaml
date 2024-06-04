@@ -1,0 +1,84 @@
+# Copyright (c) ONNX Neural Compressor Project Contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+name: Lint
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  merge_group:
+
+permissions:  # set top-level default permissions as security best practice
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' }}
+  cancel-in-progress: true
+
+jobs:
+  optional-lint:
+    name: Optional Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+      - name: misspell # Check spellings as well
+        uses: reviewdog/action-misspell@5bd7be2fc7ae56a517184f5c4bbcf2fd7afe3927 # v1.17.0
+        with:
+          github_token: ${{ secrets.github_token }}
+          locale: "US"
+          reporter: github-pr-check
+          level: info
+          filter_mode: diff_context
+      - name: shellcheck # Static check shell scripts
+        uses: reviewdog/action-shellcheck@72365a51bf6476fe952a117c3ff703eb7775e40a # v1.20.0
+        with:
+          github_token: ${{ secrets.github_token }}
+          reporter: github-pr-check
+          level: info
+          filter_mode: diff_context
+
+  enforce-style:
+    name: Enforce style
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+      - name: Setup Python
+        uses: actions/setup-python@82c7e631bb3cdc910f68e0081d67478d79c6982d # v5.1.0
+        with:
+          python-version: "3.12"
+      - name: Install ONNX Neural Compressor
+        run: |
+          pip install .
+      - name: Install dependencies
+        run: |
+          python -m pip install lintrunner lintrunner-adapters
+          lintrunner init
+      - name: Run lintrunner on all files
+        run: |
+          set +e
+          if ! lintrunner --force-color --all-files --tee-json=lint.json -v; then
+              echo ""
+              echo -e "\e[1m\e[36mYou can reproduce these results locally by using \`lintrunner\`.\e[0m"
+              echo -e "\e[1m\e[36mSee https://github.com/onnx/neural-compressor/blob/main/.lintrunner.toml for setup instructions.\e[0m"
+              exit 1
+          fi
+      - name: Produce SARIF
+        if: always()
+        run: |
+          python -m lintrunner_adapters to-sarif lint.json lintrunner.sarif
+      - name: Upload SARIF file
+        # Use always() to always upload SARIF even if lintrunner returns with error code
+        # To toggle linter comments in the files page, press `i` on the keyboard
+        if: always()
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@cdcdbb579706841c47f7063dda365e292e5cad7a # v2.13.4
+        with:
+          # Path to SARIF file relative to the root of the repository
+          sarif_file: lintrunner.sarif
+          category: lintrunner
+          checkout_path: ${{ github.workspace }}

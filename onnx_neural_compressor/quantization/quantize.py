@@ -16,9 +16,10 @@ import pathlib
 from typing import Union
 
 import onnx
+from onnxruntime.quantization.quantize import QuantConfig
+
 from onnx_neural_compressor import config
 from onnx_neural_compressor.quantization import algorithm_entry as algos
-from onnxruntime.quantization.quantize import QuantConfig
 
 
 # ORT-like user-facing API
