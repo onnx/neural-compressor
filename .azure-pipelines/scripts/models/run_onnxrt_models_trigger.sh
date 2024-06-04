@@ -20,6 +20,11 @@ done
 
 model_src_dir="/neural-compressor/examples/nlp/huggingface_model/text_generation/llama/quantization/weight_only"
 batch_size=16
+
+if [ $model == "meta-llama/Llama-2-7b-hf" ]; then
+    model_save_path="/tf_dataset/tf_dataset2/models/huggingface/Llama-2-7b-hf"
+fi
+
 function run_prepare_model() {
     python prepare_model.py --input_model="$model" --output_model="./model_export" --task=text-generation-with-past
 }
