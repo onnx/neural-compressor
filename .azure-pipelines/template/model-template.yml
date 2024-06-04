@@ -2,6 +2,9 @@ parameters:
   - name: modelName
     type: string
     default: "meta-llama/Llama-2-7b-hf"
+  - name: modelContainerName
+    type: string
+    default: "ONC"
   - name: algorithm
     type: string
 
@@ -12,7 +15,7 @@ steps:
       repoName: "neural-compressor"
       repoTag: "py310"
       dockerFileName: "Dockerfile"
-      containerName: "ONC"
+      containerName: ${{ parameters.modelContainerName }}
 
   - script: |
       docker exec ${{ parameters.modelContainerName }} bash -c \
