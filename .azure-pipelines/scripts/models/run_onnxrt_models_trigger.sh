@@ -23,7 +23,7 @@ batch_size=16
 function run_prepare_model() {
     python prepare_model.py --input_model="$model" \
         --output_model="./model_export" \
-        --task=text-generation-with-past \ # or text-generatio
+        --task=text-generation-with-past \
 }
 
 function run_quantize() {
