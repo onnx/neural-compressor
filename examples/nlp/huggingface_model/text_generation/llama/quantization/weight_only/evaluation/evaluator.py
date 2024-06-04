@@ -255,7 +255,7 @@ def simple_evaluate(
         if num_fewshot is not None:
             if (default_num_fewshot := task_obj.get_config("num_fewshot")) == 0:
                 lm_eval.utils.eval_logger.info(
-                    f"num_fewshot has been set to 0 for {task_name} in its config."
+                    f"num_fewshot has been set to 0 for {task_name} in its config."  # noqa: ISC003
                     + "Manual configuration will be ignored."
                 )
             else:
@@ -305,7 +305,7 @@ def simple_evaluate(
         results["date"] = start_date
         try:
             lm_eval.logging_utils.add_env_info(results)  # additional environment info to results
-        except:
+        except:  # noqa: E722
             lm_eval.utils.eval_logger.info("get env info failed.")
         return results
     else:
@@ -416,8 +416,8 @@ def evaluate(
         if lm.world_size > 1:
             lm.accelerator.wait_for_everyone()
 
-    RANK = lm.rank
-    WORLD_SIZE = lm.world_size
+    RANK = lm.rank  # noqa: N806
+    WORLD_SIZE = lm.world_size  # noqa: N806
     ### Postprocess outputs ###
     # TODO: del model here, maybe (idea: allow user to specify device of e.g. reward model separately)
     for task_output in eval_tasks:

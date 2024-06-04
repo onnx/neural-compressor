@@ -211,7 +211,7 @@ class AWQDataloader(data_reader.CalibrationDataReader):
             collate_fn=self.collate_batch,
         )
         model = onnx.load(model_path, load_external_data=False)
-        inputs_names = [input.name for input in model.graph.input]
+        inputs_names = [input.name for input in model.graph.input]  # noqa: A001
         key_value_input_names = [key for key in inputs_names if (".key" in key) or (".value" in key)]
         use_cache = len(key_value_input_names) > 0
         self.batch_size = batch_size
@@ -273,17 +273,17 @@ class GPTQDataloader(data_reader.CalibrationDataReader):
         traindata.set_format(type="torch", columns=["input_ids", "attention_mask"])
 
         session = ort.InferenceSession(model_path)
-        inputs_names = [input.name for input in session.get_inputs()]
+        inputs_names = [input.name for input in session.get_inputs()]  # noqa: A001
         key_value_input_names = [key for key in inputs_names if (".key" in key) or (".value" in key)]
         use_cache = len(key_value_input_names) > 0
 
         for i in range(calibration_sampling_size):
             while True:
-                i = random.randint(0, len(traindata) - 1)
+                i = random.randint(0, len(traindata) - 1)  # noqa: PLW2901
                 trainenc = traindata[i]
                 if trainenc["input_ids"].shape[0] > seqlen:
                     break
-            i = random.randint(0, trainenc["input_ids"].shape[0] - seqlen - 1)
+            i = random.randint(0, trainenc["input_ids"].shape[0] - seqlen - 1)  # noqa: PLW2901
             j = i + seqlen
             inp = trainenc["input_ids"][i:j].unsqueeze(0)
             mask = torch.ones(inp.shape)

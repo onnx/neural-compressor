@@ -54,7 +54,7 @@ def cli_evaluate(args) -> None:
         raise ValueError("Specify --output_path if providing --log_samples or --predict_only")
 
     if args.include_path is not None:
-        eval_logger.info(f"Including path: {args.include_path}")
+        eval_logger.info(f"Including path: {args.include_path}")  # noqa: G004
     task_manager = lm_eval.tasks.TaskManager(args.verbosity, include_path=args.include_path)
 
     if args.limit:
@@ -64,7 +64,7 @@ def cli_evaluate(args) -> None:
         eval_logger.error("Need to specify task to evaluate.")
         sys.exit()
     elif args.tasks == "list":
-        eval_logger.info("Available Tasks:\n - {}".format("\n - ".join(task_manager.all_tasks)))
+        eval_logger.info("Available Tasks:\n - {}".format("\n - ".join(task_manager.all_tasks)))  # noqa: G001
         sys.exit()
     elif os.path.isdir(args.tasks):
         task_names = []
@@ -86,11 +86,11 @@ def cli_evaluate(args) -> None:
         if task_missing:
             missing = ", ".join(task_missing)
             eval_logger.error(
-                f"Tasks were not found: {missing}\n"
+                f"Tasks were not found: {missing}\n"  # noqa: G004
                 f"{lm_eval.utils.SPACING}Try `lm-eval --tasks list` for list of available tasks",
             )
             raise ValueError(
-                f"Tasks not found: {missing}. Try `lm-eval --tasks list` for list of available tasks,"
+                f"Tasks not found: {missing}. Try `lm-eval --tasks list` for list of available tasks,"  # noqa: ISC003
                 + " or '--verbosity DEBUG' to troubleshoot task registration issues."
             )
 
@@ -101,7 +101,7 @@ def cli_evaluate(args) -> None:
             raise FileExistsError(f"File already exists at {path}")
         output_path_file = path.joinpath(DEFAULT_RESULTS_FILE)
         if output_path_file.is_file():
-            eval_logger.warning(f"File {output_path_file} already exists. Results will be overwritten.")
+            eval_logger.warning(f"File {output_path_file} already exists. Results will be overwritten.")  # noqa: G004
         # if path json then get parent dir
         elif path.suffix in (".json", ".jsonl"):
             output_path_file = path
@@ -115,7 +115,7 @@ def cli_evaluate(args) -> None:
         os.environ["HF_DATASETS_TRUST_REMOTE_CODE"] = str(args.trust_remote_code)
         args.model_args = args.model_args + f",trust_remote_code={os.environ['HF_DATASETS_TRUST_REMOTE_CODE']}"
 
-    eval_logger.info(f"Selected Tasks: {task_names}")
+    eval_logger.info(f"Selected Tasks: {task_names}")  # noqa: G004
     eval_logger.info("Loading selected tasks...")
 
     request_caching_args = evaluator.request_caching_arg_to_dict(cache_requests=args.cache_requests)
@@ -161,14 +161,14 @@ def cli_evaluate(args) -> None:
                 wandb_logger.log_eval_result()
                 if args.log_samples:
                     wandb_logger.log_eval_samples(samples)
-            except Exception as e:
-                eval_logger.info(f"Logging to Weights and Biases failed due to {e}")
+            except Exception as e:  # noqa: BLE001
+                eval_logger.info(f"Logging to Weights and Biases failed due to {e}")  # noqa: G004
 
         if args.output_path:
             output_path_file.open("w", encoding="utf-8").write(dumped)
 
             if args.log_samples:
-                for task_name, config in results["configs"].items():
+                for task_name, config in results["configs"].items():  # noqa: B007
                     output_name = "{}_{}".format(re.sub("/|=", "__", args.model_args), task_name)
                     filename = path.joinpath(f"{output_name}.jsonl")
                     samples_dumped = json.dumps(

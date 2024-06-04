@@ -14,5 +14,5 @@
 
 # Refer from https://github.com/intel/intel-extension-for-transformers/tree/main/intel_extension_for_transformers/transformers/llm/evaluation/lm_eval
 
-from evaluation.accuracy import cli_evaluate as evaluate
-from evaluation.utils import LMEvalParser
+from evaluation.accuracy import cli_evaluate as evaluate  # noqa: F401
+from evaluation.utils import LMEvalParser  # noqa: F401

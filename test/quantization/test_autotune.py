@@ -31,7 +31,7 @@ from onnx_neural_compressor import config, data_reader
 from onnx_neural_compressor.quantization import tuning
 
 
-def fake_eval(model, eval_result_lst):
+def fake_eval(model, eval_result_lst):  # noqa: ARG001
     acc = eval_result_lst.pop(0)
     return acc
 
@@ -112,12 +112,12 @@ class TestONNXRT3xAutoTune(unittest.TestCase):
     def test_sq_auto_tune(self):
         acc_data = iter([1.0, 0.8, 0.99, 1.0, 0.99, 0.99])
 
-        def eval_acc_fn(model) -> float:
+        def eval_acc_fn(model) -> float:  # noqa: ARG001
             return next(acc_data)
 
         perf_data = iter([1.0, 0.9, 0.99])
 
-        def eval_perf_fn(model) -> float:
+        def eval_perf_fn(model) -> float:  # noqa: ARG001
             return next(perf_data)
 
         eval_fns = [
@@ -158,12 +158,12 @@ class TestONNXRT3xAutoTune(unittest.TestCase):
     def test_rtn_auto_tune(self):
         acc_data = iter([1.0, 0.8, 0.6, 1.0, 0.99, 0.9])
 
-        def eval_acc_fn(model) -> float:
+        def eval_acc_fn(model) -> float:  # noqa: ARG001
             return next(acc_data)
 
         perf_data = iter([1.0, 0.99, 0.99])
 
-        def eval_perf_fn(model) -> float:
+        def eval_perf_fn(model) -> float:  # noqa: ARG001
             return next(perf_data)
 
         eval_fns = [
@@ -210,12 +210,12 @@ class TestONNXRT3xAutoTune(unittest.TestCase):
     def test_awq_auto_tune(self):
         acc_data = iter([1.0, 0.8, 0.6, 1.0, 0.99, 0.9])
 
-        def eval_acc_fn(model) -> float:
+        def eval_acc_fn(model) -> float:  # noqa: ARG001
             return next(acc_data)
 
         perf_data = iter([1.0, 0.99, 0.99])
 
-        def eval_perf_fn(model) -> float:
+        def eval_perf_fn(model) -> float:  # noqa: ARG001
             return next(perf_data)
 
         eval_fns = [
@@ -262,12 +262,12 @@ class TestONNXRT3xAutoTune(unittest.TestCase):
     def test_gptq_auto_tune(self):
         acc_data = iter([1.0, 0.8, 0.6, 1.0, 0.99, 0.9])
 
-        def eval_acc_fn(model) -> float:
+        def eval_acc_fn(model) -> float:  # noqa: ARG001
             return next(acc_data)
 
         perf_data = iter([1.0, 0.99, 0.99])
 
-        def eval_perf_fn(model) -> float:
+        def eval_perf_fn(model) -> float:  # noqa: ARG001
             return next(perf_data)
 
         eval_fns = [

@@ -33,15 +33,15 @@ class FakeModel:
 class FakeAlgoConfig(config.BaseConfig):
     """Config class for fake algo."""
 
-    supported_configs: list = []
-    params_list = [
+    supported_configs: list = []  # noqa: RUF012
+    params_list = [  # noqa: RUF012
         "weight_dtype",
         "weight_bits",
         config.TuningParam("target_op_type_list", tunable_type=List[List[str]]),
     ]
     name = FAKE_CONFIG_NAME
 
-    def __init__(
+    def __init__(  # noqa: D417
         self,
         weight_dtype: str = "int",
         weight_bits: int = 4,
@@ -74,7 +74,7 @@ class FakeAlgoConfig(config.BaseConfig):
         pass
 
     @staticmethod
-    def get_model_info(model: Any) -> list[tuple[str, Any]]:
+    def get_model_info(model: Any) -> list[tuple[str, Any]]:  # noqa: ARG004
         return FAKE_MODEL_INFO
 
     @classmethod
@@ -95,15 +95,15 @@ def get_default_fake_config() -> FakeAlgoConfig:
 class FakeAlgoOneConfig(config.BaseConfig):
     """Config class for fake algo."""
 
-    supported_configs: list = []
-    params_list = [
+    supported_configs: list = []  # noqa: RUF012
+    params_list = [  # noqa: RUF012
         "weight_dtype",
         "weight_bits",
         config.TuningParam("target_op_type_list", tunable_type=List[List[str]]),
     ]
     name = FAKE_CONFIG_NAME_1
 
-    def __init__(
+    def __init__(  # noqa: D417
         self,
         weight_dtype: str = "int",
         weight_bits: int = 4,
@@ -136,7 +136,7 @@ class FakeAlgoOneConfig(config.BaseConfig):
         pass
 
     @staticmethod
-    def get_model_info(model: Any) -> list[tuple[str, Any]]:
+    def get_model_info(model: Any) -> list[tuple[str, Any]]:  # noqa: ARG004
         return FAKE_MODEL_INFO
 
     @classmethod
@@ -155,7 +155,7 @@ class TestEvaluator(unittest.TestCase):
 
     def test_single_eval_fn(self):
 
-        def fake_eval_fn(model):
+        def fake_eval_fn(model):  # noqa: ARG001
             return 1.0
 
         evaluator = tuning.Evaluator()
@@ -166,7 +166,7 @@ class TestEvaluator(unittest.TestCase):
     def test_single_eval_fn_dict(self):
         acc_data = iter([1.0, 0.8, 0.99, 1.0, 0.99, 0.99])
 
-        def eval_acc_fn(model) -> float:
+        def eval_acc_fn(model) -> float:  # noqa: ARG001
             return next(acc_data)
 
         eval_fns = {"eval_fn": eval_acc_fn, "weight": 0.5, "name": "accuracy"}
@@ -208,8 +208,8 @@ class TestBaseConfig(unittest.TestCase):
 
     def test_mixed_two_algos(self):
         model = FakeModel()
-        OP1_NAME = "OP1_NAME"
-        OP2_NAME = "OP2_NAME"
+        OP1_NAME = "OP1_NAME"  # noqa: N806
+        OP2_NAME = "OP2_NAME"  # noqa: N806
         fake_config = FakeAlgoConfig(weight_bits=4, white_list=[OP1_NAME])
         fake1_config = FakeAlgoOneConfig(weight_bits=2, white_list=[OP2_NAME])
         mixed_config = fake_config + fake1_config
