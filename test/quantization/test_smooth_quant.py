@@ -27,6 +27,7 @@ from onnx_neural_compressor import config, data_reader
 from onnx_neural_compressor.quantization import QuantType
 from onnx_neural_compressor.quantization import algorithm_entry as algos
 from onnx_neural_compressor.quantization import quantize
+from onnx_neural_compressor import onnx_model
 
 
 class DataReader(data_reader.CalibrationDataReader):
@@ -79,6 +80,8 @@ class TestONNXRT3xSmoothQuant(unittest.TestCase):
         model = algos.smooth_quant_entry(self.gptj, sq_config, self.data_reader)
         num_muls = len([i for i in model.graph.node if i.name.endswith("_smooth_mul") and i.op_type == "Mul"])
         self.assertEqual(num_muls, 30)
+        model = onnx_model.ONNXModel(model)
+        self.assertTrue(model.is_smoothquant_model())
 
     def test_sq_auto_tune_from_class_beginner(self):
         self.data_reader.rewind()

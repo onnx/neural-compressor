@@ -164,16 +164,17 @@ class TestRTNQuantWithORTLikeAPI(TestRTNQuant):
         algo_config = matmul_nbits_quantizer.RTNWeightOnlyQuantConfig()
 
         for n_bits in [3, 4, 8]:
-            quant = matmul_nbits_quantizer.MatMulNBitsQuantizer(
-                copy.deepcopy(self.gptj),
-                n_bits=n_bits,
-                block_size=32,
-                is_symmetric=False,
-                algo_config=algo_config,
-            )
-            quant.process()
-            self.assertIsNotNone(quant.model)
-            self.assertEqual(self._count_woq_matmul(quant.model, bits=n_bits, group_size=32), 30)
+            for is_symmetric in [True, False]:
+                quant = matmul_nbits_quantizer.MatMulNBitsQuantizer(
+                    copy.deepcopy(self.gptj),
+                    n_bits=n_bits,
+                    block_size=32,
+                    is_symmetric=is_symmetric,
+                    algo_config=algo_config,
+                )
+                quant.process()
+                self.assertIsNotNone(quant.model)
+                self.assertEqual(self._count_woq_matmul(quant.model, bits=n_bits, group_size=32), 30)
 
     def test_rtn_config_nbits_with_exclude_node(self):
 

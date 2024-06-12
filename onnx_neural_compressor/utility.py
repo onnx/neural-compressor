@@ -50,21 +50,21 @@ def check_value(name, src, supported_type, supported_value=[]):
                 self._datatype = datatype
     """
     if isinstance(src, list) and any([not isinstance(i, supported_type) for i in src]):
-        assert False, "Type of {} items should be {} but not {}".format(
+        assert False, "Type of '{}' items should be {} but not {}".format(
             name, str(supported_type), [type(i) for i in src]
         )
     elif not isinstance(src, list) and not isinstance(src, supported_type):
-        assert False, "Type of {} should be {} but not {}".format(name, str(supported_type), type(src))
+        assert False, "Type of '{}' should be {} but not {}".format(name, str(supported_type), type(src))
 
     if len(supported_value) > 0:
         if isinstance(src, str) and src not in supported_value:
-            assert False, "{} is not in supported {}: {}. Skip setting it.".format(src, name, str(supported_value))
+            assert False, "'{}' is not in supported '{}': {}. Skip setting it.".format(src, name, str(supported_value))
         elif (
             isinstance(src, list)
             and all([isinstance(i, str) for i in src])
             and any([i not in supported_value for i in src])
         ):
-            assert False, "{} is not in supported {}: {}. Skip setting it.".format(src, name, str(supported_value))
+            assert False, "{} is not in supported '{}': {}. Skip setting it.".format(src, name, str(supported_value))
 
     return True
 
@@ -296,30 +296,6 @@ class CpuInfo(object):
         return 0
 
 
-def dump_elapsed_time(customized_msg=""):
-    """Get the elapsed time for decorated functions.
-
-    Args:
-        customized_msg (string, optional): The parameter passed to decorator. Defaults to None.
-    """
-
-    def f(func):
-
-        def fi(*args, **kwargs):
-            start = time.time()
-            res = func(*args, **kwargs)
-            end = time.time()
-            logger.info(
-                "%s elapsed time: %s ms"
-                % (customized_msg if customized_msg else func.__qualname__, round((end - start) * 1000, 2))
-            )
-            return res
-
-        return fi
-
-    return f
-
-
 def set_random_seed(seed: int):
     """Set the random seed in config."""
     options.random_seed = seed
@@ -371,19 +347,6 @@ dtype_mapping = {
     "bf16": 16,
     "bfloat16": 16,
 }
-
-
-def find_by_name(name, item_list):
-    """Helper function to find item by name in a list."""
-    items = []
-    for item in item_list:
-        assert hasattr(item, "name"), "{} should have a 'name' attribute defined".format(item)  # pragma: no cover
-        if item.name == name:
-            items.append(item)
-    if len(items) > 0:
-        return items[0]
-    else:
-        return None
 
 
 def simple_progress_bar(total, i):
@@ -438,6 +401,7 @@ def get_model_info(
 
 def is_B_transposed(node):
     """Whether inuput B is transposed."""
+    import pdb;pdb.set_trace()
     transB = [attr for attr in node.attribute if attr.name == "transB"]
     if len(transB):
         return 0 < onnx.helper.get_attribute_value(transB[0])
@@ -512,7 +476,7 @@ def _calculate_scale_zp(rmin, rmax, quantize_range, qType, scheme):
             )
         elif qType == onnx.onnx_pb.TensorProto.UINT8:
             zero_point = np.maximum(0, np.minimum(255, ((0 - float(rmin)) / scale).round()).round()).astype("uint8")
-        else:
+        else:  # pragma: no cover
             zero_point = (
                 (-64 - rmin) / float(scale) if quantize_range == 128 else (-127 - rmin) / float(scale)
             ).round()
@@ -529,7 +493,7 @@ def _calculate_scale_zp(rmin, rmax, quantize_range, qType, scheme):
         elif qType == onnx.onnx_pb.TensorProto.UINT8:
             zero_point = round((0 - float(rmin)) / scale)
             zero_point = np.uint8(round(max(0, min(255, zero_point))))
-        else:
+        else: # pragma: no cover
             zero_point = (
                 round((-64 - float(rmin)) / scale) if quantize_range == 128 else round((-127 - float(rmin)) / scale)
             )
