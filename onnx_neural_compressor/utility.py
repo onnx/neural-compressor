@@ -401,7 +401,6 @@ def get_model_info(
 
 def is_B_transposed(node):
     """Whether inuput B is transposed."""
-    import pdb;pdb.set_trace()
     transB = [attr for attr in node.attribute if attr.name == "transB"]
     if len(transB):
         return 0 < onnx.helper.get_attribute_value(transB[0])

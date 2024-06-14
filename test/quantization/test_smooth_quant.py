@@ -58,7 +58,7 @@ class DataReader(data_reader.CalibrationDataReader):
         self.enum_data = None
 
 
-class TestONNXRT3xSmoothQuant(unittest.TestCase):
+class TestONNXRTSmoothQuant(unittest.TestCase):
 
     @classmethod
     def setUpClass(self):
@@ -73,6 +73,11 @@ class TestONNXRT3xSmoothQuant(unittest.TestCase):
     @classmethod
     def tearDownClass(self):
         shutil.rmtree("./gptj", ignore_errors=True)
+
+    def test_sq_config(self):
+        sq_config = config.SmoothQuantConfig()
+        model_info = sq_config.get_model_info(model=onnx.load(self.gptj))
+        self.assertEqual(len(model_info), 40)
 
     def test_sq_from_class_beginner(self):
         self.data_reader.rewind()

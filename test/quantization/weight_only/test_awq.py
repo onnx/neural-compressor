@@ -3,8 +3,9 @@ import itertools
 import os
 import shutil
 import unittest
-
+import numpy as np
 import torch
+import torch.nn as nn
 import transformers
 from optimum.exporters.onnx import main_export
 
@@ -120,7 +121,7 @@ class TestAWQQuantWithInternalAPI(TestAWQQuant):
             "enable_mse_search": [True, False],
         }
 
-        keys = config.AWQConfig.params_list
+        keys = config.AWQConfig.params_list + config.AWQConfig.model_params_list
         for value in itertools.product(*awq_options.values()):
             d = dict(zip(keys, value))
             print(d)
@@ -137,6 +138,9 @@ class TestAWQQuantWithInternalAPI(TestAWQQuant):
         awq_config2 = config.AWQConfig.from_dict(quant_config_dict["awq"])
         self.assertEqual(awq_config1.to_dict(), awq_config2.to_dict())
 
+        tuning_config = config.AWQConfig.get_config_set_for_tuning()
+        self.assertTrue(isinstance(tuning_config, config.AWQConfig))
+
     def test_quantize_awq_from_dict_default(self):
 
         qmodel = self._apply_awq(quant_config=config.get_default_awq_config())
@@ -149,7 +153,7 @@ class TestAWQQuantWithInternalAPI(TestAWQQuant):
         qmodel = self._apply_awq(quant_config)
         self.assertIsNotNone(qmodel)
 
-    def test_quantize_awq_fallback_from_class_beginner(self):
+    def test_quantize_awq_fallback(self):
 
         fp32_config = config.AWQConfig(weight_dtype="fp32")
         quant_config = config.AWQConfig(
@@ -163,11 +167,22 @@ class TestAWQQuantWithInternalAPI(TestAWQQuant):
         self.assertEqual(self._count_woq_matmul(qmodel), 29)
         self.assertFalse(self._check_node_is_quantized(qmodel, "/h.4/mlp/fc_out/MatMul"))
 
+        # test quant_last_matmul
+        quant_config = config.AWQConfig(
+            weight_dtype="int",
+            weight_sym=False,
+            weight_group_size=32,
+            quant_last_matmul=False,
+        )
+        qmodel = self._apply_awq(quant_config)
+        self.assertIsNotNone(qmodel)
+        self.assertEqual(self._count_woq_matmul(qmodel), 29)
+        self.assertFalse(self._check_node_is_quantized(qmodel, "/h.4/mlp/fc_out/MatMul"))
+
 
 class TestAWQQuantWithORTLikeAPI(TestAWQQuant):
 
     def test_awq_config_4bits(self):
-
         algo_config = matmul_4bits_quantizer.AWQWeightOnlyQuantConfig(
             calibration_data_reader=self.calibration_data_reader
         )
@@ -181,6 +196,28 @@ class TestAWQQuantWithORTLikeAPI(TestAWQQuant):
         quant.process()
         self.assertIsNotNone(quant.model)
         self.assertTrue(self._check_model_is_quantized(quant.model))
+
+    def test_awq_config_4bits_with_accuracy_level(self):
+        algo_config = matmul_4bits_quantizer.RTNWeightOnlyQuantConfig()
+
+        for accuracy_level in [0, 1, 2, 3, 4]:
+            quant = matmul_4bits_quantizer.MatMul4BitsQuantizer(
+                copy.deepcopy(self.gptj),
+                block_size=32,
+                is_symmetric=False,
+                algo_config=algo_config,
+                accuracy_level=accuracy_level,
+            )
+            quant.process()
+
+            for node in quant.model.graph.node:
+                if node.op_type == "MatMulNBits":
+                    for attr in node.attribute:
+                        if attr.name == "accuracy_level":
+                            self.assertEqual(attr.i, accuracy_level)
+                            break
+            self.assertIsNotNone(quant.model)
+            self.assertTrue(self._check_model_is_quantized(quant.model))
 
     def test_awq_config_4bits_with_exclude_node(self):
 

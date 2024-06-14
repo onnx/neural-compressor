@@ -2,7 +2,7 @@ import copy
 import os
 import shutil
 import unittest
-
+import json
 import numpy as np
 import onnx
 from optimum.exporters.onnx import main_export
@@ -57,10 +57,19 @@ class TestQuantizationConfig(unittest.TestCase):
         onnx.save(simple_onnx_model, "simple_onnx_model.onnx")
         self.simple_onnx_model = "simple_onnx_model.onnx"
 
+        data = {
+            "weight_bits": 4,
+            "weight_group_size": 128
+        }
+        self.json_filename = "rtn_config.json"
+        with open(self.json_filename, "w") as file:
+            json.dump(data, file)
+
     @classmethod
     def tearDownClass(self):
         shutil.rmtree("gptj", ignore_errors=True)
         os.remove("simple_onnx_model.onnx")
+        os.remove("rtn_config.json")
 
     def setUp(self):
         # print the test name
@@ -216,6 +225,14 @@ class TestQuantizationConfig(unittest.TestCase):
         self.assertIn("rtn", combined_config_d)
         self.assertIn("gptq", combined_config_d)
 
+    def test_json_file(self):
+        qconfig = config.RTNConfig.from_json_file(self.json_filename)
+        self.assertEqual(qconfig.weight_group_size, 128)
+
+        os.remove(self.json_filename)
+        qconfig.to_json_file(self.json_filename)
+        self.assertTrue(os.path.exists(self.json_filename))
+
 
 class TestQuantConfigForAutotune(unittest.TestCase):
 
@@ -225,6 +242,78 @@ class TestQuantConfigForAutotune(unittest.TestCase):
         expand_config_list = config.RTNConfig.expand(tune_config)
         self.assertEqual(expand_config_list[0].weight_bits, 4)
         self.assertEqual(expand_config_list[1].weight_bits, 8)
+
+class TestComposableConfig(unittest.TestCase):
+
+    def test_composable_config(self):
+        qconfig1 = {
+            "rtn": {
+                "global": {
+                    "weight_bits": 4,
+                },
+                "local": {
+                    "fc1": {
+                        "weight_bits": 8,
+                    }
+                },
+            }
+        }
+        qconfig2 = {
+            "rtn": {
+                "global": {
+                    "weight_bits": 4,
+                },
+                "local": {
+                    "fc2": {
+                        "weight_bits": 8,
+                        "weight_group_size": 128,
+                    }
+                },
+            }
+        }
+        qconfig1 = config.RTNConfig.from_dict(qconfig1["rtn"])
+        qconfig2 = config.RTNConfig.from_dict(qconfig2["rtn"])
+
+        qconfig1 = config.ComposableConfig([qconfig1])
+        qconfig2 = config.ComposableConfig([qconfig2])
+        qconfig = qconfig1 + qconfig2
+        self.assertEqual(len(qconfig.config_list), 2)
+
+    def test_composable_config_from_dict(self):
+        qconfig1 = {
+            "rtn": {
+                "global": {
+                    "weight_bits": 4,
+                },
+                "local": {
+                    "fc1": {
+                        "weight_bits": 8,
+                    }
+                },
+            }
+        }
+        qconfig2 = {
+            "rtn": {
+                "global": {
+                    "weight_bits": 4,
+                },
+                "local": {
+                    "fc2": {
+                        "weight_bits": 8,
+                        "weight_group_size": 128,
+                    }
+                },
+            }
+        }
+
+        registered_configs = config.config_registry.get_cls_configs()
+        qconfig1 = config.ComposableConfig.from_dict(qconfig1, config_registry=registered_configs)
+        qconfig2 = config.ComposableConfig.from_dict(qconfig2, config_registry=registered_configs)
+        qconfig = qconfig1 + qconfig2
+        self.assertEqual(qconfig.to_dict()['local']['fc1']['weight_group_size'], 32)
+        self.assertEqual(qconfig.to_dict()['local']['fc2']['weight_group_size'], 128)
+
+
 
 
 if __name__ == "__main__":

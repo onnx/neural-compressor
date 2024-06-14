@@ -121,7 +121,7 @@ class TestGPTQQuantWithInternalAPI(TestGPTQQuant):
             "perchannel": [True, False],
         }
 
-        keys = config.GPTQConfig.params_list
+        keys = config.GPTQConfig.params_list + config.GPTQConfig.model_params_list
         for value in itertools.product(*gptq_options.values()):
             d = dict(zip(keys, value))
             print(d)
@@ -137,6 +137,9 @@ class TestGPTQQuantWithInternalAPI(TestGPTQQuant):
         gptq_config2 = config.GPTQConfig.from_dict(quant_config_dict["gptq"])
         self.assertEqual(gptq_config1.to_dict(), gptq_config2.to_dict())
 
+        tuning_config = config.GPTQConfig.get_config_set_for_tuning()
+        self.assertTrue(isinstance(tuning_config, config.GPTQConfig))
+
     def test_quantize_gptq_from_dict_default(self):
         qmodel = self._apply_gptq(quant_config=config.get_default_gptq_config())
         self.assertIsNotNone(qmodel)
@@ -147,7 +150,7 @@ class TestGPTQQuantWithInternalAPI(TestGPTQQuant):
         qmodel = self._apply_gptq(quant_config)
         self.assertIsNotNone(qmodel)
 
-    def test_quantize_gptq_fallback_from_class_beginner(self):
+    def test_quantize_gptq_fallback(self):
         fp32_config = config.GPTQConfig(weight_dtype="fp32")
         quant_config = config.GPTQConfig(
             weight_bits=4,
@@ -156,6 +159,19 @@ class TestGPTQQuantWithInternalAPI(TestGPTQQuant):
             weight_group_size=32,
         )
         quant_config.set_local("/h.4/mlp/fc_out/MatMul", fp32_config)
+        qmodel = self._apply_gptq(quant_config)
+        self.assertIsNotNone(qmodel)
+        self.assertEqual(self._count_woq_matmul(qmodel), 29)
+        self.assertFalse(self._check_node_is_quantized(qmodel, "/h.4/mlp/fc_out/MatMul"))
+
+        # test quant_last_matmul
+        quant_config = config.GPTQConfig(
+            weight_bits=4,
+            weight_dtype="int",
+            weight_sym=False,
+            weight_group_size=32,
+            quant_last_matmul=False,
+        )
         qmodel = self._apply_gptq(quant_config)
         self.assertIsNotNone(qmodel)
         self.assertEqual(self._count_woq_matmul(qmodel), 29)
@@ -178,6 +194,28 @@ class TestGPTQQuantWithORTLikeAPI(TestGPTQQuant):
         quant.process()
         self.assertIsNotNone(quant.model)
         self.assertTrue(self._check_model_is_quantized(quant.model))
+
+    def test_gptq_config_4bits_with_accuracy_level(self):
+        algo_config = matmul_4bits_quantizer.RTNWeightOnlyQuantConfig()
+
+        for accuracy_level in [0, 1, 2, 3, 4]:
+            quant = matmul_4bits_quantizer.MatMul4BitsQuantizer(
+                copy.deepcopy(self.gptj),
+                block_size=32,
+                is_symmetric=False,
+                algo_config=algo_config,
+                accuracy_level=accuracy_level
+            )
+            quant.process()
+
+            for node in quant.model.graph.node:
+                if node.op_type == "MatMulNBits":
+                    for attr in node.attribute:
+                        if attr.name == "accuracy_level":
+                            self.assertEqual(attr.i, accuracy_level)
+                            break
+            self.assertIsNotNone(quant.model)
+            self.assertTrue(self._check_model_is_quantized(quant.model))
 
     def test_gptq_config_4bits_with_exclude_node(self):
         algo_config = matmul_4bits_quantizer.GPTQWeightOnlyQuantConfig(

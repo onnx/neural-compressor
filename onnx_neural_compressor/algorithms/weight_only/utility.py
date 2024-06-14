@@ -109,7 +109,7 @@ def make_matmul_weight_only_node(
 
         # build zero_point tensor
         if zero_point is not None:
-            if num_bits > 4:
+            if num_bits > 4: # pragma: no cover
                 packed_zp = np.reshape(zero_point, (1, -1)).astype("uint8")
             else:
                 packed_zp = np.full((zero_point.shape[0] + 1) // 2, 136, dtype="uint8")

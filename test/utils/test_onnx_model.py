@@ -81,27 +81,11 @@ class TestONNXModel(unittest.TestCase):
         onnx.save(matmul_add_model, "matmul_add.onnx")
         self.matmul_add_model = "matmul_add.onnx"
 
-        main_export("prajjwal1/bert-tiny", output="bert-tiny")
-        self.bert = find_onnx_file("./bert-tiny")
-
-        opt_options = fusion_options.FusionOptions("bert")
-        opt_options.enable_embed_layer_norm = False
-        model_optimizer = optimizer.optimize_model(
-            self.bert,
-            "bert",
-            num_heads=2,
-            hidden_size=128,
-            optimization_options=opt_options)
-        model = model_optimizer.model
-        onnx.save(model, "./bert-tiny/optimized_model.onnx")
-        self.bert_optimized = "./bert-tiny/optimized_model.onnx"
-
 
     @classmethod
     def tearDownClass(self):
         shutil.rmtree("./gptj", ignore_errors=True)
         shutil.rmtree("./large_model", ignore_errors=True)
-        shutil.rmtree("./bert-tiny", ignore_errors=True)
         os.remove("matmul_add.onnx")
 
     def setUp(self):
