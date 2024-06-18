@@ -42,9 +42,9 @@ def _get_blob_size(group_size, has_zp):
     """
     if version.Version(ort.__version__) > constants.ONNXRT1161_VERSION:
         blob_size = group_size // 2
-    elif has_zp: # pragma: no cover
+    elif has_zp:  # pragma: no cover
         blob_size = group_size // 2 + 4 + 1
-    else: # pragma: no cover
+    else:  # pragma: no cover
         blob_size = group_size // 2 + 4
     return blob_size
 
@@ -109,7 +109,7 @@ def make_matmul_weight_only_node(
 
         # build zero_point tensor
         if zero_point is not None:
-            if num_bits > 4: # pragma: no cover
+            if num_bits > 4:  # pragma: no cover
                 packed_zp = np.reshape(zero_point, (1, -1)).astype("uint8")
             else:
                 packed_zp = np.full((zero_point.shape[0] + 1) // 2, 136, dtype="uint8")
@@ -137,7 +137,7 @@ def make_matmul_weight_only_node(
             # require onnxruntime > 1.16.3
             kwargs["accuracy_level"] = accuracy_level
 
-    else: # pragma: no cover
+    else:  # pragma: no cover
         offset = 5 if zero_point is not None else 4
         op_type = "MatMulFpQ4"
 

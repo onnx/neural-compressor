@@ -204,7 +204,7 @@ class TestGPTQQuantWithORTLikeAPI(TestGPTQQuant):
                 block_size=32,
                 is_symmetric=False,
                 algo_config=algo_config,
-                accuracy_level=accuracy_level
+                accuracy_level=accuracy_level,
             )
             quant.process()
 

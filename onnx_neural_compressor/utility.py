@@ -492,7 +492,7 @@ def _calculate_scale_zp(rmin, rmax, quantize_range, qType, scheme):
         elif qType == onnx.onnx_pb.TensorProto.UINT8:
             zero_point = round((0 - float(rmin)) / scale)
             zero_point = np.uint8(round(max(0, min(255, zero_point))))
-        else: # pragma: no cover
+        else:  # pragma: no cover
             zero_point = (
                 round((-64 - float(rmin)) / scale) if quantize_range == 128 else round((-127 - float(rmin)) / scale)
             )

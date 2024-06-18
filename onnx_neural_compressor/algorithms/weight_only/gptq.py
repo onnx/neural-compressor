@@ -279,13 +279,13 @@ def gptq_quantize(
                 weight = onnx.numpy_helper.to_array(
                     model.get_initializer(model.get_node(node.name).input[1]), base_dir
                 ).copy()
-                if len(weight.shape) != 2: # pragma: no cover
+                if len(weight.shape) != 2:  # pragma: no cover
                     continue
 
                 weights.append(weight)
                 node_list.append(model.get_node(node.name))
 
-        if len(weights) == 0: # pragma: no cover
+        if len(weights) == 0:  # pragma: no cover
             continue
 
         Hs = [np.zeros((i.shape[0], i.shape[0])) for i in weights]

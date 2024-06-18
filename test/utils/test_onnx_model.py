@@ -2,20 +2,16 @@ import copy
 import os
 import shutil
 import unittest
-import transformers
+
+import numpy as np
+import onnx
 import torch
 import torch.nn as nn
-import numpy as np
-
-import onnx
-from onnxruntime.transformers import optimizer
-from onnxruntime.transformers import fusion_options
-
-from onnx_neural_compressor import config
-from onnx_neural_compressor import logger
-from onnx_neural_compressor import onnx_model
-
+import transformers
+from onnxruntime.transformers import fusion_options, optimizer
 from optimum.exporters.onnx import main_export
+
+from onnx_neural_compressor import config, logger, onnx_model
 
 
 def find_onnx_file(folder_path):
@@ -26,13 +22,16 @@ def find_onnx_file(folder_path):
                 return os.path.join(root, file)
     return None
 
+
 class Net(nn.Module):
     def __init__(self, in_features, out_features):
         super(Net, self).__init__()
         self.fc = nn.Linear(in_features, out_features)
+
     def forward(self, x):
         x = self.fc(x)
         return x
+
 
 def build_matmul_model():
     # MatMul - Add - Add
@@ -57,6 +56,7 @@ def build_matmul_model():
     model = onnx.helper.make_model(graph, **{"opset_imports": [onnx.helper.make_opsetid("", 13)]})
     return model
 
+
 class TestONNXModel(unittest.TestCase):
 
     @classmethod
@@ -74,13 +74,13 @@ class TestONNXModel(unittest.TestCase):
             os.makedirs(folder_path)
         with torch.no_grad():
             torch.onnx.export(
-                model, (input,), os.path.join(folder_path, "model.onnx"), do_constant_folding=True, opset_version=13)
+                model, (input,), os.path.join(folder_path, "model.onnx"), do_constant_folding=True, opset_version=13
+            )
         self.large_model = os.path.join(folder_path, "model.onnx")
 
         matmul_add_model = build_matmul_model()
         onnx.save(matmul_add_model, "matmul_add.onnx")
         self.matmul_add_model = "matmul_add.onnx"
-
 
     @classmethod
     def tearDownClass(self):
@@ -115,22 +115,22 @@ class TestONNXModel(unittest.TestCase):
 
     def test_check_is_large_model(self):
         # model <= 2GB
-        model = onnx_model.ONNXModel(self.gptj) # pass str
+        model = onnx_model.ONNXModel(self.gptj)  # pass str
         model.check_is_large_model()
         self.assertFalse(model.is_large_model)
 
         model = onnx.load(self.gptj)
-        model = onnx_model.ONNXModel(model) # pass ModelProto
+        model = onnx_model.ONNXModel(model)  # pass ModelProto
         model.check_is_large_model()
         self.assertFalse(model.is_large_model)
 
         # model > 2GB
-        model = onnx_model.ONNXModel(self.large_model) # pass str
+        model = onnx_model.ONNXModel(self.large_model)  # pass str
         model.check_is_large_model()
         self.assertTrue(model.is_large_model)
 
         model = onnx.load(self.large_model)
-        model = onnx_model.ONNXModel(model) # pass ModelProto
+        model = onnx_model.ONNXModel(model)  # pass ModelProto
         model.check_is_large_model()
         self.assertTrue(model.is_large_model)
 
@@ -176,7 +176,7 @@ class TestONNXModel(unittest.TestCase):
         array = np.ones((5, 2))
         model.set_initializer("B", array)
         new_init_array = onnx.numpy_helper.to_array(model.get_initializer("B"))
-        self.assertTrue((new_init_array==array).all())
+        self.assertTrue((new_init_array == array).all())
 
     def test_get_siblings(self):
         model = onnx_model.ONNXModel(self.gptj)
@@ -234,7 +234,10 @@ class TestONNXModel(unittest.TestCase):
         model.ir_version = 7
         model = onnx_model.ONNXModel(model)
         self.assertTrue("Constant" in [node.op_type for node in model.nodes()])
-        model._input_name_to_nodes, model._output_name_to_node = {}, {} # test if _input_name_to_nodes and _output_name_to_node is empty
+        model._input_name_to_nodes, model._output_name_to_node = (
+            {},
+            {},
+        )  # test if _input_name_to_nodes and _output_name_to_node is empty
         model.remove_unused_nodes()
         self.assertTrue("Constant" not in [node.op_type for node in model.nodes()])
 

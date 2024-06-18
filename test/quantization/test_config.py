@@ -1,8 +1,9 @@
 import copy
+import json
 import os
 import shutil
 import unittest
-import json
+
 import numpy as np
 import onnx
 from optimum.exporters.onnx import main_export
@@ -57,10 +58,7 @@ class TestQuantizationConfig(unittest.TestCase):
         onnx.save(simple_onnx_model, "simple_onnx_model.onnx")
         self.simple_onnx_model = "simple_onnx_model.onnx"
 
-        data = {
-            "weight_bits": 4,
-            "weight_group_size": 128
-        }
+        data = {"weight_bits": 4, "weight_group_size": 128}
         self.json_filename = "rtn_config.json"
         with open(self.json_filename, "w") as file:
             json.dump(data, file)
@@ -243,6 +241,7 @@ class TestQuantConfigForAutotune(unittest.TestCase):
         self.assertEqual(expand_config_list[0].weight_bits, 4)
         self.assertEqual(expand_config_list[1].weight_bits, 8)
 
+
 class TestComposableConfig(unittest.TestCase):
 
     def test_composable_config(self):
@@ -310,10 +309,8 @@ class TestComposableConfig(unittest.TestCase):
         qconfig1 = config.ComposableConfig.from_dict(qconfig1, config_registry=registered_configs)
         qconfig2 = config.ComposableConfig.from_dict(qconfig2, config_registry=registered_configs)
         qconfig = qconfig1 + qconfig2
-        self.assertEqual(qconfig.to_dict()['local']['fc1']['weight_group_size'], 32)
-        self.assertEqual(qconfig.to_dict()['local']['fc2']['weight_group_size'], 128)
-
-
+        self.assertEqual(qconfig.to_dict()["local"]["fc1"]["weight_group_size"], 32)
+        self.assertEqual(qconfig.to_dict()["local"]["fc2"]["weight_group_size"], 128)
 
 
 if __name__ == "__main__":

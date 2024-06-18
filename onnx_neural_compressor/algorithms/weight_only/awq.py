@@ -49,7 +49,7 @@ def _apply_awq_scale(model, weight_config, absorb_pairs, output_dicts, num_bits,
     base_dir = os.path.dirname(model.model_path) if model.model_path is not None else ""
 
     for parent, nodes in absorb_pairs.items():
-        if any([node.input[0] not in output_dicts for node in nodes]): # pragma: no cover
+        if any([node.input[0] not in output_dicts for node in nodes]):  # pragma: no cover
             logger.warning(
                 "Miss input tensors of nodes {} during AWQ, skip it!".format(
                     ", ".join([node.name for node in nodes if node.input[0] not in output_dicts])
@@ -153,7 +153,9 @@ def _apply_awq_scale(model, weight_config, absorb_pairs, output_dicts, num_bits,
 
         if parent.op_type in ["LayerNormalization", "BatchNormalization", "InstanceNormalization"] and len(
             model.input_name_to_nodes()[nodes[0].input[0]]
-        ) == len(nodes): # pragma: no cover
+        ) == len(
+            nodes
+        ):  # pragma: no cover
             for idx in [1, 2]:
                 tensor = onnx.numpy_helper.to_array(model.get_initializer(parent.input[idx]), base_dir)
                 dtype = tensor.dtype
@@ -347,7 +349,7 @@ def awq_quantize(
         output_names = list(set(output_names))
         model.add_tensors_to_outputs(output_names)
 
-        if model.is_large_model: # pragma: no cover
+        if model.is_large_model:  # pragma: no cover
             onnx.save_model(
                 model.model,
                 model.model_path + "_augment.onnx",
@@ -377,7 +379,7 @@ def awq_quantize(
                 ):
                     dump_pairs[parent.name].append(model.get_node(node.name))
 
-            if len(dump_pairs[parent.name]) == 0: # pragma: no cover
+            if len(dump_pairs[parent.name]) == 0:  # pragma: no cover
                 continue
 
             output_dicts = {}
