@@ -38,9 +38,11 @@ class LMEvalParser:
         verbosity="INFO",
         wandb_args="",
         predict_only=False,
-        seed=[0, 1234, 1234],
+        seed=None,
         trust_remote_code=False,
     ):
+        if seed is None:
+            seed = [0, 1234, 1234]
         self.model = model
         self.tasks = tasks
         self.model_args = model_args

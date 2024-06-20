@@ -31,7 +31,7 @@ DEFAULT_RESULTS_FILE = "results.json"
 
 
 def _handle_non_serializable(o):
-    if isinstance(o, np.int64) or isinstance(o, np.int32):
+    if isinstance(o, (np.int32, np.int64)):
         return int(o)
     elif isinstance(o, set):
         return list(o)
@@ -45,7 +45,7 @@ def cli_evaluate(args) -> None:
 
     eval_logger = lm_eval.utils.eval_logger
     eval_logger.setLevel(getattr(logging, f"{args.verbosity}"))
-    eval_logger.info(f"Verbosity set to {args.verbosity}")
+    eval_logger.info("Verbosity set to %s", args.verbosity)
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
     if args.predict_only:
@@ -54,48 +54,45 @@ def cli_evaluate(args) -> None:
         raise ValueError("Specify --output_path if providing --log_samples or --predict_only")
 
     if args.include_path is not None:
-        eval_logger.info(f"Including path: {args.include_path}")
+        eval_logger.info(f"Including path: {args.include_path}")  # noqa: G004
     task_manager = lm_eval.tasks.TaskManager(args.verbosity, include_path=args.include_path)
 
     if args.limit:
-        eval_logger.warning(
-            " --limit SHOULD ONLY BE USED FOR TESTING." "REAL METRICS SHOULD NOT BE COMPUTED USING LIMIT."
-        )
+        eval_logger.warning(" --limit SHOULD ONLY BE USED FOR TESTING.REAL METRICS SHOULD NOT BE COMPUTED USING LIMIT.")
 
     if args.tasks is None:
         eval_logger.error("Need to specify task to evaluate.")
         sys.exit()
     elif args.tasks == "list":
-        eval_logger.info("Available Tasks:\n - {}".format("\n - ".join(task_manager.all_tasks)))
+        eval_logger.info("Available Tasks:\n - {}".format("\n - ".join(task_manager.all_tasks)))  # noqa: G001
         sys.exit()
+    elif os.path.isdir(args.tasks):
+        task_names = []
+        yaml_path = os.path.join(args.tasks, "*.yaml")
+        for yaml_file in glob.glob(yaml_path):
+            config = lm_eval.utils.load_yaml_config(yaml_file)
+            task_names.append(config)
     else:
-        if os.path.isdir(args.tasks):
-            task_names = []
-            yaml_path = os.path.join(args.tasks, "*.yaml")
-            for yaml_file in glob.glob(yaml_path):
-                config = lm_eval.utils.load_yaml_config(yaml_file)
+        task_list = args.tasks.split(",")
+        task_names = task_manager.match_tasks(task_list)
+        for task in [task for task in task_list if task not in task_names]:
+            if os.path.isfile(task):
+                config = lm_eval.utils.load_yaml_config(task)
                 task_names.append(config)
-        else:
-            task_list = args.tasks.split(",")
-            task_names = task_manager.match_tasks(task_list)
-            for task in [task for task in task_list if task not in task_names]:
-                if os.path.isfile(task):
-                    config = lm_eval.utils.load_yaml_config(task)
-                    task_names.append(config)
-            task_missing = [
-                task for task in task_list if task not in task_names and "*" not in task
-            ]  # we don't want errors if a wildcard ("*") task name was used
+        task_missing = [
+            task for task in task_list if task not in task_names and "*" not in task
+        ]  # we don't want errors if a wildcard ("*") task name was used
 
-            if task_missing:
-                missing = ", ".join(task_missing)
-                eval_logger.error(
-                    f"Tasks were not found: {missing}\n"
-                    f"{lm_eval.utils.SPACING}Try `lm-eval --tasks list` for list of available tasks",
-                )
-                raise ValueError(
-                    f"Tasks not found: {missing}. Try `lm-eval --tasks list` for list of available tasks,"
-                    + " or '--verbosity DEBUG' to troubleshoot task registration issues."
-                )
+        if task_missing:
+            missing = ", ".join(task_missing)
+            eval_logger.error(
+                f"Tasks were not found: {missing}\n"  # noqa: G004
+                f"{lm_eval.utils.SPACING}Try `lm-eval --tasks list` for list of available tasks",
+            )
+            raise ValueError(
+                f"Tasks not found: {missing}. Try `lm-eval --tasks list` for list of available tasks,"  # noqa: ISC003
+                + " or '--verbosity DEBUG' to troubleshoot task registration issues."
+            )
 
     if args.output_path:
         path = Path(args.output_path)
@@ -104,7 +101,7 @@ def cli_evaluate(args) -> None:
             raise FileExistsError(f"File already exists at {path}")
         output_path_file = path.joinpath(DEFAULT_RESULTS_FILE)
         if output_path_file.is_file():
-            eval_logger.warning(f"File {output_path_file} already exists. Results will be overwritten.")
+            eval_logger.warning(f"File {output_path_file} already exists. Results will be overwritten.")  # noqa: G004
         # if path json then get parent dir
         elif path.suffix in (".json", ".jsonl"):
             output_path_file = path
@@ -118,7 +115,7 @@ def cli_evaluate(args) -> None:
         os.environ["HF_DATASETS_TRUST_REMOTE_CODE"] = str(args.trust_remote_code)
         args.model_args = args.model_args + f",trust_remote_code={os.environ['HF_DATASETS_TRUST_REMOTE_CODE']}"
 
-    eval_logger.info(f"Selected Tasks: {task_names}")
+    eval_logger.info(f"Selected Tasks: {task_names}")  # noqa: G004
     eval_logger.info("Loading selected tasks...")
 
     request_caching_args = evaluator.request_caching_arg_to_dict(cache_requests=args.cache_requests)
@@ -164,14 +161,14 @@ def cli_evaluate(args) -> None:
                 wandb_logger.log_eval_result()
                 if args.log_samples:
                     wandb_logger.log_eval_samples(samples)
-            except Exception as e:
-                eval_logger.info(f"Logging to Weights and Biases failed due to {e}")
+            except Exception as e:  # noqa: BLE001
+                eval_logger.info(f"Logging to Weights and Biases failed due to {e}")  # noqa: G004
 
         if args.output_path:
             output_path_file.open("w", encoding="utf-8").write(dumped)
 
             if args.log_samples:
-                for task_name, config in results["configs"].items():
+                for task_name, config in results["configs"].items():  # noqa: B007
                     output_name = "{}_{}".format(re.sub("/|=", "__", args.model_args), task_name)
                     filename = path.joinpath(f"{output_name}.jsonl")
                     samples_dumped = json.dumps(

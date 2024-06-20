@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 #
 # Copyright (c) 2023 Intel Corporation
 #
@@ -13,12 +12,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from __future__ import annotations
 
 import functools
 import glob
 import os
 import shutil
 import unittest
+from typing import Callable
 from unittest import mock
 
 import numpy as np
@@ -29,15 +30,13 @@ from optimum.exporters.onnx import main_export
 from onnx_neural_compressor import config, data_reader
 from onnx_neural_compressor.quantization import tuning
 
-from typing import Callable, Dict, List, Optional, Union  # isort: skip
 
-
-def fake_eval(model, eval_result_lst):
+def fake_eval(model, eval_result_lst):  # noqa: ARG001
     acc = eval_result_lst.pop(0)
     return acc
 
 
-def _create_evaluator_for_eval_fns(eval_fns: Optional[Union[Callable, Dict, List[Dict]]] = None) -> tuning.Evaluator:
+def _create_evaluator_for_eval_fns(eval_fns: Callable | dict | list[dict] | None = None) -> tuning.Evaluator:
     evaluator = tuning.Evaluator()
     evaluator.set_eval_fn_registry(eval_fns)
     return evaluator
@@ -91,14 +90,14 @@ class TestONNXRT3xAutoTune(unittest.TestCase):
         acc_data = iter([1.0, 0.8, 0.99, 1.0, 0.99, 0.99])
 
         def eval_acc_fn(model) -> float:
-            session = ort.InferenceSession(model.SerializeToString(), providers=["CPUExecutionProvider"])
+            ort.InferenceSession(model.SerializeToString(), providers=["CPUExecutionProvider"])
             return next(acc_data)
 
         custom_tune_config = tuning.TuningConfig(
             config_set=[config.SmoothQuantConfig(alpha=0.5), config.SmoothQuantConfig(alpha=0.6)]
         )
         with self.assertRaises(SystemExit):
-            best_model = tuning.autotune(
+            tuning.autotune(
                 model_input=self.gptj,
                 tune_config=custom_tune_config,
                 eval_fn=eval_acc_fn,
@@ -113,12 +112,12 @@ class TestONNXRT3xAutoTune(unittest.TestCase):
     def test_sq_auto_tune(self):
         acc_data = iter([1.0, 0.8, 0.99, 1.0, 0.99, 0.99])
 
-        def eval_acc_fn(model) -> float:
+        def eval_acc_fn(model) -> float:  # noqa: ARG001
             return next(acc_data)
 
         perf_data = iter([1.0, 0.9, 0.99])
 
-        def eval_perf_fn(model) -> float:
+        def eval_perf_fn(model) -> float:  # noqa: ARG001
             return next(perf_data)
 
         eval_fns = [
@@ -159,12 +158,12 @@ class TestONNXRT3xAutoTune(unittest.TestCase):
     def test_rtn_auto_tune(self):
         acc_data = iter([1.0, 0.8, 0.6, 1.0, 0.99, 0.9])
 
-        def eval_acc_fn(model) -> float:
+        def eval_acc_fn(model) -> float:  # noqa: ARG001
             return next(acc_data)
 
         perf_data = iter([1.0, 0.99, 0.99])
 
-        def eval_perf_fn(model) -> float:
+        def eval_perf_fn(model) -> float:  # noqa: ARG001
             return next(perf_data)
 
         eval_fns = [
@@ -204,19 +203,19 @@ class TestONNXRT3xAutoTune(unittest.TestCase):
         op_names = [
             i.name
             for i in best_model.graph.node
-            if i.op_type.startswith("MatMul") and i.input[1].endswith("_Q{}G{}".format(4, 32))
+            if i.op_type.startswith("MatMul") and i.input[1].endswith(f"_Q{4}G{32}")
         ]
         self.assertTrue(len(op_names) > 0)
 
     def test_awq_auto_tune(self):
         acc_data = iter([1.0, 0.8, 0.6, 1.0, 0.99, 0.9])
 
-        def eval_acc_fn(model) -> float:
+        def eval_acc_fn(model) -> float:  # noqa: ARG001
             return next(acc_data)
 
         perf_data = iter([1.0, 0.99, 0.99])
 
-        def eval_perf_fn(model) -> float:
+        def eval_perf_fn(model) -> float:  # noqa: ARG001
             return next(perf_data)
 
         eval_fns = [
@@ -256,19 +255,19 @@ class TestONNXRT3xAutoTune(unittest.TestCase):
         op_names = [
             i.name
             for i in best_model.graph.node
-            if i.op_type.startswith("MatMul") and i.input[1].endswith("_Q{}G{}".format(4, 32))
+            if i.op_type.startswith("MatMul") and i.input[1].endswith(f"_Q{4}G{32}")
         ]
         self.assertTrue(len(op_names) > 0)
 
     def test_gptq_auto_tune(self):
         acc_data = iter([1.0, 0.8, 0.6, 1.0, 0.99, 0.9])
 
-        def eval_acc_fn(model) -> float:
+        def eval_acc_fn(model) -> float:  # noqa: ARG001
             return next(acc_data)
 
         perf_data = iter([1.0, 0.99, 0.99])
 
-        def eval_perf_fn(model) -> float:
+        def eval_perf_fn(model) -> float:  # noqa: ARG001
             return next(perf_data)
 
         eval_fns = [
@@ -307,7 +306,7 @@ class TestONNXRT3xAutoTune(unittest.TestCase):
         op_names = [
             i.name
             for i in best_model.graph.node
-            if i.op_type.startswith("MatMul") and i.input[1].endswith("_Q{}G{}".format(4, 32))
+            if i.op_type.startswith("MatMul") and i.input[1].endswith(f"_Q{4}G{32}")
         ]
         self.assertTrue(len(op_names) > 0)
 
@@ -327,7 +326,7 @@ class TestONNXRT3xAutoTune(unittest.TestCase):
         op_names = [
             i.name
             for i in best_model.graph.node
-            if i.op_type.startswith("MatMul") and i.input[1].endswith("_Q{}G{}".format(8, 32))
+            if i.op_type.startswith("MatMul") and i.input[1].endswith(f"_Q{8}G{32}")
         ]
         self.assertTrue(len(op_names) > 0)
 
@@ -347,7 +346,7 @@ class TestONNXRT3xAutoTune(unittest.TestCase):
                 [
                     i.name
                     for i in best_model.graph.node
-                    if i.op_type.startswith("MatMul") and i.input[1].endswith("_Q{}G{}".format(4, 32))
+                    if i.op_type.startswith("MatMul") and i.input[1].endswith(f"_Q{4}G{32}")
                 ]
             )
             + 1,
@@ -366,7 +365,7 @@ class TestONNXRT3xAutoTune(unittest.TestCase):
         op_names = [
             i.name
             for i in best_model.graph.node
-            if i.op_type.startswith("MatMul") and i.input[1].endswith("_Q{}G{}".format(4, 128))
+            if i.op_type.startswith("MatMul") and i.input[1].endswith(f"_Q{4}G{128}")
         ]
         self.assertTrue(len(op_names) > 0)
 

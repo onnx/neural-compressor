@@ -11,14 +11,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+from __future__ import annotations
 
 import collections
 import itertools
 import logging
 import random
 import time
-from typing import TYPE_CHECKING, List, Optional, Union
+from typing import TYPE_CHECKING
 
 import lm_eval.api.metrics
 import lm_eval.api.registry
@@ -40,30 +40,30 @@ if TYPE_CHECKING:
 @lm_eval.utils.positional_deprecated
 def simple_evaluate(
     model,
-    model_args: Optional[Union[str, dict, object]] = None,
-    tasks: Optional[List[Union[str, dict, object]]] = None,
-    num_fewshot: Optional[int] = None,
-    batch_size: Optional[int] = None,
-    max_batch_size: Optional[int] = None,
-    provider: Optional[str] = None,
-    use_cache: Optional[str] = None,
+    model_args: str | dict | object | None = None,
+    tasks: list[str | dict | object] | None = None,
+    num_fewshot: int | None = None,
+    batch_size: int | None = None,
+    max_batch_size: int | None = None,
+    provider: str | None = None,
+    use_cache: str | None = None,
     cache_requests: bool = False,
     rewrite_requests_cache: bool = False,
     delete_requests_cache: bool = False,
-    limit: Optional[Union[int, float]] = None,
+    limit: int | float | None = None,
     bootstrap_iters: int = 100000,
     check_integrity: bool = False,
     write_out: bool = False,
     log_samples: bool = True,
-    gen_kwargs: Optional[str] = None,
-    task_manager: Optional[lm_eval.tasks.TaskManager] = None,
+    gen_kwargs: str | None = None,
+    task_manager: lm_eval.tasks.TaskManager | None = None,
     verbosity: str = "INFO",
     predict_only: bool = False,
     random_seed: int = 0,
     numpy_random_seed: int = 1234,
     torch_random_seed: int = 1234,
-    user_model: Optional[object] = None,
-    tokenizer: Optional[object] = None,
+    user_model: object | None = None,
+    tokenizer: object | None = None,
 ):
     """Instantiate and evaluate a model on a list of tasks.
 
@@ -178,7 +178,7 @@ def simple_evaluate(
             elif isinstance(user_model, optimum.onnxruntime.ORTModelForSeq2SeqLM):
                 model_id = "optimum/t5-small"
             lm_eval.utils.eval_logger.info(
-                "We use '{}' to build `LM` instance, the actually run model is user_model you passed.".format(model_id)
+                f"We use '{model_id}' to build `LM` instance, the actually run model is user_model you passed."
             )
             lm = lm_eval.api.registry.get_model(model).create_from_arg_string(
                 "pretrained=" + model_id,
@@ -193,7 +193,7 @@ def simple_evaluate(
             if tokenizer is not None:
                 lm.tokenizer = tokenizer
             else:
-                assert False, "Please provide tokenizer in evaluation function"
+                raise AssertionError("Please provide tokenizer in evaluation function")
         elif isinstance(model_args, dict):
             lm = lm_eval.api.registry.get_model(model).create_from_arg_obj(
                 model_args,
@@ -231,7 +231,7 @@ def simple_evaluate(
         task_manager = lm_eval.tasks.TaskManager(verbosity)
 
     task_dict = lm_eval.tasks.get_task_dict(tasks, task_manager)
-    for task_name in task_dict.keys():
+    for task_name in task_dict:
         task_obj = task_dict[task_name]
         if isinstance(task_obj, tuple):
             _, task_obj = task_obj
@@ -255,7 +255,7 @@ def simple_evaluate(
         if num_fewshot is not None:
             if (default_num_fewshot := task_obj.get_config("num_fewshot")) == 0:
                 lm_eval.utils.eval_logger.info(
-                    f"num_fewshot has been set to 0 for {task_name} in its config."
+                    f"num_fewshot has been set to 0 for {task_name} in its config."  # noqa: ISC003
                     + "Manual configuration will be ignored."
                 )
             else:
@@ -263,10 +263,8 @@ def simple_evaluate(
                     f"Overwriting default num_fewshot of {task_name} from {default_num_fewshot} to {num_fewshot}"
                 )
                 task_obj.set_config(key="num_fewshot", value=num_fewshot)
-        else:
-            # if num_fewshot not provided, and the task does not define a default one, default to 0
-            if (default_num_fewshot := task_obj.get_config("num_fewshot")) is None:
-                task_obj.set_config(key="num_fewshot", value=0)
+        elif (default_num_fewshot := task_obj.get_config("num_fewshot")) is None:
+            task_obj.set_config(key="num_fewshot", value=0)
 
     if check_integrity:
         lm_eval.evaluator_utils.run_task_tests(task_list=tasks)
@@ -307,7 +305,7 @@ def simple_evaluate(
         results["date"] = start_date
         try:
             lm_eval.logging_utils.add_env_info(results)  # additional environment info to results
-        except:
+        except:  # noqa: E722
             lm_eval.utils.eval_logger.info("get env info failed.")
         return results
     else:
@@ -316,12 +314,12 @@ def simple_evaluate(
 
 @lm_eval.utils.positional_deprecated
 def evaluate(
-    lm: "lm_eval.api.model.LM",
+    lm: lm_eval.api.model.LM,
     task_dict,
-    limit: Optional[int] = None,
+    limit: int | None = None,
     cache_requests: bool = False,
     rewrite_requests_cache: bool = False,
-    bootstrap_iters: Optional[int] = 100000,
+    bootstrap_iters: int | None = 100000,
     write_out: bool = False,
     log_samples: bool = True,
     verbosity: str = "INFO",
@@ -362,9 +360,7 @@ def evaluate(
     # get lists of group hierarchy and each type of request
     task_hierarchy, eval_tasks = lm_eval.evaluator_utils.get_task_list(task_dict)
     if not log_samples:
-        if not all(
-            "bypass" not in getattr(task_output.task, "_metric_fn_list", {}).keys() for task_output in eval_tasks
-        ):
+        if not all("bypass" not in getattr(task_output.task, "_metric_fn_list", {}) for task_output in eval_tasks):
             raise ValueError("log_samples must be True for 'bypass' metric-only tasks")
     for task_output in eval_tasks:
         task: lm_eval.tasks.Task = task_output.task
@@ -420,8 +416,8 @@ def evaluate(
         if lm.world_size > 1:
             lm.accelerator.wait_for_everyone()
 
-    RANK = lm.rank
-    WORLD_SIZE = lm.world_size
+    RANK = lm.rank  # noqa: N806
+    WORLD_SIZE = lm.world_size  # noqa: N806
     ### Postprocess outputs ###
     # TODO: del model here, maybe (idea: allow user to specify device of e.g. reward model separately)
     for task_output in eval_tasks:
@@ -439,7 +435,7 @@ def evaluate(
         for instances in instances_by_doc_id.values():
             instances.sort(key=lambda x: x.idx)
         # iterate over different filters used
-        for filter_key in task.instances[0].filtered_resps.keys():
+        for filter_key in task.instances[0].filtered_resps:
             doc_iterator = task.doc_iterator(rank=RANK, limit=limit, world_size=WORLD_SIZE)
             for doc_id, doc in doc_iterator:
                 requests = instances_by_doc_id[doc_id]
@@ -506,7 +502,7 @@ def evaluate(
                     {
                         key
                         for task in task_list
-                        for key in results[task].keys()
+                        for key in results[task]
                         if "_stderr" not in key and key not in ["alias", "samples"]
                     }
                 )
@@ -537,8 +533,8 @@ def evaluate(
         groups_agg = collections.defaultdict(dict)
         all_tasks_list = list(task_hierarchy.keys())
         while True:
-            add_tasks_list = list(k for k in results_agg.keys())
-            left_tasks_list = sorted(list(set(all_tasks_list) - set(add_tasks_list)))
+            add_tasks_list = list(results_agg.keys())
+            left_tasks_list = sorted(set(all_tasks_list) - set(add_tasks_list))
             if len(left_tasks_list) == 0:
                 break
 

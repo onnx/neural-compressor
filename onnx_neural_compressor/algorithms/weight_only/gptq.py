@@ -14,6 +14,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from __future__ import annotations
 
 import copy
 import os
@@ -28,12 +29,10 @@ from onnx_neural_compressor import config, constants, data_reader, onnx_model, u
 from onnx_neural_compressor.algorithms.layer_wise import core
 from onnx_neural_compressor.algorithms.weight_only import utility as woq_utility
 
-from typing import List, Union  # isort: skip
-
 
 def _gptq(
-    W: np.array,
-    H: np.array,
+    W: np.array,  # noqa: N803
+    H: np.array,  # noqa: N803
     num_bits: int = 4,
     group_size: int = 32,
     scheme: str = "asym",
@@ -60,7 +59,6 @@ def _gptq(
     Returns:
         Q: fake quantized weight
     """
-    Qs = []
     maxq = 2**num_bits - 1
     grid = 100
     maxshrink = 0.8
@@ -114,8 +112,6 @@ def _gptq(
         zero = np.reshape(zero, shape)
         return scale, zero
 
-    scales = []
-    zps = []
     shape = W.shape
     scale, zp = find_params(W)
     dead = np.diag(H) == 0
@@ -125,24 +121,24 @@ def _gptq(
     # rearrange considering the diag's value
     if actorder:
         perm = np.argsort(np.diag(H))[::-1]
-        W = W[perm, :]
-        H = H[perm, :][:, perm]
-    Losses = np.zeros_like(W)
-    Q = np.zeros_like(W)
+        W = W[perm, :]  # noqa: N806
+        H = H[perm, :][:, perm]  # noqa: N806
+    Losses = np.zeros_like(W)  # noqa: N806
+    Q = np.zeros_like(W)  # noqa: N806
     damp = percdamp * np.mean(np.diag(H))
     diag = np.arange(shape[0])
     H[diag, diag] += damp  # add a average value of
-    H = np.linalg.cholesky(np.linalg.inv(H)).T
-    Hinv = H
+    H = np.linalg.cholesky(np.linalg.inv(H)).T  # noqa: N806
+    Hinv = H  # noqa: N806
     for i1 in range(0, shape[0], blocksize):
         i2 = min(i1 + blocksize, shape[0])
         count = i2 - i1
 
-        W1 = copy.deepcopy(W[i1:i2, :])
-        Q1 = np.zeros_like(W1)
-        Err1 = np.zeros_like(W1)
-        Losses1 = np.zeros_like(W1)
-        Hinv1 = Hinv[i1:i2, i1:i2]
+        W1 = copy.deepcopy(W[i1:i2, :])  # noqa: N806
+        Q1 = np.zeros_like(W1)  # noqa: N806
+        Err1 = np.zeros_like(W1)  # noqa: N806
+        Losses1 = np.zeros_like(W1)  # noqa: N806
+        Hinv1 = Hinv[i1:i2, i1:i2]  # noqa: N806
 
         for i in range(count):  # within a block, channel wise
             w = W1[i, :]
@@ -167,17 +163,17 @@ def _gptq(
 
     if actorder:
         invperm = np.argsort(perm)
-        Q = Q[invperm, :]
+        Q = Q[invperm, :]  # noqa: N806
 
-    Q = np.reshape(Q, W.shape)
+    Q = np.reshape(Q, W.shape)  # noqa: N806
     del W
     return Q
 
 
 def gptq_quantize(
-    model: Union[onnx.ModelProto, onnx_model.ONNXModel, pathlib.Path, str],
+    model: onnx.ModelProto | onnx_model.ONNXModel | pathlib.Path | str,
     data_reader: data_reader.CalibrationDataReader,
-    weight_config: dict = {},
+    weight_config: dict | None = None,
     num_bits: int = 4,
     group_size: int = 32,
     scheme: str = "asym",
@@ -187,7 +183,7 @@ def gptq_quantize(
     mse: bool = False,
     perchannel: bool = True,
     accuracy_level: int = 0,
-    providers: List[str] = ["CPUExecutionProvider"],
+    providers: list[str] | None = None,
     return_modelproto: bool = True,
 ):
     """Quant the model with GPTQ method.
@@ -226,6 +222,10 @@ def gptq_quantize(
     Returns:
         onnx.ModelProto: quantized onnx model
     """
+    if providers is None:
+        providers = ["CPUExecutionProvider"]
+    if weight_config is None:
+        weight_config = {}
     if not isinstance(model, onnx_model.ONNXModel):
         model = onnx_model.ONNXModel(model)
     base_dir = os.path.dirname(model.model_path) if model.model_path is not None else ""
@@ -244,7 +244,7 @@ def gptq_quantize(
             and model.get_initializer(node.input[1]) is not None
             and weight_config.get((node.name, node.op_type), {}).get("weight_dtype", "fp32") != "fp32"
         ):
-            output_names.append(node.input[0])
+            output_names.append(node.input[0])  # noqa: PERF401
     output_names = list(set(output_names))
     model.add_tensors_to_outputs(output_names)
     if model.is_large_model:
@@ -288,21 +288,21 @@ def gptq_quantize(
         if len(weights) == 0:
             continue
 
-        Hs = [np.zeros((i.shape[0], i.shape[0])) for i in weights]
+        Hs = [np.zeros((i.shape[0], i.shape[0])) for i in weights]  # noqa: N806
         nsamples = 0
         for data in inputs:
             inp = session.run([input_name], data)[0]
             tmp = inp.shape[0]
             inp = np.reshape(inp, (-1, inp.shape[-1]))
-            Hs = [i * (nsamples / (nsamples + tmp)) for i in Hs]
+            Hs = [i * (nsamples / (nsamples + tmp)) for i in Hs]  # noqa: N806
             nsamples += tmp
             inp = np.sqrt(2 / nsamples) * inp
-            Hs = [i + np.matmul(inp.T, inp) for i in Hs]
+            Hs = [i + np.matmul(inp.T, inp) for i in Hs]  # noqa: N806
 
         for (
             node,
             weight,
-            H,
+            H,  # noqa: N806
         ) in zip(node_list, weights, Hs):
             if (node.name, node.op_type) in weight_config:
                 num_bits = weight_config[(node.name, node.op_type)].get("weight_bits", 4)
@@ -328,13 +328,13 @@ def gptq_quantize(
             weight_tensor = model.get_initializer(node.input[1])
             init_share_num = model.get_initializer_share_num(node.input[1])
 
-            satisfy_MatMulNBits_condition = Version(ort.__version__) > constants.ONNXRT1161_VERSION and num_bits == 4
-            satisfy_MatMulFpQ4_condition = (
+            satisfy_matmul_nbits_condition = Version(ort.__version__) > constants.ONNXRT1161_VERSION and num_bits == 4
+            satisfy_matmul_fpq4_condition = (
                 Version(ort.__version__) >= constants.ONNXRT116_VERSION and num_bits == 4 and group_size == 32
             )
-            if ("CUDAExecutionProvider" in providers and satisfy_MatMulNBits_condition) or (
+            if ("CUDAExecutionProvider" in providers and satisfy_matmul_nbits_condition) or (
                 "CUDAExecutionProvider" not in providers
-                and (satisfy_MatMulFpQ4_condition or satisfy_MatMulNBits_condition)
+                and (satisfy_matmul_fpq4_condition or satisfy_matmul_nbits_condition)
             ):  # pragma: no cover
                 # MatMulFpQ4 support 4 bits and 32 group_size with ort 1.16.0 and 1.16.1 versions, supported by CPU EP
                 # MatMulNBits supports 4 bits and 2^n group_size with ort > 1.16.1, supported by CPU EP AND CUDA EP
@@ -360,7 +360,7 @@ def gptq_quantize(
                 model.add_node(q_matmul_node)
             else:
                 q_weight_tensor = onnx.helper.make_tensor(
-                    name=node.input[1] + "_Q{}G{}".format(str(num_bits), str(group_size)),
+                    name=node.input[1] + f"_Q{num_bits!s}G{group_size!s}",
                     data_type=utility.dtype_mapping[str(dtype)],
                     dims=q_weight.shape,
                     vals=q_weight.astype(dtype).tobytes(),
@@ -388,7 +388,7 @@ def gptq_quantize(
 
 
 def apply_gptq_on_model(
-    model: Union[onnx.ModelProto, onnx_model.ONNXModel, pathlib.Path, str],
+    model: onnx.ModelProto | onnx_model.ONNXModel | pathlib.Path | str,
     quant_config: dict,
     calibration_data_reader: data_reader.CalibrationDataReader,
 ) -> onnx.ModelProto:
@@ -419,7 +419,7 @@ def apply_gptq_on_model(
             quant_func=gptq_quantize,
             weight_config=quant_config,
             data_reader=calibration_data_reader,
-            **quant_kwargs
+            **quant_kwargs,
         )
     else:
         quantized_model = gptq_quantize(

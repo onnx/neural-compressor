@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 #
 # Copyright (c) 2023 MIT HAN Lab
 # This source code is licensed under the MIT license
@@ -82,7 +81,7 @@ def make_matmul_weight_only_node(
     """
     blob_size = _get_blob_size(group_size, zero_point is not None)
     packed = np.zeros((q_weight.shape[0], blob_size), dtype="uint8")
-    q_weight_name = node.input[1] + "_Q{}G{}".format(str(num_bits), str(group_size))
+    q_weight_name = node.input[1] + f"_Q{num_bits!s}G{group_size!s}"
     input_names = [node.input[0], q_weight_name]
     new_inits = []
     kwargs = {}
@@ -187,7 +186,7 @@ def make_matmul_weight_only_node(
     return matmul_weight_only_node, new_inits
 
 
-def prepare_inputs(model, data_reader, providers):
+def prepare_inputs(model, data_reader, providers):  # noqa: ARG001
     """Prepare inputs for weight only quantization.
 
     Args:
@@ -199,7 +198,6 @@ def prepare_inputs(model, data_reader, providers):
         inputs: prepared inputs.
         so: session options
     """
-
     so = ort.SessionOptions()
     if sys.version_info < (3, 11) and util.find_spec("onnxruntime_extensions"):  # pragma: no cover
         so.register_custom_ops_library(onnxruntime_extensions.get_library_path())

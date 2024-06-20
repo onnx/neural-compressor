@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 #
 # Copyright (c) 2023 MIT HAN Lab
 # This source code is licensed under the MIT license
@@ -17,6 +16,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from __future__ import annotations
 
 import os
 import pathlib
@@ -30,18 +30,16 @@ from onnx_neural_compressor import config, constants, onnx_model, utility
 from onnx_neural_compressor.algorithms.layer_wise import core
 from onnx_neural_compressor.algorithms.weight_only import utility as woq_utility
 
-from typing import List, Union  # isort: skip
-
 
 def rtn_quantize(
-    model: Union[onnx.ModelProto, onnx_model.ONNXModel, pathlib.Path, str],
-    weight_config: dict = {},
+    model: onnx.ModelProto | onnx_model.ONNXModel | pathlib.Path | str,
+    weight_config: dict | None = None,
     num_bits: int = 4,
     group_size: int = 32,
     scheme: str = "asym",
-    ratios: dict = {},
+    ratios: dict | None = None,
     accuracy_level: int = 0,
-    providers: List[str] = ["CPUExecutionProvider"],
+    providers: list[str] | None = None,
     return_modelproto: bool = True,
 ):
     """Quantize the model with round to nearst method.
@@ -74,6 +72,12 @@ def rtn_quantize(
     Returns:
         onnx.ModelProto: quantized onnx model.
     """
+    if providers is None:
+        providers = ["CPUExecutionProvider"]
+    if ratios is None:
+        ratios = {}
+    if weight_config is None:
+        weight_config = {}
     if not isinstance(model, onnx_model.ONNXModel):
         model = onnx_model.ONNXModel(model)
     base_dir = os.path.dirname(model.model_path) if model.model_path is not None else ""
@@ -114,10 +118,10 @@ def rtn_quantize(
 
             weight = woq_utility.pad_tensor(weight, group_size, k_blocks)
 
-            satisfy_MatMulNBits_condition = (
+            satisfy_MatMulNBits_condition = (  # noqa: N806
                 version.Version(ort.__version__) > constants.ONNXRT1161_VERSION and num_bits == 4
             )
-            satisfy_MatMulFpQ4_condition = (
+            satisfy_MatMulFpQ4_condition = (  # noqa: N806
                 version.Version(ort.__version__) >= constants.ONNXRT116_VERSION and num_bits == 4 and group_size == 32
             )
             if ("CUDAExecutionProvider" in providers and satisfy_MatMulNBits_condition) or (
@@ -152,7 +156,7 @@ def rtn_quantize(
                 q_weight = np.transpose(q_weight)
                 q_weight = q_weight[: org_w_shape[0], :].astype(dtype)
                 q_weight_tensor = onnx.helper.make_tensor(
-                    name=node.input[1] + "_Q{}G{}".format(str(num_bits), str(group_size)),
+                    name=node.input[1] + f"_Q{num_bits!s}G{group_size!s}",
                     data_type=utility.dtype_mapping[str(dtype)],
                     dims=weight.shape,
                     vals=q_weight.tobytes(),
@@ -178,7 +182,7 @@ def rtn_quantize(
 
 
 def apply_rtn_on_model(
-    model: Union[onnx.ModelProto, onnx_model.ONNXModel, pathlib.Path, str], quant_config: dict
+    model: onnx.ModelProto | onnx_model.ONNXModel | pathlib.Path | str, quant_config: dict
 ) -> onnx.ModelProto:
     """Apply RTN on onnx model.
 

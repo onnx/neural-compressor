@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 #
 # Copyright (c) 2023 MIT HAN Lab
 # This source code is licensed under the MIT license
@@ -16,26 +15,26 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from __future__ import annotations
 
 import copy
 import os
 import pathlib
+from typing import Callable
 
 import onnx
 import onnxruntime as ort
 
 from onnx_neural_compressor import data_reader, logger, onnx_model, utility
 
-from typing import Callable, List, Union  # isort: skip
 
-
-def layer_wise_quant(
-    model: Union[onnx.ModelProto, onnx_model.ONNXModel, pathlib.Path, str],
+def layer_wise_quant(  # noqa: D417
+    model: onnx.ModelProto | onnx_model.ONNXModel | pathlib.Path | str,
     quant_func: Callable,
     weight_config: dict,
     data_reader: data_reader.CalibrationDataReader = None,
-    *args,
-    **kwargs
+    *args,  # noqa: ARG001
+    **kwargs,
 ) -> onnx_model.ONNXModel:
     """Quantize model layer by layer to save memory.
 
@@ -82,12 +81,10 @@ def layer_wise_quant(
         )
         raise ValueError("Fail to run layer-wise quantization.")
     logger.info(
-        "Will split model into {} parts to do layer-wise quantization".format(
-            len([node.name for node in split_nodes]) + 1
-        )
+        f"Will split model into {len([node.name for node in split_nodes]) + 1} parts to do layer-wise quantization"
     )
     logger.debug(
-        "Will split model with these nodes for layer-wise quantization: {}".format([node.name for node in split_nodes])
+        f"Will split model with these nodes for layer-wise quantization: {[node.name for node in split_nodes]}"
     )
 
     split_idx = 1
@@ -106,7 +103,7 @@ def layer_wise_quant(
             current_data_reader = lwq_data_reader.pop(0)
 
         # if no remaining split nodes, it means this is the last split, and the two split models will be saved.
-        save_both_split_models = True if len(split_nodes) == 0 else False
+        save_both_split_models = len(split_nodes) == 0
 
         # split model with given split node
         split_model_part_1, split_model_part_2 = split_model.split_model_with_node(
@@ -116,7 +113,7 @@ def layer_wise_quant(
             # append split_model_part_2 to do next split
             model_to_split.append(split_model_part_2)
 
-        logger.info("Quantize split model {}".format(split_idx))
+        logger.info(f"Quantize split model {split_idx}")
         if require_data_reader:
             # process data_reader for current split and next split
             current_data_reader = _filter_data_reader_for_current_split_model(
@@ -133,7 +130,7 @@ def layer_wise_quant(
                 weight_config=weight_config,
                 data_reader=current_data_reader,
                 return_modelproto=False,
-                **kwargs
+                **kwargs,
             )
         else:
             # perform quantization
@@ -144,12 +141,12 @@ def layer_wise_quant(
         # check split model is valid
         try:
             ort.InferenceSession(split_model_part_1_quantized.model.SerializeToString(), providers=providers)
-        except Exception as e:
+        except Exception:
             logger.error(
-                "Layer-wise quantized model {} can't be inferred correctly. "
-                "Please check the raise exception".format(split_idx)
+                f"Layer-wise quantized model {split_idx} can't be inferred correctly. "
+                "Please check the raise exception"
             )
-            raise e
+            raise
 
         # merge split quantized model
         if quantized_model_merged is None:
@@ -161,7 +158,7 @@ def layer_wise_quant(
         split_idx += 1
         # if this is the last split, quantize the last split model
         if save_both_split_models:
-            logger.info("Quantize split model {}".format(split_idx))
+            logger.info(f"Quantize split model {split_idx}")
 
             # quantize split model
             if require_data_reader:
@@ -177,7 +174,7 @@ def layer_wise_quant(
                     weight_config=weight_config,
                     data_reader=current_data_reader,
                     return_modelproto=False,
-                    **kwargs
+                    **kwargs,
                 )
             else:
                 # perform quantization
@@ -188,12 +185,12 @@ def layer_wise_quant(
             # check split model is valid
             try:
                 ort.InferenceSession(split_model_part_2_quantized.model.SerializeToString(), providers=providers)
-            except Exception as e:
+            except Exception:
                 logger.error(
-                    "Layer-wise quantized model {} can't be inferred correctly. "
-                    "Please check the raise exception".format(split_idx)
+                    f"Layer-wise quantized model {split_idx} can't be inferred correctly. "
+                    "Please check the raise exception"
                 )
-                raise e
+                raise
 
             # merge split quantized model
             if quantized_model_merged is None:
@@ -235,7 +232,7 @@ def _filter_data_reader_for_current_split_model(model: onnx.ModelProto, data_rea
         data_reader.CalibrationDataReader: filtered data reader.
     """
     filter_inputs = []
-    input_names = [input.name for input in model.graph.input]
+    input_names = [input.name for input in model.graph.input]  # noqa: A001
     while True:
         inputs = data_reader.get_next()
         if not inputs:
@@ -247,10 +244,10 @@ def _filter_data_reader_for_current_split_model(model: onnx.ModelProto, data_rea
     return DataReader(filter_inputs)
 
 
-def _prepare_data_reader_for_next_split_model(
+def _prepare_data_reader_for_next_split_model(  # noqa: D417
     model_path: str,
     data_reader: data_reader.CalibrationDataReader,
-    providers: List[str] = ["CPUExecutionProvider"],
+    providers: list[str] | None = None,
 ):
     """Prepare data reader for next split model.
 
@@ -264,6 +261,8 @@ def _prepare_data_reader_for_next_split_model(
     Returns:
         data_reader.CalibrationDataReader: data reader for next split model.
     """
+    if providers is None:
+        providers = ["CPUExecutionProvider"]
     data_reader = copy.deepcopy(data_reader)
 
     data_reader_for_next_split_model = []
@@ -274,6 +273,6 @@ def _prepare_data_reader_for_next_split_model(
         if not inputs:
             break
         out = session.run(None, inputs)
-        inputs.update({name: value for name, value in zip(output_names, out)})
+        inputs.update(dict(zip(output_names, out)))
         data_reader_for_next_split_model.append(inputs)
     return DataReader(data_reader_for_next_split_model)

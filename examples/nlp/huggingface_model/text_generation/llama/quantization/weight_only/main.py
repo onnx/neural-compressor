@@ -37,7 +37,7 @@ from onnx_neural_compressor import config, data_reader, logger, utility
 from onnx_neural_compressor.quantization import matmul_nbits_quantizer, tuning
 
 logging.basicConfig(
-    format="%(asctime)s - %(levelname)s - %(name)s -   %(message)s", datefmt="%m/%d/%Y %H:%M:%S", level=logging.WARN
+    format="%(asctime)s - %(levelname)s - %(name)s -   %(message)s", datefmt="%m/%d/%Y %H:%M:%S", level=logging.WARNING
 )
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -108,7 +108,7 @@ def replace_architectures(json_path):
     # replace 'LLaMATokenizer' to lowercase 'LlamaTokenizer'
     # to avoid bug 'Tokenizer class LLaMATokenizer does not exist or is not currently imported.'
     # refer to https://github.com/huggingface/transformers/issues/22222#issuecomment-1477171703
-    with open(json_path, "r") as file:
+    with open(json_path) as file:
         data = json.load(file)
         data["architectures"] = ["LlamaForCausalLM"]
 
@@ -136,10 +136,10 @@ def eval_func(model):
     eval_acc = 0
     for task_name in args.tasks:
         if task_name == "wikitext":
-            print("Accuracy for %s is: %s" % (task_name, results["results"][task_name]["word_perplexity,none"]))
+            print("Accuracy for {} is: {}".format(task_name, results["results"][task_name]["word_perplexity,none"]))
             eval_acc += results["results"][task_name]["word_perplexity,none"]
         else:
-            print("Accuracy for %s is: %s" % (task_name, results["results"][task_name]["acc,none"]))
+            print("Accuracy for {} is: {}".format(task_name, results["results"][task_name]["acc,none"]))
             eval_acc += results["results"][task_name]["acc,none"]
 
     if len(args.tasks) != 0:
@@ -162,8 +162,8 @@ def benchmark(model):
     model = optimum_ort.ORTModelForCausalLM(
         session,  # pylint: disable=E1121
         model_config,
-        use_cache=True if use_cache else False,
-        use_io_binding=True if use_cache else False,
+        use_cache=bool(use_cache),
+        use_io_binding=bool(use_cache),
     )
 
     max_new_tokens = 32
@@ -177,7 +177,6 @@ def benchmark(model):
     num_warmup = 10
     batch_size = 1
     prompt = [prompt] * batch_size
-    total_list = []
 
     for i in range(num_iter):
         tic = time.time()
@@ -193,7 +192,7 @@ def benchmark(model):
     print("\n", "-" * 10, "Summary:", "-" * 10)
     print(args)
     throughput = (num_iter - num_warmup) / total_time
-    print("Throughput: {} samples/s".format(throughput))
+    print(f"Throughput: {throughput} samples/s")
 
 
 class AWQDataloader(data_reader.CalibrationDataReader):
@@ -212,7 +211,7 @@ class AWQDataloader(data_reader.CalibrationDataReader):
             collate_fn=self.collate_batch,
         )
         model = onnx.load(model_path, load_external_data=False)
-        inputs_names = [input.name for input in model.graph.input]
+        inputs_names = [input.name for input in model.graph.input]  # noqa: A001
         key_value_input_names = [key for key in inputs_names if (".key" in key) or (".value" in key)]
         use_cache = len(key_value_input_names) > 0
         self.batch_size = batch_size
@@ -274,17 +273,17 @@ class GPTQDataloader(data_reader.CalibrationDataReader):
         traindata.set_format(type="torch", columns=["input_ids", "attention_mask"])
 
         session = ort.InferenceSession(model_path)
-        inputs_names = [input.name for input in session.get_inputs()]
+        inputs_names = [input.name for input in session.get_inputs()]  # noqa: A001
         key_value_input_names = [key for key in inputs_names if (".key" in key) or (".value" in key)]
         use_cache = len(key_value_input_names) > 0
 
         for i in range(calibration_sampling_size):
             while True:
-                i = random.randint(0, len(traindata) - 1)
+                i = random.randint(0, len(traindata) - 1)  # noqa: PLW2901
                 trainenc = traindata[i]
                 if trainenc["input_ids"].shape[0] > seqlen:
                     break
-            i = random.randint(0, trainenc["input_ids"].shape[0] - seqlen - 1)
+            i = random.randint(0, trainenc["input_ids"].shape[0] - seqlen - 1)  # noqa: PLW2901
             j = i + seqlen
             inp = trainenc["input_ids"][i:j].unsqueeze(0)
             mask = torch.ones(inp.shape)
@@ -325,7 +324,7 @@ if __name__ == "__main__":
         elif args.mode == "accuracy":
             acc_result = eval_func(args.model_path)
             print("Batch size = %d" % args.batch_size)
-            print("Accuracy: %.5f" % acc_result)
+            print(f"Accuracy: {acc_result:.5f}")
 
     if args.tune:
         model_name = "model.onnx"  # require optimum >= 1.14.0

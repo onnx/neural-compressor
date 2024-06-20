@@ -11,13 +11,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from __future__ import annotations
 
 import importlib
-import logging
-import os
 import pathlib
 import subprocess
 import time
+from typing import Callable
 
 import cpuinfo
 import numpy as np
@@ -27,10 +27,8 @@ from onnxruntime.quantization import onnx_model
 
 from onnx_neural_compressor import constants, logger
 
-from typing import Callable, Dict, List, Tuple, Union  # isort: skip
-
 # Dictionary to store a mapping between algorithm names and corresponding algo implementation(function)
-algos_mapping: Dict[str, Callable] = {}
+algos_mapping: dict[str, Callable] = {}
 
 
 #######################################################
@@ -38,33 +36,34 @@ algos_mapping: Dict[str, Callable] = {}
 #######################################################
 
 
-def check_value(name, src, supported_type, supported_value=[]):
+def check_value(name, src, supported_type, supported_value=None):
     """Check if the given object is the given supported type and in the given supported value.
 
     Example::
 
         from onnx_neural_compressor import utility
 
+
         def datatype(self, datatype):
             if utility.check_value("datatype", datatype, list, ["fp32", "bf16", "uint8", "int8"]):
                 self._datatype = datatype
     """
-    if isinstance(src, list) and any([not isinstance(i, supported_type) for i in src]):
-        assert False, "Type of {} items should be {} but not {}".format(
-            name, str(supported_type), [type(i) for i in src]
-        )
+    if supported_value is None:
+        supported_value = []
+    if isinstance(src, list) and any(not isinstance(i, supported_type) for i in src):
+        raise AssertionError(f"Type of {name} items should be {supported_type!s} but not {[type(i) for i in src]}")
     elif not isinstance(src, list) and not isinstance(src, supported_type):
-        assert False, "Type of {} should be {} but not {}".format(name, str(supported_type), type(src))
+        raise AssertionError(f"Type of {name} should be {supported_type!s} but not {type(src)}")
 
     if len(supported_value) > 0:
         if isinstance(src, str) and src not in supported_value:
-            assert False, "{} is not in supported {}: {}. Skip setting it.".format(src, name, str(supported_value))
+            raise AssertionError(f"{src} is not in supported {name}: {supported_value!s}. Skip setting it.")
         elif (
             isinstance(src, list)
-            and all([isinstance(i, str) for i in src])
-            and any([i not in supported_value for i in src])
+            and all(isinstance(i, str) for i in src)
+            and any(i not in supported_value for i in src)
         ):
-            assert False, "{} is not in supported {}: {}. Skip setting it.".format(src, name, str(supported_value))
+            raise AssertionError(f"{src} is not in supported {name}: {supported_value!s}. Skip setting it.")
 
     return True
 
@@ -94,6 +93,7 @@ class Options:
         from onnx_neural_compressor import set_random_seed
         from onnx_neural_compressor import set_workspace
         from onnx_neural_compressor import set_resume_from
+
         set_random_seed(2022)
         set_workspace("workspace_path")
         set_resume_from("workspace_path")
@@ -153,7 +153,7 @@ class TuningLogger:
         logger.info("Tuning started.")
 
     @classmethod
-    def trial_start(cls, trial_index: int = None) -> None:
+    def trial_start(cls, trial_index: int | None = None) -> None:
         logger.info("%d-trail started.", trial_index)
 
     @classmethod
@@ -173,7 +173,7 @@ class TuningLogger:
         logger.info("Evaluation end.")
 
     @classmethod
-    def trial_end(cls, trial_index: int = None) -> None:
+    def trial_end(cls, trial_index: int | None = None) -> None:
         logger.info("%d-trail end.", trial_index)
 
     @classmethod
@@ -183,7 +183,6 @@ class TuningLogger:
 
 def singleton(cls):
     """Singleton decorator."""
-
     instances = {}
 
     def _singleton(*args, **kw):
@@ -195,7 +194,7 @@ def singleton(cls):
     return _singleton
 
 
-class LazyImport(object):
+class LazyImport:
     """Lazy import python module till use."""
 
     def __init__(self, module_name):
@@ -212,7 +211,7 @@ class LazyImport(object):
         try:
             self.module = importlib.import_module(self.module_name)
             mod = getattr(self.module, name)
-        except:
+        except:  # noqa: E722
             spec = importlib.util.find_spec(str(self.module_name + "." + name))
             mod = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(mod)
@@ -228,7 +227,7 @@ class LazyImport(object):
 
 
 @singleton
-class CpuInfo(object):
+class CpuInfo:
     """CPU info collection."""
 
     def __init__(self):
@@ -241,13 +240,13 @@ class CpuInfo(object):
             max_extension_support = cpuid.get_max_extension_support()
             if max_extension_support >= 7:
                 ecx = cpuid._run_asm(
-                    b"\x31\xC9",  # xor ecx, ecx
-                    b"\xB8\x07\x00\x00\x00" b"\x0f\xa2" b"\x89\xC8" b"\xC3",  # mov eax, 7  # cpuid  # mov ax, cx  # ret
+                    b"\x31\xc9",  # xor ecx, ecx
+                    b"\xb8\x07\x00\x00\x00\x0f\xa2\x89\xc8\xc3",  # mov eax, 7  # cpuid  # mov ax, cx  # ret
                 )
                 self._vnni = bool(ecx & (1 << 11))
                 eax = cpuid._run_asm(
-                    b"\xB9\x01\x00\x00\x00",  # mov ecx, 1
-                    b"\xB8\x07\x00\x00\x00" b"\x0f\xa2" b"\xC3",  # mov eax, 7  # cpuid  # ret
+                    b"\xb9\x01\x00\x00\x00",  # mov ecx, 1
+                    b"\xb8\x07\x00\x00\x00\x0f\xa2\xc3",  # mov eax, 7  # cpuid  # ret
                 )
                 self._bf16 = bool(eax & (1 << 5))
         # TODO: The implementation will be refined in the future.
@@ -304,14 +303,12 @@ def dump_elapsed_time(customized_msg=""):
     """
 
     def f(func):
-
         def fi(*args, **kwargs):
             start = time.time()
             res = func(*args, **kwargs)
             end = time.time()
             logger.info(
-                "%s elapsed time: %s ms"
-                % (customized_msg if customized_msg else func.__qualname__, round((end - start) * 1000, 2))
+                f"{customized_msg if customized_msg else func.__qualname__} elapsed time: {round((end - start) * 1000, 2)} ms"
             )
             return res
 
@@ -377,7 +374,7 @@ def find_by_name(name, item_list):
     """Helper function to find item by name in a list."""
     items = []
     for item in item_list:
-        assert hasattr(item, "name"), "{} should have a 'name' attribute defined".format(item)  # pragma: no cover
+        assert hasattr(item, "name"), f"{item} should have a 'name' attribute defined"  # pragma: no cover
         if item.name == name:
             items.append(item)
     if len(items) > 0:
@@ -420,8 +417,8 @@ def register_algo(name):
 
 
 def get_model_info(
-    model: Union[onnx.ModelProto, pathlib.Path, str], white_op_type_list: List[Callable]
-) -> List[Tuple[str, Callable]]:
+    model: onnx.ModelProto | pathlib.Path | str, white_op_type_list: list[Callable]
+) -> list[tuple[str, Callable]]:
     if not isinstance(model, onnx.ModelProto):
         model = onnx.load(model)
     filter_result = []
@@ -436,15 +433,15 @@ def get_model_info(
     return filter_result
 
 
-def is_B_transposed(node):
+def is_B_transposed(node):  # noqa: N802
     """Whether inuput B is transposed."""
-    transB = [attr for attr in node.attribute if attr.name == "transB"]
+    transB = [attr for attr in node.attribute if attr.name == "transB"]  # noqa: N806
     if len(transB):
-        return 0 < onnx.helper.get_attribute_value(transB[0])
+        return onnx.helper.get_attribute_value(transB[0]) > 0
     return False
 
 
-def get_qrange_for_qType(qType, reduce_range=False):
+def get_qrange_for_qType(qType, reduce_range=False):  # noqa: N802, N803
     """Helper function to get the quantization range for a type.
 
     Args:
@@ -460,7 +457,7 @@ def get_qrange_for_qType(qType, reduce_range=False):
         raise ValueError("unsupported quantization data type")
 
 
-def _quantize_data_with_scale_zero(data, qType, scheme, scale, zero_point):
+def _quantize_data_with_scale_zero(data, qType, scheme, scale, zero_point):  # noqa: N803
     """Quantize data with scale and zero point.
 
     To pack weights, we compute a linear transformation
@@ -482,11 +479,11 @@ def _quantize_data_with_scale_zero(data, qType, scheme, scale, zero_point):
     elif qType == onnx.onnx_pb.TensorProto.UINT8 and scheme == "asym":
         quantized_data = ((data.astype(np.float32) / scale).round() + zero_point).astype("B")
     else:
-        raise ValueError("Unexpected combination of data type {} and scheme {}.".format(qType, scheme))
+        raise ValueError(f"Unexpected combination of data type {qType} and scheme {scheme}.")
     return quantized_data
 
 
-def _calculate_scale_zp(rmin, rmax, quantize_range, qType, scheme):
+def _calculate_scale_zp(rmin, rmax, quantize_range, qType, scheme):  # noqa: N803
     """Calculate scale and zero point."""
     if isinstance(rmax, np.ndarray):
         if scheme == "sym":
@@ -536,7 +533,7 @@ def _calculate_scale_zp(rmin, rmax, quantize_range, qType, scheme):
     return scale, zero_point
 
 
-def quantize_data(data, quantize_range, qType, scheme):
+def quantize_data(data, quantize_range, qType, scheme):  # noqa: N803
     """Quantize data.
 
     To pack weights, we compute a linear transformation
@@ -556,8 +553,8 @@ def quantize_data(data, quantize_range, qType, scheme):
         qType (int): data type to quantize to. Supported types UINT8 and INT8
         scheme (string): sym or asym quantization.
     """
-    rmin = min(min(data), 0)
-    rmax = max(max(data), 0)
+    rmin = min(*data, 0)
+    rmax = max(*data, 0)
 
     scale, zero_point = _calculate_scale_zp(rmin, rmax, quantize_range, qType, scheme)
     quantized_data = _quantize_data_with_scale_zero(data, qType, scheme, scale, zero_point)

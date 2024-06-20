@@ -5,9 +5,9 @@ import unittest
 
 import onnx
 import onnxruntime as ort
-import onnxruntime.tools.symbolic_shape_infer as symbolic_shape_infer
 import torch
 import transformers
+from onnxruntime.tools import symbolic_shape_infer
 from optimum.exporters.onnx import main_export
 
 from onnx_neural_compressor import config, data_reader, logger
@@ -17,7 +17,7 @@ from onnx_neural_compressor.quantization import matmul_4bits_quantizer
 
 def find_onnx_file(folder_path):
     # return first .onnx file path in folder_path
-    for root, dirs, files in os.walk(folder_path):
+    for root, _dirs, files in os.walk(folder_path):
         for file in files:
             if file.endswith(".onnx"):
                 return os.path.join(root, file)

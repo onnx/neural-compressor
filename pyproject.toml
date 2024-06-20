@@ -50,53 +50,67 @@ indent-width = 4
 
 # Assume Python 3.8
 target-version = "py38"
+unsafe-fixes = true
 
 [tool.ruff.lint]
-# Enable Pyflakes (`F`) and a subset of the pycodestyle (`E`)  codes by default.
-# Unlike Flake8, Ruff doesn't enable pycodestyle warnings (`W`) or
-# McCabe complexity (`C901`) by default.
-select = ["E4", "E7", "E9", "F"]
-ignore = [
-    "E402", # Module level import not at top of file
-    "E501", # Line too long (121 > 120 characters)
-    "E721", # Do not compare types, use isinstance()
-    "E722", # Do not use bare except
-    "E731", # Do not assign a lambda expression, use a def
-    "E741", # Do not use variables named ‘l’, ‘O’, or ‘I’
-    "F401", # {name} imported but unused
-    "F403", # from {name} import * used; unable to detect undefined names
-    "F405", # {name} may be undefined, or defined from star imports
-    "F841", # Local variable is assigned to but never used{name}
+select = [
+    "A", # flake8-builtins
+    "ARG", # flake8-unused-arguments
+    "B", # flake8-bugbear
+    "BLE", # flake8-blind-except
+    "C4", # flake8-comprehensions
+    "D", # pydocstyle
+    "E", # pycodestyle
+    "F", # Pyflakes
+    "FA", # flake8-future-annotations
+    "G", # flake8-logging-format
+    "I002", # isort: required imports
+    "ISC", # flake8-implicit-str-concat
+    "LOG", # flake8-logging
+    "N", # pep8-naming
+    "NPY", # modern numpy
+    "PERF", # Perflint
+    "PIE", # flake8-pie
+    "PL", # pylint
+    "PYI", # flake8-pyi
+    "RUF", # Ruff-specific rules
+    "SIM", # flake8-simplify
+    "SLOT", # flake8-slot
+    "T10", # flake8-debugger
+    "TID", # Disallow relative imports
+    "TRY", # flake8-try-except-raise
+    "UP", # pyupgrade
+    "W", # pycodestyle
+    "YTT", # flake8-2020
 ]
-
-# Allow fix for all enabled rules (when `--fix`) is provided.
-fixable = ["ALL"]
-unfixable = []
-
-# Allow unused variables when underscore-prefixed.
-dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+# NOTE: Refrain from growing the ignore list unless for exceptional cases.
+# Always include a comment to explain why.
+ignore = [
+    "D1", # D1 is for missing docstrings, which is not yet enforced.
+    "E501", # Line length controlled by formatter
+    "NPY002", # np.random.Generator may not be preferred in all cases
+    "PLR09", # Ignore the pylint "too-many-*" rules
+    "PLR2004", # Magic numbers
+    "PYI011", # Allow protobuf enums as defaults to function arguments
+    "PYI021", # Allow docstrings in pyi files
+    "PYI041", # int | float is sometimes more clear than float
+    "RUF015", # next(iter(...)) sometimes obscures the intent when we access the 0th element of a shape
+    "SIM102", # We don't perfer always combining if branches
+    "SIM108", # We don't always encourage ternary operators
+    "SIM114", # Don't always combine if branches for debugability
+    "SIM116", # Don't use dict lookup to replace if-else
+    "TRY003", # Messages can be constructed in the exception
+]
 
 ignore-init-module-imports = true
 
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
 [tool.ruff.format]
-# Like Black, use double quotes for strings.
-quote-style = "double"
-
-# Like Black, indent with spaces, rather than tabs.
-indent-style = "space"
-
-# Like Black, respect magic trailing commas.
-skip-magic-trailing-comma = false
-
-# Like Black, automatically detect the appropriate line ending.
-line-ending = "auto"
-
 # Enable auto-formatting of code examples in docstrings. Markdown,
 # reStructuredText code/literal blocks and doctests are all supported.
-#
-# This is currently disabled by default, but it is planned for this
-# to be opt-out in the future.
-docstring-code-format = false
+docstring-code-format = true
 
 # Set the line length limit used when formatting code snippets in
 # docstrings.

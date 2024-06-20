@@ -29,7 +29,7 @@ from onnx_neural_compressor import constants, logger, utility
 class ONNXModel(onnx_model.ONNXModel):
     """Build ONNX model."""
 
-    def __init__(self, model, **kwargs):
+    def __init__(self, model, **kwargs):  # noqa: D417
         """Initialize an ONNX model.
 
         Args:
@@ -84,7 +84,7 @@ class ONNXModel(onnx_model.ONNXModel):
                     self._is_large_model = True
                     return
                 else:  # pragma: no cover
-                    raise e
+                    raise
             if init_size > constants.MAXIMUM_PROTOBUF:
                 self._is_large_model = True
                 return
@@ -163,8 +163,8 @@ class ONNXModel(onnx_model.ONNXModel):
             onnx.save(self.model, root)
 
         if self._config is not None:
-            model_type = "" if not hasattr(self._config, "model_type") else getattr(self._config, "model_type")
-            setattr(self._config.__class__, "model_type", model_type)
+            model_type = "" if not hasattr(self._config, "model_type") else self._config.model_type
+            self._config.__class__.model_type = model_type
             output_config_file = pathlib.Path(root).parent.joinpath("config.json").as_posix()
             self._config.to_json_file(output_config_file, use_diff=False)
 
@@ -194,7 +194,7 @@ class ONNXModel(onnx_model.ONNXModel):
         if len(nodes) == 1:
             return nodes[0]
         elif len(nodes) == 0:
-            raise ValueError("{} is not used by any node in this model.".format(weight_name))
+            raise ValueError(f"{weight_name} is not used by any node in this model.")
         else:
             raise NotImplementedError("Models with shared weights is not supported.")
 
@@ -217,13 +217,13 @@ class ONNXModel(onnx_model.ONNXModel):
         for parent in self.get_parents(node):
             for child in self.get_children(parent):
                 if child.name != node.name:
-                    siblings.append(child)
+                    siblings.append(child)  # noqa: PERF401
         return siblings
 
     def get_scale_zero(self, tensor):
         """Help function to get scale and zero_point."""
         if not tensor.endswith("_quantized"):
-            logger.debug("Find {} in the quantized graph is not quantized.".format(tensor))
+            logger.debug(f"Find {tensor} in the quantized graph is not quantized.")
             return None, None
 
         if len(self._input_name_to_nodes) == 0:
@@ -234,7 +234,7 @@ class ONNXModel(onnx_model.ONNXModel):
         def _searcher(tensor_name):
             """Search scale and zero point tensor recursively."""
             node = self._input_name_to_nodes[tensor_name][0]
-            parent = self._output_name_to_node[tensor_name] if tensor_name in self._output_name_to_node else None
+            parent = self._output_name_to_node.get(tensor_name, None)
             direct_int8 = ["Reshape", "Transpose", "Squeeze", "Unsqueeze", "MaxPool", "Pad", "Split"]
             if parent is not None and parent.op_type in direct_int8:
                 fp32_tensor_name = (
@@ -273,12 +273,16 @@ class ONNXModel(onnx_model.ONNXModel):
             return None, None
         else:
             scale_tensor, zo_tensor = _searcher(tensor)
-            assert scale_tensor, "missing scale for tensor {}".format(tensor)
-            assert zo_tensor, "missing zero point for tensor {}".format(tensor)
+            assert scale_tensor, f"missing scale for tensor {tensor}"
+            assert zo_tensor, f"missing zero point for tensor {tensor}"
             return scale_tensor, zo_tensor
 
-    def replace_input_of_all_nodes(self, old_input_name, new_input_name, white_optype=[], black_optype=[]):
+    def replace_input_of_all_nodes(self, old_input_name, new_input_name, white_optype=None, black_optype=None):
         """Replace inputs of all nodes."""
+        if black_optype is None:
+            black_optype = []
+        if white_optype is None:
+            white_optype = []
         if len(white_optype) > 0:
             for node in self.model.graph.node:
                 if node.op_type in white_optype:
@@ -288,8 +292,12 @@ class ONNXModel(onnx_model.ONNXModel):
                 if node.op_type not in black_optype:
                     ONNXModel.replace_node_input(node, old_input_name, new_input_name)
 
-    def replace_output_of_all_nodes(self, old_output_name, new_output_name, white_optype=[], black_optype=[]):
+    def replace_output_of_all_nodes(self, old_output_name, new_output_name, white_optype=None, black_optype=None):
         """Replace outputs of all nodes."""
+        if black_optype is None:
+            black_optype = []
+        if white_optype is None:
+            white_optype = []
         if len(white_optype) > 0:
             for node in self.model.graph.node:
                 if node.op_type in white_optype:
@@ -330,7 +338,7 @@ class ONNXModel(onnx_model.ONNXModel):
                     if output in self._input_name_to_nodes or output in self.output():
                         unused = False
                         break
-                for input in node.input:
+                for input in node.input:  # noqa: A001
                     if self.get_initializer(input) is not None:
                         continue
                     elif input in self._output_name_to_node or input in self.input():
@@ -381,12 +389,12 @@ class ONNXModel(onnx_model.ONNXModel):
         for inp in self.model.graph.input:
             q.extend(input_name_to_nodes[inp.name])
         for n in self.model.graph.node:
-            if all([i not in output_name_to_node and i not in self.input() for i in n.input]):
+            if all(i not in output_name_to_node and i not in self.input() for i in n.input):
                 q.append(n)
 
         while q:
             n = q.popleft()
-            if not all([output_name_to_node[i].name in all_nodes for i in n.input if i in output_name_to_node]):
+            if not all(output_name_to_node[i].name in all_nodes for i in n.input if i in output_name_to_node):
                 if n not in wait:
                     wait.append(n)
                 continue
@@ -399,13 +407,15 @@ class ONNXModel(onnx_model.ONNXModel):
                 q = copy.deepcopy(wait)
                 wait.clear()
         nodes = [i[1] for i in all_nodes.items()]
-        assert len(list(set([n.name for n in nodes]))) == len(list(set([n.name for n in self.model.graph.node])))
+        assert len(list({n.name for n in nodes})) == len(list({n.name for n in self.model.graph.node}))
         self.model.graph.ClearField("node")
         self.model.graph.node.extend(nodes)
 
-    def get_nodes_chain(self, start, stop, result_chain=[]):
+    def get_nodes_chain(self, start, stop, result_chain=None):
         """Get nodes chain with given start node and stop node."""
         # process start node list
+        if result_chain is None:
+            result_chain = []
         start_node = collections.deque()
         for node in start:
             if isinstance(node, str):
@@ -413,7 +423,7 @@ class ONNXModel(onnx_model.ONNXModel):
             elif isinstance(node, onnx.NodeProto):
                 start_node.append(node.name)
             else:
-                assert False, "'get_nodes_chain' function only support list[string]" "or list[NodeProto] params"
+                raise TypeError("'get_nodes_chain' function only support list[string]or list[NodeProto] params")
 
         # process stop node list
         stop_node = []
@@ -423,7 +433,7 @@ class ONNXModel(onnx_model.ONNXModel):
             elif isinstance(node, onnx.NodeProto):
                 stop_node.append(node.name)
             else:
-                assert False, "'get_nodes_chain' function only support list[string]" "or list[NodeProto] params"
+                raise TypeError("'get_nodes_chain' function only support list[string]or list[NodeProto] params")
 
         while start_node:
             node_name = start_node.popleft()
@@ -585,7 +595,7 @@ class ONNXModel(onnx_model.ONNXModel):
                 continue
             qkv_nodes = [qkv for qkv in qkv_nodes_list if qkv is not None][-1]
             other_inputs = []
-            for input in start_node.input:
+            for input in start_node.input:  # noqa: A001
                 if input not in self._output_name_to_node:
                     continue
                 if input == qkv_nodes[0].output[0]:
@@ -650,11 +660,11 @@ class ONNXModel(onnx_model.ONNXModel):
         removed_outputs = []
         for tensor in tensor_names:
             if tensor in self.output():
-                removed_outputs.append(self.model.graph.output[self.output().index(tensor)])
+                removed_outputs.append(self.model.graph.output[self.output().index(tensor)])  # noqa: PERF401
         for output in removed_outputs:
             self.model.graph.output.remove(output)
 
-    def match_first_parent(self, node, parent_op_type, output_name_to_node_dict, exclude=[]):
+    def match_first_parent(self, node, parent_op_type, output_name_to_node_dict, exclude=None):  # noqa: D417
         """Find parent node based on constraints on op_type.
 
         Args:
@@ -667,20 +677,22 @@ class ONNXModel(onnx_model.ONNXModel):
             parent: The matched parent node. None if not found.
             index: The input index of matched parent node. None if not found.
         """
-        for i, input in enumerate(node.input):
+        if exclude is None:
+            exclude = []
+        for i, input in enumerate(node.input):  # noqa: A001
             if input in output_name_to_node_dict:
                 parent = output_name_to_node_dict[input]
                 if parent.op_type == parent_op_type and parent not in exclude:
                     return parent, i
         return None, None
 
-    def match_parent(
+    def match_parent(  # noqa: D417
         self,
         node,
         parent_op_type,
         input_index=None,
         output_name_to_node_dict=None,
-        exclude=[],
+        exclude=None,
         return_indice=None,
     ):
         """Find parent node based on constraints on op_type and index.
@@ -696,6 +708,8 @@ class ONNXModel(onnx_model.ONNXModel):
         Returns:
             parent: The matched parent node.
         """
+        if exclude is None:
+            exclude = []
         assert node is not None
         assert input_index is None or input_index >= 0
 
@@ -719,7 +733,7 @@ class ONNXModel(onnx_model.ONNXModel):
 
         return None
 
-    def match_parent_path(
+    def match_parent_path(  # noqa: D417
         self,
         node,
         parent_op_types,
@@ -773,10 +787,7 @@ class ONNXModel(onnx_model.ONNXModel):
         Returns:
             bool: the model is smooth quantized or not.
         """
-        for init in self.model.graph.initializer:
-            if "_smooth_scale" in init.name:
-                return True
-        return False
+        return any("_smooth_scale" in init.name for init in self.model.graph.initializer)
 
     def find_split_nodes(self):
         """Find split nodes for layer-wise quantization."""
@@ -813,7 +824,7 @@ class ONNXModel(onnx_model.ONNXModel):
             unvalid_nodes = [
                 i
                 for i in self.model.graph.node
-                if all([out not in self._input_name_to_nodes and not self.is_graph_output(out) for out in i.output])
+                if all(out not in self._input_name_to_nodes and not self.is_graph_output(out) for out in i.output)
             ]
         self.topological_sort()
 
@@ -839,7 +850,7 @@ class ONNXModel(onnx_model.ONNXModel):
 
         assert len(split_node_output) == 1, (
             "Only support split at node with 1 output tensor, while "
-            "current split node {} has {} output tensors".format(split_node_name, len(split_node_output))
+            f"current split node {split_node_name} has {len(split_node_output)} output tensors"
         )
         split_tensor_name = split_node_output[0]
 
@@ -858,8 +869,8 @@ class ONNXModel(onnx_model.ONNXModel):
 
         insert_output_for_model_1 = []
         insert_input_for_model_2 = []
-        for output in split_model_part_1._output_name_to_node.keys():
-            if output in split_model_part_2._input_name_to_nodes.keys():
+        for output in split_model_part_1._output_name_to_node:
+            if output in split_model_part_2._input_name_to_nodes:
                 output_type, output_shape = self._get_output_type_shape_by_tensor_name(output)
                 output_tensor = onnx.helper.make_tensor_value_info(output, output_type, output_shape)
                 if output_tensor not in split_model_part_1.model.graph.output:
@@ -872,7 +883,7 @@ class ONNXModel(onnx_model.ONNXModel):
             split_model_part_1.model.graph.output.append(output)
 
         # insert model 2 input
-        for input in insert_input_for_model_2:
+        for input in insert_input_for_model_2:  # noqa: A001
             split_model_part_2.model.graph.input.append(input)
 
         # remove unused init
@@ -889,7 +900,7 @@ class ONNXModel(onnx_model.ONNXModel):
         split_model_part_1.model_path = split_model_part_1_path
         split_model_part_1._save_split_model(split_model_part_1_path)
         split_model_part_1.check_is_large_model()
-        logger.debug("save split model part 1 to {} for layer wise quantization".format(split_model_part_1_path))
+        logger.debug(f"save split model part 1 to {split_model_part_1_path} for layer wise quantization")
 
         if save_both_split_models:
             split_model_part_2.load_model_initializer_by_tensor(dir_of_model_to_split)
@@ -897,7 +908,7 @@ class ONNXModel(onnx_model.ONNXModel):
             split_model_part_2.model_path = split_model_part_2_path
             split_model_part_2._save_split_model(split_model_part_2_path)
             split_model_part_2.check_is_large_model()
-            logger.debug("save split model part 2 to {} for layer wise quantization".format(split_model_part_2_path))
+            logger.debug(f"save split model part 2 to {split_model_part_2_path} for layer wise quantization")
             return split_model_part_1, split_model_part_2
         else:
             return split_model_part_1, split_model_part_2
@@ -947,16 +958,16 @@ class ONNXModel(onnx_model.ONNXModel):
         if len(self._input_name_to_nodes) == 0:
             self._input_name_to_nodes = self.input_name_to_nodes()
         for output in self.model.graph.output:
-            if output.name not in self._output_name_to_node.keys():
-                remove_outputs.append(output)
+            if output.name not in self._output_name_to_node:
+                remove_outputs.append(output)  # noqa: PERF401
 
-        for input in self.model.graph.input:
-            if input.name not in self._input_name_to_nodes.keys():
-                remove_inputs.append(input)
+        for input in self.model.graph.input:  # noqa: A001
+            if input.name not in self._input_name_to_nodes:
+                remove_inputs.append(input)  # noqa: PERF401
 
         for output in remove_outputs:
             self.model.graph.output.remove(output)
-        for input in remove_inputs:
+        for input in remove_inputs:  # noqa: A001
             self.model.graph.input.remove(input)
 
     def remove_unused_init(self):
@@ -965,8 +976,8 @@ class ONNXModel(onnx_model.ONNXModel):
         if len(self._input_name_to_nodes) == 0:
             self._input_name_to_nodes = self.input_name_to_nodes()
         for init in self.model.graph.initializer:
-            if init.name not in self._input_name_to_nodes.keys():
-                remov_inits.append(init)
+            if init.name not in self._input_name_to_nodes:
+                remov_inits.append(init)  # noqa: PERF401
         self.remove_initializers(remov_inits)
 
     def load_model_initializer_by_tensor(self, data_path=None):
@@ -999,8 +1010,8 @@ class ONNXModel(onnx_model.ONNXModel):
     def merge_split_models(self, to_merge_model):
         """Merge two split model into final model."""
         to_merge_model.write_external_data_to_new_location()
-        self.add_nodes([node for node in to_merge_model.nodes()])
-        self.add_initializers([init for init in to_merge_model.initializer()])
+        self.add_nodes(list(to_merge_model.nodes()))
+        self.add_initializers(list(to_merge_model.initializer()))
         self.update()
 
         # add new output
@@ -1012,16 +1023,16 @@ class ONNXModel(onnx_model.ONNXModel):
         remove_output = []
         for output in self.model.graph.output:
             if output.name in to_merge_model.input():
-                remove_output.append(output)
+                remove_output.append(output)  # noqa: PERF401
         for output in remove_output:
             self.model.graph.output.remove(output)
 
         # add new input
-        for input in to_merge_model.graph().input:
+        for input in to_merge_model.graph().input:  # noqa: A001
             if (
                 input.name not in self.input()
                 and input.name not in self.output()
-                and input.name not in self._output_name_to_node.keys()
+                and input.name not in self._output_name_to_node
             ):
                 self.model.graph.input.append(input)
 

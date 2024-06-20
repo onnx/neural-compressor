@@ -37,7 +37,7 @@ _logger = logging.getLogger("onnx_neural_compressor")
 _logger.handlers.clear()
 _logger.setLevel(LOGLEVEL)
 formatter = logging.Formatter("%(asctime)s [%(levelname)s][%(filename)s:%(lineno)d] %(message)s", "%Y-%m-%d %H:%M:%S")
-streamHandler = logging.StreamHandler()
+streamHandler = logging.StreamHandler()  # noqa: N816
 streamHandler.setFormatter(formatter)
 _logger.addHandler(streamHandler)
 _logger.propagate = False

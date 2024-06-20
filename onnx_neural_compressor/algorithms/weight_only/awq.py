@@ -14,6 +14,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from __future__ import annotations
 
 import copy
 import os
@@ -28,8 +29,6 @@ from onnx_neural_compressor import config, constants, data_reader, logger, onnx_
 from onnx_neural_compressor.algorithms.weight_only import rtn
 from onnx_neural_compressor.algorithms.weight_only import utility as woq_utility
 
-from typing import List, Union  # isort: skip
-
 
 def _get_weight_scale(weight, group_size):
     """Get the scale of weight."""
@@ -41,7 +40,6 @@ def _get_weight_scale(weight, group_size):
 
 def _apply_awq_scale(model, weight_config, absorb_pairs, output_dicts, num_bits, group_size, scheme):
     """Apply scale for salient weight."""
-    best_scales = {}
     new_init_tensors = []
     new_added_mul_nodes = []
     replace_input = []
@@ -49,7 +47,7 @@ def _apply_awq_scale(model, weight_config, absorb_pairs, output_dicts, num_bits,
     base_dir = os.path.dirname(model.model_path) if model.model_path is not None else ""
 
     for parent, nodes in absorb_pairs.items():
-        if any([node.input[0] not in output_dicts for node in nodes]):
+        if any(node.input[0] not in output_dicts for node in nodes):
             logger.warning(
                 "Miss input tensors of nodes {} during AWQ, skip it!".format(
                     ", ".join([node.name for node in nodes if node.input[0] not in output_dicts])
@@ -72,12 +70,11 @@ def _apply_awq_scale(model, weight_config, absorb_pairs, output_dicts, num_bits,
 
         # search scale
         best_error = float("inf")
-        best_ratio = -1
         best_scale = None
         n_grid = 20
 
         for ratio in range(n_grid):
-            ratio = ratio * 1 / n_grid
+            ratio = ratio * 1 / n_grid  # noqa: PLW2901
             loss = 0
             for node in nodes:
                 if weight_config.get((node.name, node.op_type), {}) == "fp32":
@@ -119,7 +116,6 @@ def _apply_awq_scale(model, weight_config, absorb_pairs, output_dicts, num_bits,
             is_best = loss < best_error
             if is_best:
                 best_error = loss
-                best_ratio = ratio
                 best_scale = scales
 
         for node in nodes:
@@ -147,7 +143,7 @@ def _apply_awq_scale(model, weight_config, absorb_pairs, output_dicts, num_bits,
             if init_share_num == 1:
                 model.remove_initializer(weight_tensor)
 
-        parent = model.get_node(parent)
+        parent = model.get_node(parent)  # noqa: PLW2901
         if parent.name in updated_nodes:
             continue
 
@@ -164,7 +160,7 @@ def _apply_awq_scale(model, weight_config, absorb_pairs, output_dicts, num_bits,
 
         elif (
             parent.op_type in ["SimplifiedLayerNormalization", "MatMul", "Gemm", "Mul"]
-            and not all([model.get_initializer(inp) is None for inp in parent.input])
+            and not all(model.get_initializer(inp) is None for inp in parent.input)
             and len(model.input_name_to_nodes()[nodes[0].input[0]]) == len(nodes)
         ):  # pragma: no cover
             for inp in parent.input:
@@ -204,7 +200,7 @@ def _apply_awq_scale(model, weight_config, absorb_pairs, output_dicts, num_bits,
             )
             new_added_mul_nodes.append(mul_node)
             for node in nodes:
-                replace_input.append([node, node.input[0], mul_node.output[0]])
+                replace_input.append([node, node.input[0], mul_node.output[0]])  # noqa: PERF401
             updated_nodes.append(parent.name)
             output_dicts[mul_node.output[0]] = output_dicts[mul_node.input[0]] / np.reshape(best_scale, (1, -1))
 
@@ -220,8 +216,8 @@ def _apply_awq_clip(model, weight_config, absorb_pairs, output_dicts, num_bits, 
     """Apply clip for weight by checking mse."""
     base_dir = os.path.dirname(model.model_path) if model.model_path is not None else ""
     ratios = {}
-    for parent, nodes in absorb_pairs.items():
-        if any([node.input[0] not in output_dicts for node in nodes]):
+    for nodes in absorb_pairs.values():
+        if any(node.input[0] not in output_dicts for node in nodes):
             logger.warning(
                 "Miss input tensors of nodes {} during AWQ, skip it!".format(
                     ", ".join([node.name for node in nodes if node.input[0] not in output_dicts])
@@ -278,16 +274,16 @@ def _apply_awq_clip(model, weight_config, absorb_pairs, output_dicts, num_bits, 
 
 
 def awq_quantize(
-    model: Union[onnx.ModelProto, onnx_model.ONNXModel, pathlib.Path, str],
+    model: onnx.ModelProto | onnx_model.ONNXModel | pathlib.Path | str,
     data_reader: data_reader.CalibrationDataReader,
-    weight_config: dict = {},
+    weight_config: dict | None = None,
     num_bits: int = 4,
     group_size: int = 32,
     scheme: str = "asym",
     enable_auto_scale: bool = True,
     enable_mse_search: bool = True,
     accuracy_level: int = 0,
-    providers: List[str] = ["CPUExecutionProvider"],
+    providers: list[str] | None = None,
 ) -> onnx.ModelProto:
     """Quant the model with Activation-aware Weight quantization(AWQ) method.
 
@@ -321,6 +317,10 @@ def awq_quantize(
     Returns:
         onnx.ModelProto: quantized onnx model.
     """
+    if providers is None:
+        providers = ["CPUExecutionProvider"]
+    if weight_config is None:
+        weight_config = {}
     if not isinstance(model, onnx_model.ONNXModel):
         model = onnx_model.ONNXModel(model)
     output_dicts = {}
@@ -343,7 +343,7 @@ def awq_quantize(
                 and model.get_initializer(node.input[1]) is not None
                 and weight_config.get((node.name, node.op_type), {}).get("weight_dtype", "fp32") != "fp32"
             ):
-                output_names.append(node.input[0])
+                output_names.append(node.input[0])  # noqa: PERF401
         output_names = list(set(output_names))
         model.add_tensors_to_outputs(output_names)
         if model.is_large_model:
@@ -415,7 +415,7 @@ def awq_quantize(
 
 
 def apply_awq_on_model(
-    model: Union[onnx.ModelProto, onnx_model.ONNXModel, pathlib.Path, str],
+    model: onnx.ModelProto | onnx_model.ONNXModel | pathlib.Path | str,
     quant_config: dict,
     calibration_data_reader: data_reader.CalibrationDataReader,
 ) -> onnx.ModelProto:
