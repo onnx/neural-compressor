@@ -54,7 +54,7 @@ if __name__ == "__main__":
             "onnxruntime",
             "onnxruntime-extensions",
             "psutil",
-            "numpy",
+            "numpy<2.0.0",
             "py-cpuinfo",
             "pydantic",
             "transformers",
