@@ -310,7 +310,7 @@ class BaseConfig(ABC):
     def from_json_file(cls, filename):
         with open(filename, "r", encoding="utf-8") as file:
             config_dict = json.load(file)
-        return cls.from_dict(**config_dict)
+        return cls.from_dict(config_dict)
 
     def to_json_file(self, filename):
         config_dict = self.to_dict()
@@ -543,7 +543,7 @@ class ComposableConfig(BaseConfig):
         raise NotImplementedError
 
     @classmethod
-    def get_config_set_for_tuning(cls) -> None:
+    def get_config_set_for_tuning(cls) -> None:  # pragma: no cover
         # TODO (Yi) handle the composable config in `tuning_config`
         return None
 
@@ -706,7 +706,7 @@ class RTNConfig(BaseConfig):
         return filter_result
 
     @classmethod
-    def get_config_set_for_tuning(cls) -> Union[None, "RTNConfig", List["RTNConfig"]]:  # pragma: no cover
+    def get_config_set_for_tuning(cls) -> Union[None, "RTNConfig", List["RTNConfig"]]:
         return RTNConfig(weight_bits=[4, 8], weight_sym=[True, False])
 
 
@@ -871,7 +871,7 @@ class GPTQConfig(BaseConfig):
         return filter_result
 
     @classmethod
-    def get_config_set_for_tuning(cls) -> Union[None, "GPTQConfig", List["GPTQConfig"]]:  # pragma: no cover
+    def get_config_set_for_tuning(cls) -> Union[None, "GPTQConfig", List["GPTQConfig"]]:
         return GPTQConfig(
             weight_bits=[4, 8],
             weight_sym=[True, False],
@@ -1022,7 +1022,7 @@ class AWQConfig(BaseConfig):
         return filter_result
 
     @classmethod
-    def get_config_set_for_tuning(cls) -> Union[None, "AWQConfig", List["AWQConfig"]]:  # pragma: no cover
+    def get_config_set_for_tuning(cls) -> Union[None, "AWQConfig", List["AWQConfig"]]:
         return AWQConfig(
             weight_bits=[4, 8],
             weight_sym=[True, False],

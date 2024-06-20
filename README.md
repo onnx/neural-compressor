@@ -30,20 +30,20 @@ pip install -r requirements.txt
 pip install .
 ```
 
-> **Note**: 
+> **Note**:
 > Further installation methods can be found under [Installation Guide](./docs/installation_guide.md).
 
 ## Getting Started
 
-Setting up the environment:  
+Setting up the environment:
 ```bash
 pip install onnx-neural-compressor "onnxruntime>=1.17.0" onnx
 ```
 After successfully installing these packages, try your first quantization program.
-> Notes: please install from source before the formal pypi release. 
+> Notes: please install from source before the formal pypi release.
 
 ### Weight-Only Quantization (LLMs)
-Following example code demonstrates Weight-Only Quantization on LLMs, device will be selected for efficiency automatically when multiple devices are available. 
+Following example code demonstrates Weight-Only Quantization on LLMs, device will be selected for efficiency automatically when multiple devices are available.
 
 Run the example:
 ```python
@@ -59,17 +59,17 @@ quant = matmul_nbits_quantizer.MatMulNBitsQuantizer(
 )
 quant.process()
 best_model = quant.model
-```   
+```
 
 ### Static Quantization
 
 ```python
 from onnx_neural_compressor import config
 from onnx_neural_compressor.quantization import quantize
-from onnx_neural_compressor.quantization import calibrate
+from onnx_neural_compressor import data_reader
 
 
-class DataReader(calibrate.CalibrationDataReader):
+class DataReader(data_reader.CalibrationDataReader):
     def __init__(self):
         self.encoded_list = []
         # append data into self.encoded_list
@@ -127,6 +127,6 @@ quantize(model, output_model_path, qconfig)
 * [Contribution Guidelines](./docs/source/CONTRIBUTING.md)
 * [Security Policy](SECURITY.md)
 
-## Communication 
+## Communication
 - [GitHub Issues](https://github.com/onnx/neural-compressor/issues): mainly for bug reports, new feature requests, question asking, etc.
-- [Email](mailto:inc.maintainers@intel.com): welcome to raise any interesting research ideas on model compression techniques by email for collaborations.  
+- [Email](mailto:inc.maintainers@intel.com): welcome to raise any interesting research ideas on model compression techniques by email for collaborations.
