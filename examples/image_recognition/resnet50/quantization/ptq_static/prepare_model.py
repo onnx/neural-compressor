@@ -2,7 +2,6 @@ import argparse
 import os
 import sys
 import urllib
-from urllib
 
 MODEL_URL = "https://github.com/onnx/models/raw/main/validated/vision/classification/resnet/model/resnet50-v1-12.onnx"
 MAX_TIMES_RETRY_DOWNLOAD = 5
@@ -16,8 +15,8 @@ def parse_arguments():
 
 
 def progressbar(cur, total=100):
-    percent = '{:.2%}'.format(cur / total)
-    sys.stdout.write("\r[%-100s] %s" % ('#' * int(cur), percent))
+    percent = "{:.2%}".format(cur / total)
+    sys.stdout.write("\r[%-100s] %s" % ("#" * int(cur), percent))
     sys.stdout.flush()
 
 
