@@ -1,4 +1,5 @@
-numpy
+# onnxruntime doesn't support numpy>=2.0.0. After the fix the version restriction will be removed
+numpy<2.0.0
 onnx
 onnxruntime
 onnxruntime-extensions
