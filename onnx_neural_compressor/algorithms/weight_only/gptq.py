@@ -25,8 +25,8 @@ import onnxruntime as ort
 from packaging.version import Version
 
 from onnx_neural_compressor import config, constants, data_reader, onnx_model, utility
-from onnx_neural_compressor.algorithms.layer_wise import core
 from onnx_neural_compressor.algorithms import utility as quant_utils
+from onnx_neural_compressor.algorithms.layer_wise import core
 
 from typing import List, Union  # isort: skip
 

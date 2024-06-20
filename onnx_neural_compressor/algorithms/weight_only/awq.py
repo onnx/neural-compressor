@@ -25,8 +25,8 @@ import onnxruntime as ort
 from packaging import version
 
 from onnx_neural_compressor import config, constants, data_reader, logger, onnx_model
-from onnx_neural_compressor.algorithms.weight_only import rtn
 from onnx_neural_compressor.algorithms import utility as quant_utils
+from onnx_neural_compressor.algorithms.weight_only import rtn
 
 from typing import List, Union  # isort: skip
 
@@ -107,7 +107,7 @@ def _apply_awq_scale(model, weight_config, absorb_pairs, output_dicts, num_bits,
                 else:
                     q_weight = quant_utils.qdq_tensor(weight, num_bits, group_size, sym, "int")
 
-                q_weight = q_weight[:org_w_shape[0], :] / np.expand_dims(scales, axis=-1)
+                q_weight = q_weight[: org_w_shape[0], :] / np.expand_dims(scales, axis=-1)
                 out = np.matmul(inp, q_weight)
                 loss += np.mean(np.power((org_out - out), 2))
 
@@ -258,7 +258,7 @@ def _apply_awq_clip(model, weight_config, absorb_pairs, output_dicts, num_bits, 
                 else:
                     weight = quant_utils.qdq_tensor(weight, num_bits, group_size, sym, "int", ratio)
 
-                cur_out = np.matmul(inp, weight[:, :org_w_shape[0]].T)
+                cur_out = np.matmul(inp, weight[:, : org_w_shape[0]].T)
                 loss = np.mean(np.power((org_out - cur_out), 2))
                 is_best = loss < best_error
                 if is_best:

@@ -1,8 +1,8 @@
+import collections
 import copy
 import os
 import shutil
 import unittest
-import collections
 
 import numpy as np
 import onnx
@@ -30,10 +30,14 @@ def build_model():
     conv2_node = onnx.helper.make_node("Conv", ["add_out", "conv2_weight"], ["conv2_output"], name="conv2")
 
     # 1, 8, 13, 13
-    concat_node = onnx.helper.make_node("Concat", ["conv1_output", "conv2_output"], ["concat_output"], name="Concat", axis=1)
+    concat_node = onnx.helper.make_node(
+        "Concat", ["conv1_output", "conv2_output"], ["concat_output"], name="Concat", axis=1
+    )
     # 1, 8, 11, 11
     avg_args = {"kernel_shape": [3, 3]}
-    avgpool_node = onnx.helper.make_node("AveragePool", ["concat_output"], ["avg_output"], name="AveragePool", **avg_args)
+    avgpool_node = onnx.helper.make_node(
+        "AveragePool", ["concat_output"], ["avg_output"], name="AveragePool", **avg_args
+    )
     reshape_node = onnx.helper.make_node("Reshape", ["avg_output", "shape"], ["reshape_output"], name="Reshape")
 
     add_node_2 = onnx.helper.make_node("Add", ["reshape_output", "add_init_2"], ["add_out_2"], name="add_2")
@@ -128,7 +132,9 @@ class TestQuantizer(unittest.TestCase):
         resize_node = onnx.helper.make_node("Resize", resize_inputs, ["output"], name="resize_node", **resize_attrs)
         resize_roi = [0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0]
         resize_roi_name = "resize_roi"
-        resize_roi_initializer = onnx.helper.make_tensor(resize_roi_name, onnx.TensorProto.FLOAT, [len(resize_roi)], resize_roi)
+        resize_roi_initializer = onnx.helper.make_tensor(
+            resize_roi_name, onnx.TensorProto.FLOAT, [len(resize_roi)], resize_roi
+        )
         initializers.extend([resize_roi_initializer])
         resize_node.input.extend([resize_roi_name])
 
@@ -159,11 +165,15 @@ class TestQuantizer(unittest.TestCase):
         }
 
         q_model = self.qlinear_test(model, q_config, quantize_params, ["Resize", "Conv"])
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 1)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 1
+        )
         self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 1)
 
         q_model = self.qdq_test(model, q_config, quantize_params, ["Resize", "Conv"])
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 4)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 4
+        )
         self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 3)
 
         # test opset version 10
@@ -171,11 +181,15 @@ class TestQuantizer(unittest.TestCase):
         model.ir_version = 7  # use stable onnx ir version
 
         q_model = self.qlinear_test(model, q_config, quantize_params, ["Resize", "Conv"])
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 1)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 1
+        )
         self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 1)
 
         q_model = self.qdq_test(model, q_config, quantize_params, ["Resize", "Conv"])
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 3)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 3
+        )
         self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 2)
 
     def test_argmax(self):
@@ -240,7 +254,9 @@ class TestQuantizer(unittest.TestCase):
             "output": [np.uint8(0), np.float32(10.0)],
         }
         q_model = self.qlinear_test(model, q_config, quantize_params, ["Conv", "ArgMax"])
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 1)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 1
+        )
         self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 1)
 
     def test_gemm(self):
@@ -284,10 +300,14 @@ class TestQuantizer(unittest.TestCase):
             "output": [np.uint8(0), np.float32(10.0)],
         }
         q_model = self.qlinear_test(model, q_config, quantize_params, ["Gemm"])
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 1)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 1
+        )
         self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 1)
         q_model = self.qdq_test(model, q_config, quantize_params, ["Gemm"])
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 4)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 4
+        )
         self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 2)
 
         # test gemm with non-constant bias
@@ -308,10 +328,14 @@ class TestQuantizer(unittest.TestCase):
         model = onnx.helper.make_model(graph, opset_imports=[onnx.helper.make_opsetid("", 13)])
         model.ir_version = 7
         q_model = self.qlinear_test(model, q_config, quantize_params, ["Gemm"])
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 0)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 0
+        )
         self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 0)
         q_model = self.qdq_test(model, q_config, quantize_params, ["Gemm"])
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 3)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 3
+        )
         self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 2)
 
     def test_embed(self):
@@ -319,7 +343,9 @@ class TestQuantizer(unittest.TestCase):
         input_ids_tensor = onnx.helper.make_tensor_value_info("input_ids", onnx.TensorProto.INT32, input_ids_shape)
 
         segment_ids_shape = [1, 4]
-        segment_ids_tensor = onnx.helper.make_tensor_value_info("segment_ids", onnx.TensorProto.INT32, segment_ids_shape)
+        segment_ids_tensor = onnx.helper.make_tensor_value_info(
+            "segment_ids", onnx.TensorProto.INT32, segment_ids_shape
+        )
 
         # EmbedLayerNormalization Node Constants and Weights:
         word_embed_shape = [32, 4]
@@ -344,10 +370,14 @@ class TestQuantizer(unittest.TestCase):
 
         # EmbedLayerNormalization Outputs:
         layernorm_out_shape = [1, 4, 4]
-        layernorm_out_tensor = onnx.helper.make_tensor_value_info("layernorm_out", onnx.TensorProto.FLOAT, layernorm_out_shape)
+        layernorm_out_tensor = onnx.helper.make_tensor_value_info(
+            "layernorm_out", onnx.TensorProto.FLOAT, layernorm_out_shape
+        )
 
         mask_index_out_shape = [1]
-        mask_index_out_tensor = onnx.helper.make_tensor_value_info("mask_index_out", onnx.TensorProto.INT32, mask_index_out_shape)
+        mask_index_out_tensor = onnx.helper.make_tensor_value_info(
+            "mask_index_out", onnx.TensorProto.INT32, mask_index_out_shape
+        )
 
         # EmbedLayerNormalization Node:
         embed_layer_norm_inputs = ["input_ids", "segment_ids", "word_embed", "pos_embed", "seg_embed", "gamma", "beta"]
@@ -375,7 +405,8 @@ class TestQuantizer(unittest.TestCase):
 
         graph = onnx.helper.make_graph(nodes, graph_name, inputs, outputs, initializer=initializers)
         model = onnx.helper.make_model(
-            graph, opset_imports=[onnx.helper.make_opsetid("com.microsoft", 14), onnx.helper.make_opsetid("ai.onnx", 14)]
+            graph,
+            opset_imports=[onnx.helper.make_opsetid("com.microsoft", 14), onnx.helper.make_opsetid("ai.onnx", 14)],
         )
         model.ir_version = 7  # use stable onnx ir version
 
@@ -391,11 +422,17 @@ class TestQuantizer(unittest.TestCase):
             "input_ids": [np.uint8(10.0), np.float32(0)],
         }
         q_model = self.qlinear_test(model, q_config, quantize_params, ["EmbedLayerNormalization"])
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QEmbedLayerNormalization"], 1)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["QEmbedLayerNormalization"], 1
+        )
 
         q_model = self.qdq_test(model, q_config, quantize_params, ["EmbedLayerNormalization"])
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 5)
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["EmbedLayerNormalization"], 1)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 5
+        )
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["EmbedLayerNormalization"], 1
+        )
 
     def test_LSTM(self):
         input_shape = [1, 1, 200]
@@ -431,7 +468,9 @@ class TestQuantizer(unittest.TestCase):
 
         q_config = {"lstm": self.q_config}
         q_model = self.dynamic_test(model, q_config, None, ["LSTM"])
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DynamicQuantizeLSTM"], 1)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DynamicQuantizeLSTM"], 1
+        )
 
     def test_concat_reshape_pooling(self):
         model = build_model()
@@ -464,12 +503,16 @@ class TestQuantizer(unittest.TestCase):
             model, q_config, quantize_params, quantizable_op_types, **{"dedicated_qdq_pair": True}
         )
         self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 1)
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 1)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 1
+        )
 
         q_model = self.qdq_test(model, q_config, quantize_params, quantizable_op_types, **{"dedicated_qdq_pair": True})
-        q_model.save('test.onnx')
+        q_model.save("test.onnx")
         self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 7)
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 9)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 9
+        )
 
         q_config = {
             "Reshape": self.q_config,
@@ -480,11 +523,15 @@ class TestQuantizer(unittest.TestCase):
         }
         q_model = self.qlinear_test(model, q_config, quantize_params, quantizable_op_types)
         self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 1)
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 1)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 1
+        )
 
         q_model = self.qdq_test(model, q_config, quantize_params, quantizable_op_types)
         self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 2)
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 3)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 3
+        )
 
         q_config = {
             "Reshape": self.q_config,
@@ -495,11 +542,15 @@ class TestQuantizer(unittest.TestCase):
         }
         q_model = self.qlinear_test(model, q_config, quantize_params, quantizable_op_types)
         self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 0)
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 0)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 0
+        )
 
         q_model = self.qdq_test(model, q_config, quantize_params, quantizable_op_types)
         self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 0)
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 0)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 0
+        )
 
         q_config = {
             "Reshape": self.q_config,
@@ -510,12 +561,16 @@ class TestQuantizer(unittest.TestCase):
         }
         q_model = self.qlinear_test(model, q_config, quantize_params, quantizable_op_types)
         self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 1)
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 1)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 1
+        )
         self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["AveragePool"], 1)
 
         q_model = self.qdq_test(model, q_config, quantize_params, quantizable_op_types)
         self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 4)
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 6)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 6
+        )
 
         quantize_params = {
             "input": [np.uint8(10.0), np.float32(0)],
@@ -542,7 +597,9 @@ class TestQuantizer(unittest.TestCase):
 
         q_model = self.qdq_test(model, q_config, quantize_params, quantizable_op_types)
         self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 6)
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 8)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 8
+        )
 
     def test_conv(self):
         for op in ["Conv", "FusedConv"]:
@@ -567,11 +624,19 @@ class TestQuantizer(unittest.TestCase):
             }
             quantizable_op_types = [op]
             q_model = self.qlinear_test(model, q_config, quantize_params, quantizable_op_types)
-            self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 1)
-            self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 2)
+            self.assertEqual(
+                collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 1
+            )
+            self.assertEqual(
+                collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 2
+            )
             q_model = self.qdq_test(model, q_config, quantize_params, quantizable_op_types)
-            self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 4)
-            self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 3)
+            self.assertEqual(
+                collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 4
+            )
+            self.assertEqual(
+                collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 3
+            )
 
     def test_matmul(self):
         A = onnx.helper.make_tensor_value_info("A", onnx.TensorProto.FLOAT, [1, 1, 5, 5])
@@ -590,15 +655,21 @@ class TestQuantizer(unittest.TestCase):
         }
         quantizable_op_types = ["Matmul"]
         q_model = self.qlinear_test(model, q_config, quantize_params, quantizable_op_types)
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 1)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 1
+        )
         self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 1)
         q_model = self.qdq_test(model, q_config, quantize_params, quantizable_op_types)
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 3)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 3
+        )
         self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 2)
 
         q_config = {"Matmul": self.q_config}
         q_model = self.dynamic_test(model, q_config, None, quantizable_op_types)
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DynamicQuantizeLinear"], 1)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DynamicQuantizeLinear"], 1
+        )
         self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["MatMulInteger"], 1)
 
         quantize_params = {"A": [np.float32(10.0)], "B": [np.float32(10.0)], "C": [np.float32(10.0)]}
@@ -609,7 +680,9 @@ class TestQuantizer(unittest.TestCase):
 
         quantize_params = {}
         q_model = self.dynamic_test(model, q_config, quantize_params, quantizable_op_types)
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DynamicQuantizeLinear"], 1)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DynamicQuantizeLinear"], 1
+        )
         self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["MatMulInteger"], 1)
 
     def test_attention(self):
@@ -632,12 +705,16 @@ class TestQuantizer(unittest.TestCase):
         q_model = self.qlinear_test(model, q_config, quantize_params, quantizable_op_types)
         self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QAttention"], 1)
         self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 2)
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 0)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 0
+        )
 
         self.qdq_test(model, q_config, quantize_params, quantizable_op_types)
         q_config = {"Attention": self.q_config}
         q_model = self.dynamic_test(model, q_config, quantize_params, quantizable_op_types)
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DynamicQuantizeLinear"], 2)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DynamicQuantizeLinear"], 2
+        )
 
         E = onnx.helper.make_tensor_value_info("E", onnx.TensorProto.INT32, [1, 1, 5, 5])
         F = onnx.helper.make_tensor_value_info("F", onnx.TensorProto.FLOAT, [1, 1, 5, 5])
@@ -655,15 +732,21 @@ class TestQuantizer(unittest.TestCase):
 
         q_model = self.qlinear_test(model, q_config, quantize_params, quantizable_op_types)
         self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 2)
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 0)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 0
+        )
 
         q_model = self.qdq_test(model, q_config, quantize_params, quantizable_op_types)
         self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 2)
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 2)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 2
+        )
 
         q_config = {"Attention": self.q_config}
         q_model = self.dynamic_test(model, q_config, quantize_params, quantizable_op_types)
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DynamicQuantizeLinear"], 2)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DynamicQuantizeLinear"], 2
+        )
 
     def test_gather(self):
         input_tensor = onnx.helper.make_tensor_value_info("input", onnx.TensorProto.FLOAT, [3, 2])
@@ -701,11 +784,15 @@ class TestQuantizer(unittest.TestCase):
         quantizable_op_types = ["Gather", "MatMul"]
         q_model = self.qlinear_test(model, q_config, quantize_params, quantizable_op_types)
         self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 1)
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 1)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 1
+        )
 
         q_model = self.qdq_test(model, q_config, quantize_params, quantizable_op_types)
         self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 3)
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 4)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 4
+        )
 
         q_config = {"Gather": self.q_config, "MatMul": self.q_config}
         q_model = self.dynamic_test(model, q_config, quantize_params, quantizable_op_types)
@@ -743,11 +830,15 @@ class TestQuantizer(unittest.TestCase):
         }
         quantizable_op_types = ["Split", "MatMul"]
         q_model = self.qlinear_test(model, q_config, quantize_params, quantizable_op_types)
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 2)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 2
+        )
         self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 1)
 
         q_model = self.qdq_test(model, q_config, quantize_params, quantizable_op_types)
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 5)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 5
+        )
         self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 4)
 
     def test_pad(self):
@@ -777,7 +868,9 @@ class TestQuantizer(unittest.TestCase):
                 )
             else:
                 node = onnx.helper.make_node("Pad", ["A", "B"], ["C"], name="Pad", mode=mode)
-                graph = onnx.helper.make_graph([conv_node, node], "test_graph_1", [E, F, B], [C], [E_init, F_init, B_init])
+                graph = onnx.helper.make_graph(
+                    [conv_node, node], "test_graph_1", [E, F, B], [C], [E_init, F_init, B_init]
+                )
             model = onnx.helper.make_model(graph)
             conv_config = {
                 "weight_type": 3,
@@ -797,11 +890,15 @@ class TestQuantizer(unittest.TestCase):
             }
             quantizable_op_types = ["Conv", "Pad"]
             q_model = self.qlinear_test(model, q_config, quantize_params, quantizable_op_types)
-            self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 1)
+            self.assertEqual(
+                collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 1
+            )
             q_model = self.qdq_test(
                 model, q_config, quantize_params, quantizable_op_types, **{"dedicated_qdq_pair": True}
             )
-            self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 4)
+            self.assertEqual(
+                collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 4
+            )
 
         node = onnx.helper.make_node("Pad", ["E", "B", "D"], ["C"], name="Pad", mode="constant")
         graph = onnx.helper.make_graph([node], "test_graph_1", [E, B, D], [C], [E_init, B_init, D_init])
@@ -810,10 +907,14 @@ class TestQuantizer(unittest.TestCase):
         quantizable_op_types = ["Pad"]
         q_config = {"Pad": self.q_config}
         q_model = self.qlinear_test(model, q_config, quantize_params, quantizable_op_types)
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 1)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 1
+        )
 
         q_model = self.qdq_test(model, q_config, quantize_params, quantizable_op_types)
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 2)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 2
+        )
 
     def test_binary(self):
         for op in ["Mul", "Add"]:
@@ -831,16 +932,24 @@ class TestQuantizer(unittest.TestCase):
             }
             quantizable_op_types = [op]
             q_model = self.qlinear_test(model, q_config, quantize_params, quantizable_op_types)
-            self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 0)
+            self.assertEqual(
+                collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 0
+            )
 
             q_model = self.qlinear_test(model, q_config, {}, quantizable_op_types)
-            self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 0)
+            self.assertEqual(
+                collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 0
+            )
 
             q_model = self.qdq_test(model, q_config, quantize_params, quantizable_op_types)
-            self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 0)
+            self.assertEqual(
+                collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 0
+            )
 
             q_model = self.qdq_test(model, q_config, {}, quantizable_op_types)
-            self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 0)
+            self.assertEqual(
+                collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 0
+            )
 
     def test_relu(self):
         A = onnx.helper.make_tensor_value_info("A", onnx.TensorProto.FLOAT, [1, 1, 5, 5])
@@ -879,7 +988,7 @@ class TestQuantizer(unittest.TestCase):
         session = ort.InferenceSession(model.SerializeToString(), sess_options, providers=ort.get_available_providers())
         tmp_model = onnx.load(sess_options.optimized_model_filepath)
         q_model = self.qlinear_test(tmp_model, q_config, quantize_params, quantizable_op_types)
-        q_model.save('test.onnx')
+        q_model.save("test.onnx")
         self.assertEqual(len(q_model.model.graph.node), 5)
         q_model = self.qdq_test(tmp_model, q_config, quantize_params, quantizable_op_types)
         self.assertEqual(len(q_model.model.graph.node), 8)
@@ -920,10 +1029,14 @@ class TestQuantizer(unittest.TestCase):
         }
         quantizable_op_types = ["Conv", "Clip"]
         q_model = self.qlinear_test(model, q_config, quantize_params, quantizable_op_types)
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 1)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 1
+        )
         self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 2)
         q_model = self.qdq_test(model, q_config, quantize_params, quantizable_op_types)
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 3)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 3
+        )
         self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 3)
 
     def test_activation(self):
@@ -937,26 +1050,38 @@ class TestQuantizer(unittest.TestCase):
             quantize_params = {"A": [np.uint8(10.0), np.float32(0)], "B": [np.uint8(10.0), np.float32(0)]}
             quantizable_op_types = [op]
             q_model = self.qlinear_test(model, q_config, quantize_params, quantizable_op_types)
-            self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 1)
+            self.assertEqual(
+                collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 1
+            )
 
             q_model = self.qdq_test(model, q_config, quantize_params, quantizable_op_types)
-            self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 2)
+            self.assertEqual(
+                collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 2
+            )
 
             a_value = np.random.randn(1, 10).astype(np.float32)
             A_init = onnx.helper.make_tensor("A", onnx.TensorProto.FLOAT, [1, 10], a_value.reshape(10).tolist())
             graph = onnx.helper.make_graph([node], "test_graph_1", [A], [B], [A_init])
             model = onnx.helper.make_model(graph)
             q_model = self.qlinear_test(model, q_config, quantize_params, quantizable_op_types)
-            self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 1)
+            self.assertEqual(
+                collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 1
+            )
 
             q_model = self.qdq_test(model, q_config, quantize_params, quantizable_op_types)
-            self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 2)
+            self.assertEqual(
+                collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 2
+            )
 
             q_model = self.qlinear_test(model, q_config, {}, quantizable_op_types)
-            self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 0)
+            self.assertEqual(
+                collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 0
+            )
 
             q_model = self.qdq_test(model, q_config, {}, quantizable_op_types)
-            self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 0)
+            self.assertEqual(
+                collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 0
+            )
 
         for op in ["Relu"]:
             B = onnx.helper.make_tensor_value_info("B", onnx.TensorProto.FLOAT, [1, 10])
@@ -968,26 +1093,38 @@ class TestQuantizer(unittest.TestCase):
             quantize_params = {"A": [np.uint8(10.0), np.float32(0)], "B": [np.uint8(10.0), np.float32(0)]}
             quantizable_op_types = [op]
             q_model = self.qlinear_test(model, q_config, quantize_params, quantizable_op_types)
-            self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 0)
+            self.assertEqual(
+                collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 0
+            )
 
             q_model = self.qdq_test(model, q_config, quantize_params, quantizable_op_types)
-            self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 0)
+            self.assertEqual(
+                collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 0
+            )
 
             a_value = np.random.randn(1, 10).astype(np.float32)
             A_init = onnx.helper.make_tensor("A", onnx.TensorProto.FLOAT, [1, 10], a_value.reshape(10).tolist())
             graph = onnx.helper.make_graph([node], "test_graph_1", [A], [B], [A_init])
             model = onnx.helper.make_model(graph)
             q_model = self.qlinear_test(model, q_config, quantize_params, quantizable_op_types)
-            self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 0)
+            self.assertEqual(
+                collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 0
+            )
 
             q_model = self.qdq_test(model, q_config, quantize_params, quantizable_op_types)
-            self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 0)
+            self.assertEqual(
+                collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 0
+            )
 
             q_model = self.qlinear_test(model, q_config, {}, quantizable_op_types)
-            self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 0)
+            self.assertEqual(
+                collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 0
+            )
 
             q_model = self.qdq_test(model, q_config, {}, quantizable_op_types)
-            self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 0)
+            self.assertEqual(
+                collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 0
+            )
 
     def test_pooling(self):
         op = "MaxPool"
@@ -1024,10 +1161,14 @@ class TestQuantizer(unittest.TestCase):
         }
         quantizable_op_types = ["Conv", op]
         q_model = self.qlinear_test(model, q_config, quantize_params, quantizable_op_types)
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 1)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 1
+        )
         self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 2)
         q_model = self.qdq_test(model, q_config, quantize_params, quantizable_op_types)
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 4)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 4
+        )
         self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 4)
 
         op = "GlobalAveragePool"
@@ -1043,11 +1184,19 @@ class TestQuantizer(unittest.TestCase):
             opset.version = opset_version
             model = onnx.helper.make_model(graph, opset_imports=[opset])
             q_model = self.qlinear_test(model, q_config, quantize_params, quantizable_op_types)
-            self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 1)
-            self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 1)
+            self.assertEqual(
+                collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 1
+            )
+            self.assertEqual(
+                collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 1
+            )
             q_model = self.qdq_test(model, q_config, quantize_params, quantizable_op_types)
-            self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 2)
-            self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 2)
+            self.assertEqual(
+                collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 2
+            )
+            self.assertEqual(
+                collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 2
+            )
 
         A = onnx.helper.make_tensor_value_info("A", onnx.TensorProto.FLOAT, [1, 1, 5, 5])
         B = onnx.helper.make_tensor_value_info("B", onnx.TensorProto.FLOAT, [1, 1, 3, 3])
@@ -1068,11 +1217,15 @@ class TestQuantizer(unittest.TestCase):
         }
         quantizable_op_types = ["Conv", op]
         q_model = self.qlinear_test(model, q_config, quantize_params, quantizable_op_types)
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 1)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 1
+        )
         self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 2)
 
         q_model = self.qdq_test(model, q_config, quantize_params, quantizable_op_types)
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 4)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 4
+        )
         self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 4)
 
     def test_exclude_node(self):
@@ -1167,14 +1320,18 @@ class TestQuantizer(unittest.TestCase):
         }
         quantizable_op_types = ["MatMul", "Flatten", "Abs", "Sign", "Shrink"]
         q_model = self.qlinear_test(model, q_config, quantize_params, quantizable_op_types)
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 1)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 1
+        )
         self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 1)
         session = ort.InferenceSession(q_model.model.SerializeToString(), providers=["CPUExecutionProvider"])
         self.assertIsNotNone(session)
 
         q_model = self.qdq_test(model, q_config, quantize_params, quantizable_op_types)
         q_model.save("qdq.onnx")
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 9)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 9
+        )
         self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 7)
         session = ort.InferenceSession(q_model.model.SerializeToString(), providers=["CPUExecutionProvider"])
         self.assertIsNotNone(session)
@@ -1229,13 +1386,17 @@ class TestQuantizer(unittest.TestCase):
         }
         quantizable_op_types = ["MatMul", "Expand"]
         q_model = self.qlinear_test(model, q_config, quantize_params, quantizable_op_types)
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 1)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 1
+        )
         self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 1)
         session = ort.InferenceSession(q_model.model.SerializeToString(), providers=["CPUExecutionProvider"])
         self.assertIsNotNone(session)
 
         q_model = self.qdq_test(model, q_config, quantize_params, quantizable_op_types)
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 6)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 6
+        )
         self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 4)
         session = ort.InferenceSession(q_model.model.SerializeToString(), providers=["CPUExecutionProvider"])
         self.assertIsNotNone(session)
@@ -1292,13 +1453,17 @@ class TestQuantizer(unittest.TestCase):
         }
         quantizable_op_types = ["MatMul", "Slice"]
         q_model = self.qlinear_test(model, q_config, quantize_params, quantizable_op_types)
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 1)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 1
+        )
         self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 1)
         session = ort.InferenceSession(q_model.model.SerializeToString(), providers=["CPUExecutionProvider"])
         self.assertIsNotNone(session)
 
         q_model = self.qdq_test(model, q_config, quantize_params, quantizable_op_types)
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 6)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 6
+        )
         self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 4)
         session = ort.InferenceSession(q_model.model.SerializeToString(), providers=["CPUExecutionProvider"])
         self.assertIsNotNone(session)
@@ -1360,14 +1525,18 @@ class TestQuantizer(unittest.TestCase):
         }
         quantizable_op_types = ["MatMul", "Mod"]
         q_model = self.qlinear_test(model, q_config, quantize_params, quantizable_op_types)
-        q_model.save('test.onnx')
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 1)
+        q_model.save("test.onnx")
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 1
+        )
         self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 1)
         session = ort.InferenceSession(q_model.model.SerializeToString(), providers=["CPUExecutionProvider"])
         self.assertIsNotNone(session)
 
         q_model = self.qdq_test(model, q_config, quantize_params, quantizable_op_types)
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 8)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 8
+        )
         self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 5)
         session = ort.InferenceSession(q_model.model.SerializeToString(), providers=["CPUExecutionProvider"])
         self.assertIsNotNone(session)
@@ -1426,13 +1595,17 @@ class TestQuantizer(unittest.TestCase):
         }
         quantizable_op_types = ["MatMul", "ReduceMin"]
         q_model = self.qlinear_test(model, q_config, quantize_params, quantizable_op_types)
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 1)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 1
+        )
         self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 1)
         session = ort.InferenceSession(q_model.model.SerializeToString(), providers=["CPUExecutionProvider"])
         self.assertIsNotNone(session)
 
         q_model = self.qdq_test(model, q_config, quantize_params, quantizable_op_types)
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 6)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 6
+        )
         self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 4)
         session = ort.InferenceSession(q_model.model.SerializeToString(), providers=["CPUExecutionProvider"])
         self.assertIsNotNone(session)
@@ -1490,13 +1663,17 @@ class TestQuantizer(unittest.TestCase):
         }
         quantizable_op_types = ["MatMul", "ReduceMax"]
         q_model = self.qlinear_test(model, q_config, quantize_params, quantizable_op_types)
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 1)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 1
+        )
         self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 1)
         session = ort.InferenceSession(q_model.model.SerializeToString(), providers=["CPUExecutionProvider"])
         self.assertIsNotNone(session)
 
         q_model = self.qdq_test(model, q_config, quantize_params, quantizable_op_types)
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 6)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 6
+        )
         self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 4)
         session = ort.InferenceSession(q_model.model.SerializeToString(), providers=["CPUExecutionProvider"])
         self.assertIsNotNone(session)
@@ -1550,13 +1727,17 @@ class TestQuantizer(unittest.TestCase):
         }
         quantizable_op_types = ["MatMul", "Tile"]
         q_model = self.qlinear_test(model, q_config, quantize_params, quantizable_op_types)
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 1)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 1
+        )
         self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 1)
         session = ort.InferenceSession(q_model.model.SerializeToString(), providers=["CPUExecutionProvider"])
         self.assertIsNotNone(session)
 
         q_model = self.qdq_test(model, q_config, quantize_params, quantizable_op_types)
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 6)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 6
+        )
         self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 4)
         session = ort.InferenceSession(q_model.model.SerializeToString(), providers=["CPUExecutionProvider"])
         self.assertIsNotNone(session)
@@ -1571,7 +1752,9 @@ class TestQuantizer(unittest.TestCase):
         matmul1_output = onnx.helper.make_tensor_value_info("matmul1_output", onnx.TensorProto.FLOAT, [20, 10, 3])
         matmul1_node = onnx.helper.make_node("MatMul", ["input", "matmul1_weight"], ["matmul1_output"], name="Matmul_0")
 
-        centercroppad_output = onnx.helper.make_tensor_value_info("centercroppad_output", onnx.TensorProto.FLOAT, [10, 7, 3])
+        centercroppad_output = onnx.helper.make_tensor_value_info(
+            "centercroppad_output", onnx.TensorProto.FLOAT, [10, 7, 3]
+        )
         shape = onnx.helper.make_tensor("shape", onnx.TensorProto.INT64, [3], [10, 7, 3])
         centercroppad_node = onnx.helper.make_node(
             "CenterCropPad",
@@ -1614,13 +1797,17 @@ class TestQuantizer(unittest.TestCase):
         }
         quantizable_op_types = ["MatMul", "CenterCropPad"]
         q_model = self.qlinear_test(model, q_config, quantize_params, quantizable_op_types)
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 1)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 1
+        )
         self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 1)
         session = ort.InferenceSession(q_model.model.SerializeToString(), providers=["CPUExecutionProvider"])
         self.assertIsNotNone(session)
 
         q_model = self.qdq_test(model, q_config, quantize_params, quantizable_op_types)
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 6)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 6
+        )
         self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 4)
         session = ort.InferenceSession(q_model.model.SerializeToString(), providers=["CPUExecutionProvider"])
         self.assertIsNotNone(session)
@@ -1679,13 +1866,17 @@ class TestQuantizer(unittest.TestCase):
         }
         quantizable_op_types = ["MatMul", "GatherND"]
         q_model = self.qlinear_test(model, q_config, quantize_params, quantizable_op_types)
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 1)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 1
+        )
         self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 1)
         session = ort.InferenceSession(q_model.model.SerializeToString(), providers=["CPUExecutionProvider"])
         self.assertIsNotNone(session)
 
         q_model = self.qdq_test(model, q_config, quantize_params, quantizable_op_types)
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 6)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 6
+        )
         self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 4)
         session = ort.InferenceSession(q_model.model.SerializeToString(), providers=["CPUExecutionProvider"])
         self.assertIsNotNone(session)
@@ -1700,7 +1891,9 @@ class TestQuantizer(unittest.TestCase):
         matmul1_output = onnx.helper.make_tensor_value_info("matmul1_output", onnx.TensorProto.FLOAT, [3, 3])
         matmul1_node = onnx.helper.make_node("MatMul", ["input", "matmul1_weight"], ["matmul1_output"], name="Matmul_0")
 
-        gatherelements_output = onnx.helper.make_tensor_value_info("gatherelements_output", onnx.TensorProto.FLOAT, [2, 3])
+        gatherelements_output = onnx.helper.make_tensor_value_info(
+            "gatherelements_output", onnx.TensorProto.FLOAT, [2, 3]
+        )
         indices = onnx.helper.make_tensor("indices", onnx.TensorProto.INT64, [2, 3], [-1, -2, 0, -2, 0, 0])
         gathernd_node = onnx.helper.make_node(
             "GatherElements",
@@ -1744,13 +1937,17 @@ class TestQuantizer(unittest.TestCase):
         }
         quantizable_op_types = ["MatMul", "GatherElements"]
         q_model = self.qlinear_test(model, q_config, quantize_params, quantizable_op_types)
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 1)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 1
+        )
         self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 1)
         session = ort.InferenceSession(q_model.model.SerializeToString(), providers=["CPUExecutionProvider"])
         self.assertIsNotNone(session)
 
         q_model = self.qdq_test(model, q_config, quantize_params, quantizable_op_types)
-        self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 6)
+        self.assertEqual(
+            collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 6
+        )
         self.assertEqual(collections.Counter([node.op_type for node in q_model.model.graph.node])["QuantizeLinear"], 4)
         session = ort.InferenceSession(q_model.model.SerializeToString(), providers=["CPUExecutionProvider"])
         self.assertIsNotNone(session)

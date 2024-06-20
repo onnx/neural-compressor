@@ -17,9 +17,9 @@
 import onnx
 from onnx import onnx_pb as onnx_proto
 
-from onnx_neural_compressor.algorithms.post_training_quant.operators import base_op
-from onnx_neural_compressor.algorithms import utility as quant_utils
 from onnx_neural_compressor import constants
+from onnx_neural_compressor.algorithms import utility as quant_utils
+from onnx_neural_compressor.algorithms.post_training_quant.operators import base_op
 
 
 @base_op.op_registry(op_types="Conv, FusedConv", mode=[constants.DYNAMIC_QUANT])
@@ -115,9 +115,7 @@ class ConvOperator(base_op.Operator):
 
         scales_mul_node = quant_utils.find_by_name(scales_mul_op, self.quantizer.new_nodes)
         if scales_mul_node is None:
-            scales_mul_node = onnx.helper.make_node(
-                "Mul", [scale_0, scale_1], [scales_mul_op + ":0"], scales_mul_op
-            )
+            scales_mul_node = onnx.helper.make_node("Mul", [scale_0, scale_1], [scales_mul_op + ":0"], scales_mul_op)
             self.quantizer.new_nodes.append(scales_mul_node)
 
         scales_mul_op_output = scales_mul_node.output[0]
@@ -126,12 +124,11 @@ class ConvOperator(base_op.Operator):
         # and make the output of this node the same as output of original conv node.
         output_scale_mul_op = node.name + "_output_scale_mul"
         self.quantizer.new_nodes.append(
-            onnx.helper.make_node(
-                "Mul", [cast_op_output, scales_mul_op_output], [node.output[0]], output_scale_mul_op
-            )
+            onnx.helper.make_node("Mul", [cast_op_output, scales_mul_op_output], [node.output[0]], output_scale_mul_op)
         )
         self.quantizer.remove_nodes.extend(parents[1:])
         self.quantizer.remove_nodes.append(node)
+
 
 @base_op.op_registry(op_types="Conv, FusedConv", mode=[constants.STATIC_QUANT])
 class StaticConvOperator(ConvOperator):
@@ -174,9 +171,7 @@ class StaticConvOperator(ConvOperator):
         """Convert to QOperator format."""
         node = self.node
 
-        if len(self.quantizer.model.get_children(node)) == 0 or not node.name.endswith(
-            "_quant"
-        ):  # pragma: no cover
+        if len(self.quantizer.model.get_children(node)) == 0 or not node.name.endswith("_quant"):  # pragma: no cover
             return
         parents = self.quantizer.model.get_parents(node)
         child = self.quantizer.model.get_children(node)[0]

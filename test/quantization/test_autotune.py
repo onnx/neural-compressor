@@ -22,10 +22,9 @@ from unittest import mock
 import numpy as np
 import onnx
 import onnxruntime as ort
-from onnx_neural_compressor import quantization
 from optimum.exporters.onnx import main_export
 
-from onnx_neural_compressor import config, data_reader
+from onnx_neural_compressor import config, data_reader, quantization
 from onnx_neural_compressor.quantization import tuning
 
 from typing import Callable, Dict, List, Optional, Union  # isort: skip
@@ -458,9 +457,8 @@ class TestONNXRT3xAutoTune(unittest.TestCase):
             )
         call_args_list = mock_warning.call_args_list
         # There may be multiple calls to warning, so we need to check all of them
-        self.assertIn(
-            "Skip the verified config mapping.", [info[0][0] for info in call_args_list]
-        )
+        self.assertIn("Skip the verified config mapping.", [info[0][0] for info in call_args_list])
+
 
 if __name__ == "__main__":
     unittest.main()

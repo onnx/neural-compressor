@@ -23,18 +23,15 @@ import json
 import os
 import pathlib
 import re
-from abc import ABC
-from abc import abstractmethod
+from abc import ABC, abstractmethod
 
 import numpy as np
 import onnx
 import pydantic
-from onnx_neural_compressor import constants
-from onnx_neural_compressor import data_reader
-from onnx_neural_compressor import logger
-from onnx_neural_compressor import utility
 from onnxruntime import quantization
 from typing_extensions import Self
+
+from onnx_neural_compressor import constants, data_reader, logger, utility
 
 from collections import OrderedDict  # isort: skip
 from typing import Any, Callable, Dict, List, NamedTuple, Optional, Tuple, Type, Union, _GenericAlias  # isort: skip
@@ -302,7 +299,7 @@ class BaseConfig(ABC):
             return getattr(self, key)
         else:
             raise KeyError(f"No such attribute: {key}")
-    
+
     def __setitem__(self, key, value):
         setattr(self, key, value)
 
@@ -421,7 +418,6 @@ class BaseConfig(ABC):
             raise ValueError(f"Unsupported param type: {param}")
         return tuning_param
 
-
     def expand(self) -> List[BaseConfig]:
         """Expand the config.
 
@@ -483,7 +479,9 @@ class BaseConfig(ABC):
             local_op_level_config_lst = model_level_config_lst
         else:
             tuning_param_name_lst = [tuning_param.name for tuning_param in op_tuning_param_list]
-            tuning_param_val_lst = list(itertools.product(*[tuning_param.options for tuning_param in op_tuning_param_list]))
+            tuning_param_val_lst = list(
+                itertools.product(*[tuning_param.options for tuning_param in op_tuning_param_list])
+            )
             tuning_param_pair_lst = [dict(zip(tuning_param_name_lst[::-1], val[::-1])) for val in tuning_param_val_lst]
 
             for model_level_config in model_level_config_lst:
@@ -543,6 +541,7 @@ class BaseConfig(ABC):
         if not isinstance(other, type(self)):
             return False
         return self.get_init_args() == other.get_init_args()
+
 
 class ComposableConfig(BaseConfig):
     name = constants.COMPOSABLE_CONFIG
@@ -666,10 +665,18 @@ class OperatorConfig:
         result = {}
         for key, val in self.__dict__.items():
             if not isinstance(val, list):
-                result[key] = getattr(val, "tensor_type", val) if isinstance(val, quantization.QuantType) else getattr(val, "value", val)
+                result[key] = (
+                    getattr(val, "tensor_type", val)
+                    if isinstance(val, quantization.QuantType)
+                    else getattr(val, "value", val)
+                )
             else:
                 result[key] = [
-                    getattr(item, "tensor_type", item) if isinstance(item, quantization.QuantType) else getattr(item, "value", item)
+                    (
+                        getattr(item, "tensor_type", item)
+                        if isinstance(item, quantization.QuantType)
+                        else getattr(item, "value", item)
+                    )
                     for item in val
                 ]
         return result
@@ -679,6 +686,7 @@ class OperatorConfig:
             return self.to_dict() == other.to_dict()
         else:
             return self.to_dict() == other
+
 
 class _OperatorConfig(NamedTuple):
     config: OperatorConfig
@@ -1218,7 +1226,6 @@ class StaticQuantConfig(BaseConfig, quantization.StaticQuantConfig):
     ]
     name: str = constants.STATIC_QUANT
 
-
     def __init__(
         self,
         calibration_data_reader: data_reader.CalibrationDataReader = None,
@@ -1268,7 +1275,11 @@ class StaticQuantConfig(BaseConfig, quantization.StaticQuantConfig):
         if execution_provider is None:
             execution_provider = utility.auto_detect_ep()
         if op_types_to_quantize is None:
-            op_types_to_quantize = constants.STATIC_QOPERATOR_OP_LIST_MAP.get(execution_provider, []) if quant_format == quantization.QuantFormat.QOperator else constants.STATIC_QDQ_OP_LIST_MAP.get(execution_provider, [])
+            op_types_to_quantize = (
+                constants.STATIC_QOPERATOR_OP_LIST_MAP.get(execution_provider, [])
+                if quant_format == quantization.QuantFormat.QOperator
+                else constants.STATIC_QDQ_OP_LIST_MAP.get(execution_provider, [])
+            )
         if not reduce_range and not utility.CpuInfo().vnni:
             logger.warning(
                 "VNNI is not supported and reduce_range=False, reduce_range=True is recommended to avoid potential accuracy issue."
@@ -1292,14 +1303,16 @@ class StaticQuantConfig(BaseConfig, quantization.StaticQuantConfig):
         if "TensorrtExecutionProvider" in execution_provider:
             logger.info("Update some parameters for TensorrtExecutionProvider")
             os.environ["ORT_TENSORRT_INT8_ENABLE"] = "0"
-            self.extra_options.update({
-                "add_qdq_pair_to_weight": True,
-                "dedicated_qdq_pair": True,
-                "optypes_to_exclude_output_quant": ["Conv", "Gemm", "Add", "MatMul"],
-            })
+            self.extra_options.update(
+                {
+                    "add_qdq_pair_to_weight": True,
+                    "dedicated_qdq_pair": True,
+                    "optypes_to_exclude_output_quant": ["Conv", "Gemm", "Add", "MatMul"],
+                }
+            )
         else:
             os.environ["ORT_TENSORRT_UNAVAILABLE"] = "1"
- 
+
         BaseConfig.__init__(self, white_list=self.op_types_to_quantize)
         self.execution_provider = execution_provider
         self.quant_last_matmul = quant_last_matmul
@@ -1314,7 +1327,7 @@ class StaticQuantConfig(BaseConfig, quantization.StaticQuantConfig):
     def get_model_info(model, white_list=constants.STATIC_QOPERATOR_CPU_OP_LIST) -> list:
         if not isinstance(model, onnx.ModelProto):
             model = onnx.load(model, load_external_data=False)
- 
+
         filter_result = []
         for node in model.graph.node:
             if node.op_type in white_list:
@@ -1355,11 +1368,23 @@ class StaticQuantConfig(BaseConfig, quantization.StaticQuantConfig):
             op_type_config_dict, op_name_config_dict = config._get_op_name_op_type_config()
             last_matmul = None
             for op_name, op_type in model_info:
-                if isinstance(self.op_types_to_quantize, list) and len(self.op_types_to_quantize) > 0 and op_type not in self.op_types_to_quantize:
+                if (
+                    isinstance(self.op_types_to_quantize, list)
+                    and len(self.op_types_to_quantize) > 0
+                    and op_type not in self.op_types_to_quantize
+                ):
                     continue
-                if isinstance(self.nodes_to_quantize, list) and len(self.nodes_to_quantize) > 0 and op_name not in self.nodes_to_quantize:
+                if (
+                    isinstance(self.nodes_to_quantize, list)
+                    and len(self.nodes_to_quantize) > 0
+                    and op_name not in self.nodes_to_quantize
+                ):
                     continue
-                if isinstance(self.nodes_to_exclude, list) and len(self.nodes_to_exclude) > 0 and op_name in self.nodes_to_exclude:
+                if (
+                    isinstance(self.nodes_to_exclude, list)
+                    and len(self.nodes_to_exclude) > 0
+                    and op_name in self.nodes_to_exclude
+                ):
                     continue
                 if op_type in op_type_config_dict:
                     self._config_mapping[op_name] = op_type_config_dict[op_type]
@@ -1390,13 +1415,21 @@ class StaticQuantConfig(BaseConfig, quantization.StaticQuantConfig):
             execution_provider = utility.auto_detect_ep()
         StaticQuantConfig.register_supported_configs()
         if op_types_to_quantize is None:
-            op_types_to_quantize = constants.STATIC_QOPERATOR_OP_LIST_MAP.get(execution_provider, []) if quant_format == quantization.QuantFormat.QOperator else constants.STATIC_QDQ_OP_LIST_MAP.get(execution_provider, [])
+            op_types_to_quantize = (
+                constants.STATIC_QOPERATOR_OP_LIST_MAP.get(execution_provider, [])
+                if quant_format == quantization.QuantFormat.QOperator
+                else constants.STATIC_QDQ_OP_LIST_MAP.get(execution_provider, [])
+            )
 
         op_type_candidate = [
             op_types_to_quantize,
             list(set(op_types_to_quantize).difference({"Add", "Mul"})),
             list(set(op_types_to_quantize).difference({"Add", "Mul", "Gather", "GatherElements", "GatherND"})),
-            list(set(op_types_to_quantize).difference({"Add", "Mul", "Gather", "GatherElements", "GatherND", "Attention"})),
+            list(
+                set(op_types_to_quantize).difference(
+                    {"Add", "Mul", "Gather", "GatherElements", "GatherND", "Attention"}
+                )
+            ),
         ]
 
         cfg_lst = []
@@ -1426,58 +1459,103 @@ class StaticQuantConfig(BaseConfig, quantization.StaticQuantConfig):
                     weight_type=onnx.TensorProto.UINT8,
                     weight_sym=False,
                     per_channel=[True, False],
-                    calibrate_method=[quantization.CalibrationMethod.MinMax, quantization.CalibrationMethod.Entropy, quantization.CalibrationMethod.Percentile],
+                    calibrate_method=[
+                        quantization.CalibrationMethod.MinMax,
+                        quantization.CalibrationMethod.Entropy,
+                        quantization.CalibrationMethod.Percentile,
+                    ],
                     activation_type=onnx.TensorProto.UINT8,
                     activation_sym=False,
                 ),
                 operators=["GatherND", "GatherElements", "Gather"],
                 valid_func_list=utility.STATIC_CHECK_FUNC_LIST,
-            ))
+            )
+        )
         supported_configs.append(
             _OperatorConfig(
                 config=OperatorConfig(
                     weight_type=onnx.TensorProto.UINT8,
                     weight_sym=False,
                     per_channel=False,
-                    calibrate_method=[quantization.CalibrationMethod.MinMax, quantization.CalibrationMethod.Entropy, quantization.CalibrationMethod.Percentile],
+                    calibrate_method=[
+                        quantization.CalibrationMethod.MinMax,
+                        quantization.CalibrationMethod.Entropy,
+                        quantization.CalibrationMethod.Percentile,
+                    ],
                     activation_type=onnx.TensorProto.UINT8,
                     activation_sym=False,
                 ),
                 operators=["EmbedLayerNormalization"],
                 valid_func_list=utility.STATIC_CHECK_FUNC_LIST,
-            ))
+            )
+        )
         supported_configs.append(
             _OperatorConfig(
                 config=OperatorConfig(
                     weight_type=onnx.TensorProto.INT8,
                     weight_sym=True,
                     per_channel=[True, False],
-                    calibrate_method=[quantization.CalibrationMethod.MinMax, quantization.CalibrationMethod.Entropy, quantization.CalibrationMethod.Percentile],
+                    calibrate_method=[
+                        quantization.CalibrationMethod.MinMax,
+                        quantization.CalibrationMethod.Entropy,
+                        quantization.CalibrationMethod.Percentile,
+                    ],
                     activation_type=onnx.TensorProto.UINT8,
                     activation_sym=False,
                 ),
                 operators=["Conv", "MatMul", "Gemm", "FusedConv"],
                 valid_func_list=utility.STATIC_CHECK_FUNC_LIST,
-            ))
+            )
+        )
         supported_configs.append(
             _OperatorConfig(
                 config=OperatorConfig(
                     weight_type=onnx.TensorProto.INT8,
                     weight_sym=True,
                     per_channel=False,
-                    calibrate_method=[quantization.CalibrationMethod.MinMax, quantization.CalibrationMethod.Entropy, quantization.CalibrationMethod.Percentile],
+                    calibrate_method=[
+                        quantization.CalibrationMethod.MinMax,
+                        quantization.CalibrationMethod.Entropy,
+                        quantization.CalibrationMethod.Percentile,
+                    ],
                     activation_type=onnx.TensorProto.UINT8,
                     activation_sym=False,
                 ),
                 operators=[
-                    "Relu", "Clip", "LeakyRelu", "Sigmoid", "MaxPool", "GlobalAveragePool",
-                    "Pad", "Split", "Squeeze", "Reshape", "Concat", "AveragePool", "Tile", 
-                    "Unsqueeze", "Transpose", "Resize", "Abs", "Shrink", "Sign", "Attention",
-                    "Flatten", "Expand", "Slice", "Mod", "ReduceMax", "ReduceMin",
-                    "CenterCropPad", "Add", "Mul", "ArgMax",
+                    "Relu",
+                    "Clip",
+                    "LeakyRelu",
+                    "Sigmoid",
+                    "MaxPool",
+                    "GlobalAveragePool",
+                    "Pad",
+                    "Split",
+                    "Squeeze",
+                    "Reshape",
+                    "Concat",
+                    "AveragePool",
+                    "Tile",
+                    "Unsqueeze",
+                    "Transpose",
+                    "Resize",
+                    "Abs",
+                    "Shrink",
+                    "Sign",
+                    "Attention",
+                    "Flatten",
+                    "Expand",
+                    "Slice",
+                    "Mod",
+                    "ReduceMax",
+                    "ReduceMin",
+                    "CenterCropPad",
+                    "Add",
+                    "Mul",
+                    "ArgMax",
                 ],
                 valid_func_list=utility.STATIC_CHECK_FUNC_LIST,
-            ))
+            )
+        )
         cls.supported_configs = supported_configs
 
     def to_dict(self):
@@ -1492,10 +1570,18 @@ class StaticQuantConfig(BaseConfig, quantization.StaticQuantConfig):
                 result[key] = local_result
                 continue
             if not isinstance(val, list):
-                result[key] = getattr(val, "tensor_type", val) if isinstance(val, quantization.QuantType) else getattr(val, "value", val)
+                result[key] = (
+                    getattr(val, "tensor_type", val)
+                    if isinstance(val, quantization.QuantType)
+                    else getattr(val, "value", val)
+                )
             else:
                 result[key] = [
-                    getattr(item, "tensor_type", item) if isinstance(item, quantization.QuantType) else getattr(item, "value", item)
+                    (
+                        getattr(item, "tensor_type", item)
+                        if isinstance(item, quantization.QuantType)
+                        else getattr(item, "value", item)
+                    )
                     for item in val
                 ]
         return result
@@ -1590,6 +1676,7 @@ class SmoothQuantConfig(StaticQuantConfig):
     ) -> Union[None, "SmoothQuantConfig", List["SmoothQuantConfig"]]:  # pragma: no cover
         return SmoothQuantConfig(alpha=np.arange(0.3, 0.7, 0.05))
 
+
 def get_default_sq_config() -> SmoothQuantConfig:
     """Generate the default smooth quant config.
 
@@ -1670,7 +1757,7 @@ class DynamicQuantConfig(BaseConfig, quantization.DynamicQuantConfig):
     def get_model_info(model, white_list=constants.DYNAMIC_CPU_OP_LIST) -> list:
         if not isinstance(model, onnx.ModelProto):
             model = onnx.load(model, load_external_data=False)
- 
+
         filter_result = []
         for node in model.graph.node:
             if node.op_type in white_list:
@@ -1710,11 +1797,23 @@ class DynamicQuantConfig(BaseConfig, quantization.DynamicQuantConfig):
             op_type_config_dict, op_name_config_dict = config._get_op_name_op_type_config()
             last_matmul = None
             for op_name, op_type in model_info:
-                if isinstance(self.op_types_to_quantize, list) and len(self.op_types_to_quantize) > 0 and op_type not in self.op_types_to_quantize:
+                if (
+                    isinstance(self.op_types_to_quantize, list)
+                    and len(self.op_types_to_quantize) > 0
+                    and op_type not in self.op_types_to_quantize
+                ):
                     continue
-                if isinstance(self.nodes_to_quantize, list) and len(self.nodes_to_quantize) > 0 and op_name not in self.nodes_to_quantize:
+                if (
+                    isinstance(self.nodes_to_quantize, list)
+                    and len(self.nodes_to_quantize) > 0
+                    and op_name not in self.nodes_to_quantize
+                ):
                     continue
-                if isinstance(self.nodes_to_exclude, list) and len(self.nodes_to_exclude) > 0 and op_name in self.nodes_to_exclude:
+                if (
+                    isinstance(self.nodes_to_exclude, list)
+                    and len(self.nodes_to_exclude) > 0
+                    and op_name in self.nodes_to_exclude
+                ):
                     continue
                 if op_type in op_type_config_dict:
                     self._config_mapping[op_name] = op_type_config_dict[op_type]
@@ -1746,9 +1845,19 @@ class DynamicQuantConfig(BaseConfig, quantization.DynamicQuantConfig):
         op_type_candidate = [
             op_types_to_quantize,
             list(set(op_types_to_quantize).difference({"EmbedLayerNormalization", "Gather", "LSTM"})),
-            list(set(op_types_to_quantize).difference({"EmbedLayerNormalization", "Gather", "LSTM", "Conv", "FusedConv"})),
-            list(set(op_types_to_quantize).difference({"EmbedLayerNormalization", "Gather", "LSTM", "Conv", "FusedConv", "Attention"})),
-            list(set(op_types_to_quantize).difference({"EmbedLayerNormalization", "Gather", "LSTM", "Conv", "FusedConv", "MatMul"})),
+            list(
+                set(op_types_to_quantize).difference({"EmbedLayerNormalization", "Gather", "LSTM", "Conv", "FusedConv"})
+            ),
+            list(
+                set(op_types_to_quantize).difference(
+                    {"EmbedLayerNormalization", "Gather", "LSTM", "Conv", "FusedConv", "Attention"}
+                )
+            ),
+            list(
+                set(op_types_to_quantize).difference(
+                    {"EmbedLayerNormalization", "Gather", "LSTM", "Conv", "FusedConv", "MatMul"}
+                )
+            ),
         ]
 
         cfg_lst = []
@@ -1780,7 +1889,8 @@ class DynamicQuantConfig(BaseConfig, quantization.DynamicQuantConfig):
                 ),
                 operators=["FusedConv", "Conv", "EmbedLayerNormalization"],
                 valid_func_list=utility.DYNAMIC_CHECK_FUNC_LIST,
-            ))
+            )
+        )
         supported_configs.append(
             _OperatorConfig(
                 config=OperatorConfig(
@@ -1792,7 +1902,8 @@ class DynamicQuantConfig(BaseConfig, quantization.DynamicQuantConfig):
                 ),
                 operators=["MatMul"],
                 valid_func_list=utility.DYNAMIC_CHECK_FUNC_LIST,
-            ))
+            )
+        )
         supported_configs.append(
             _OperatorConfig(
                 config=OperatorConfig(
@@ -1804,7 +1915,8 @@ class DynamicQuantConfig(BaseConfig, quantization.DynamicQuantConfig):
                 ),
                 operators=["Gather", "Attention", "LSTM"],
                 valid_func_list=utility.DYNAMIC_CHECK_FUNC_LIST,
-            ))
+            )
+        )
         cls.supported_configs = supported_configs
 
     def to_dict(self):
@@ -1819,10 +1931,18 @@ class DynamicQuantConfig(BaseConfig, quantization.DynamicQuantConfig):
                 result[key] = local_result
                 continue
             if not isinstance(val, list):
-                result[key] = getattr(val, "tensor_type", val) if isinstance(val, quantization.QuantType) else getattr(val, "value", val)
+                result[key] = (
+                    getattr(val, "tensor_type", val)
+                    if isinstance(val, quantization.QuantType)
+                    else getattr(val, "value", val)
+                )
             else:
                 result[key] = [
-                    getattr(item, "tensor_type", item) if isinstance(item, quantization.QuantType) else getattr(item, "value", item)
+                    (
+                        getattr(item, "tensor_type", item)
+                        if isinstance(item, quantization.QuantType)
+                        else getattr(item, "value", item)
+                    )
                     for item in val
                 ]
         return result

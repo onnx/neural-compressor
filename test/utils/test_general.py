@@ -192,7 +192,10 @@ class TestBaseConfig(unittest.TestCase):
         self.assertEqual(fake_default_config.weight_dtype, "int")
         config_set = get_all_config_set()
         self.assertEqual(len(config_set), len(config.config_registry.get_all_config_cls()))
-        self.assertEqual([i for i in config_set if getattr(i, "name", "None") == FAKE_CONFIG_NAME][0].weight_bits, DEFAULT_WEIGHT_BITS)
+        self.assertEqual(
+            [i for i in config_set if getattr(i, "name", "None") == FAKE_CONFIG_NAME][0].weight_bits,
+            DEFAULT_WEIGHT_BITS,
+        )
 
     def test_config_expand_complex_tunable_type(self):
         target_op_type_list_options = [["Conv", "Gemm"], ["Conv", "Matmul"]]
@@ -251,9 +254,10 @@ class TestConfigLoader(unittest.TestCase):
         config_set = [FakeAlgoConfig(weight_bits=[4, 8]), FakeAlgoConfig(weight_bits=8)]
         config_loader = tuning.ConfigLoader(config_set)
         config_count = 0
-        for i, config in enumerate(config_loader):
+        for i, _ in enumerate(config_loader):
             config_count += 1
         self.assertEqual(config_count, 2)
+
 
 if __name__ == "__main__":
     unittest.main()

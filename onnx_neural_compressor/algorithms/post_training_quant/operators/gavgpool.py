@@ -15,10 +15,9 @@
 
 import onnx
 
-from onnx_neural_compressor.algorithms.post_training_quant.operators import base_op
+from onnx_neural_compressor import constants, utility
 from onnx_neural_compressor.algorithms import utility as quant_utils
-from onnx_neural_compressor import constants
-from onnx_neural_compressor import utility
+from onnx_neural_compressor.algorithms.post_training_quant.operators import base_op
 
 
 @base_op.op_registry(op_types="GlobalAveragePool", mode=[constants.STATIC_QUANT])

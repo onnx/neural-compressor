@@ -13,7 +13,7 @@
 # limitations under the License.
 
 
+from onnxruntime.quantization import CalibrationMethod
 from onnxruntime.quantization.quant_utils import QuantFormat, QuantType
 
-from onnxruntime.quantization import CalibrationMethod
 from onnx_neural_compressor.quantization.quantize import quantize

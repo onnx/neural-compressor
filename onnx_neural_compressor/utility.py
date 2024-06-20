@@ -103,7 +103,9 @@ class Options:
         if check_value("random_seed", random_seed, int):
             self._random_seed = random_seed
 
+
 options = Options()
+
 
 def singleton(cls):
     """Singleton decorator."""
@@ -311,55 +313,129 @@ def auto_detect_ep():
     else:
         return "CPUExecutionProvider"
 
+
 def static_basic_check(config, optype, execution_provider, quant_format):
     if quant_format == quantization.QuantFormat.QOperator:
         if execution_provider not in constants.STATIC_QOPERATOR_OP_LIST_MAP:
-            raise ValueError("Unsupported execution_provider {}, only support {}.".format(execution_provider, list(constants.STATIC_QOPERATOR_OP_LIST_MAP.keys())))
+            raise ValueError(
+                "Unsupported execution_provider {}, only support {}.".format(
+                    execution_provider, list(constants.STATIC_QOPERATOR_OP_LIST_MAP.keys())
+                )
+            )
         supported_optype = constants.STATIC_QOPERATOR_OP_LIST_MAP[execution_provider]
         if optype not in supported_optype:
-            raise ValueError("Unsupported optype {} for {}, only support {}.".format(optype, execution_provider, supported_optype))
+            raise ValueError(
+                "Unsupported optype {} for {}, only support {}.".format(optype, execution_provider, supported_optype)
+            )
     elif quant_format == quantization.QuantFormat.QDQ:
         if execution_provider not in constants.STATIC_QDQ_OP_LIST_MAP:
-            raise ValueError("Unsupported execution_provider {}, only support {}.".format(execution_provider, list(constants.STATIC_QDQ_OP_LIST_MAP.keys())))
+            raise ValueError(
+                "Unsupported execution_provider {}, only support {}.".format(
+                    execution_provider, list(constants.STATIC_QDQ_OP_LIST_MAP.keys())
+                )
+            )
         supported_optype = constants.STATIC_QDQ_OP_LIST_MAP[execution_provider]
         if optype not in supported_optype:
-            raise ValueError("Unsupported optype {} for {}, only support {}.".format(optype, execution_provider, supported_optype))
+            raise ValueError(
+                "Unsupported optype {} for {}, only support {}.".format(optype, execution_provider, supported_optype)
+            )
     else:
-        raise ValueError("Unsupported quant_format {}, only support QuantFormat.QOperator and QuantFormat.QDQ.".format(quant_format))
+        raise ValueError(
+            "Unsupported quant_format {}, only support QuantFormat.QOperator and QuantFormat.QDQ.".format(quant_format)
+        )
     return config
+
 
 def static_cpu_check(config, optype, execution_provider, quant_format):
     if execution_provider != "CPUExecutionProvider":
         return config
 
     # only support per-tensor
-    if optype in ["EmbedLayerNormalization", "Relu", "Clip", "LeakyRelu", "Sigmoid", "MaxPool", "GlobalAveragePool",
-                    "Pad", "Split", "Squeeze", "Reshape", "Concat", "AveragePool", "Tile",
-                    "Unsqueeze", "Transpose", "Resize", "Abs", "Shrink", "Sign", "Attention",
-                    "Flatten", "Expand", "Slice", "Mod", "ReduceMax", "ReduceMin",
-                    "CenterCropPad", "Add", "Mul", "ArgMax"]:
+    if optype in [
+        "EmbedLayerNormalization",
+        "Relu",
+        "Clip",
+        "LeakyRelu",
+        "Sigmoid",
+        "MaxPool",
+        "GlobalAveragePool",
+        "Pad",
+        "Split",
+        "Squeeze",
+        "Reshape",
+        "Concat",
+        "AveragePool",
+        "Tile",
+        "Unsqueeze",
+        "Transpose",
+        "Resize",
+        "Abs",
+        "Shrink",
+        "Sign",
+        "Attention",
+        "Flatten",
+        "Expand",
+        "Slice",
+        "Mod",
+        "ReduceMax",
+        "ReduceMin",
+        "CenterCropPad",
+        "Add",
+        "Mul",
+        "ArgMax",
+    ]:
         setattr(config, "per_channel", False)
 
     if optype in ["Attention"]:
         setattr(config, "activation_type", onnx.TensorProto.UINT8)
     return config
 
+
 def static_cuda_check(config, optype, execution_provider, quant_format):
     if execution_provider != "CUDAExecutionProvider":
         return config
 
     # only support per-tensor
-    if optype in ["EmbedLayerNormalization", "Relu", "Clip", "LeakyRelu", "Sigmoid", "MaxPool", "GlobalAveragePool",
-                    "Pad", "Split", "Squeeze", "Reshape", "Concat", "AveragePool", "Tile",
-                    "Unsqueeze", "Transpose", "Resize", "Abs", "Shrink", "Sign", "Attention",
-                    "Flatten", "Expand", "Slice", "Mod", "ReduceMax", "ReduceMin",
-                    "CenterCropPad", "Add", "Mul", "ArgMax"]:
+    if optype in [
+        "EmbedLayerNormalization",
+        "Relu",
+        "Clip",
+        "LeakyRelu",
+        "Sigmoid",
+        "MaxPool",
+        "GlobalAveragePool",
+        "Pad",
+        "Split",
+        "Squeeze",
+        "Reshape",
+        "Concat",
+        "AveragePool",
+        "Tile",
+        "Unsqueeze",
+        "Transpose",
+        "Resize",
+        "Abs",
+        "Shrink",
+        "Sign",
+        "Attention",
+        "Flatten",
+        "Expand",
+        "Slice",
+        "Mod",
+        "ReduceMax",
+        "ReduceMin",
+        "CenterCropPad",
+        "Add",
+        "Mul",
+        "ArgMax",
+    ]:
         setattr(config, "per_channel", False)
 
     if optype in ["Attention"]:
         setattr(config, "activation_type", onnx.TensorProto.INT8)
         setattr(config, "weight_type", onnx.TensorProto.INT8)
     return config
+
 
 def static_dml_check(config, optype, execution_provider, quant_format):
     if execution_provider != "DmlExecutionProvider":
@@ -370,12 +446,14 @@ def static_dml_check(config, optype, execution_provider, quant_format):
         setattr(config, "per_channel", False)
     return config
 
+
 def static_dnnl_check(config, optype, execution_provider, quant_format):
     if execution_provider != "DnnlExecutionProvider":
         return config
 
     # current configurations are same as CPU EP
     return static_cpu_check(config, optype, execution_provider, quant_format)
+
 
 def static_trt_check(config, optype, execution_provider, quant_format):
     if execution_provider != "TensorrtExecutionProvider":
@@ -395,6 +473,7 @@ def static_trt_check(config, optype, execution_provider, quant_format):
         setattr(config, "activation_sym", True)
     return config
 
+
 STATIC_CHECK_FUNC_LIST = [
     static_basic_check,
     static_cpu_check,
@@ -407,12 +486,19 @@ STATIC_CHECK_FUNC_LIST = [
 
 def dynamic_basic_check(config, optype, execution_provider, quant_format=None):
     if execution_provider not in constants.DYNAMIC_OP_LIST_MAP:
-        raise ValueError("Unsupported execution_provider {}, only support {}.".format(execution_provider, list(constants.DYNAMIC_OP_LIST_MAP.keys())))
+        raise ValueError(
+            "Unsupported execution_provider {}, only support {}.".format(
+                execution_provider, list(constants.DYNAMIC_OP_LIST_MAP.keys())
+            )
+        )
 
     supported_optype = constants.DYNAMIC_OP_LIST_MAP[execution_provider]
     if optype not in supported_optype:
-        raise ValueError("Unsupported optype {} for {}, only support {}.".format(optype, execution_provider, supported_optype))
+        raise ValueError(
+            "Unsupported optype {} for {}, only support {}.".format(optype, execution_provider, supported_optype)
+        )
     return config
+
 
 def dynamic_cpu_check(config, optype, execution_provider, quant_format=None):
     if execution_provider != "CPUExecutionProvider":
@@ -422,11 +508,13 @@ def dynamic_cpu_check(config, optype, execution_provider, quant_format=None):
         setattr(config, "per_channel", False)
     return config
 
+
 def dynamic_cuda_check(config, optype, execution_provider, quant_format=None):
     if execution_provider != "CUDAExecutionProvider":
         return config
     # current configurations are same as CPU EP
     return dynamic_cpu_check(config, optype, execution_provider, quant_format)
+
 
 def dynamic_dml_check(config, optype, execution_provider, quant_format=None):
     if execution_provider != "DmlExecutionProvider":
@@ -435,11 +523,13 @@ def dynamic_dml_check(config, optype, execution_provider, quant_format=None):
     # don't support dynamic quantization
     return None
 
+
 def dynamic_dnnl_check(config, optype, execution_provider, quant_format=None):
     if execution_provider != "DnnlExecutionProvider":
         return config
     # current configurations are same as CPU EP
     return dynamic_cpu_check(config, optype, execution_provider, quant_format)
+
 
 def dynamic_trt_check(config, optype, execution_provider, quant_format=None):
     if execution_provider != "TensorrtExecutionProvider":
@@ -447,6 +537,7 @@ def dynamic_trt_check(config, optype, execution_provider, quant_format=None):
 
     # don't support dynamic quantization
     return None
+
 
 DYNAMIC_CHECK_FUNC_LIST = [
     dynamic_basic_check,

@@ -2,6 +2,7 @@ import unittest
 
 import numpy as np
 import onnx
+
 from onnx_neural_compressor.algorithms import utility as quant_utils
 
 
@@ -17,7 +18,6 @@ class TestQuantUtility(unittest.TestCase):
     def test_4bit_quant_tensor(self):
         data = np.random.random((100, 32))
         q_data, scale, zp = quant_utils.quant_tensor(data)
-
 
     def test_quant_dequant_data(self):
         data = np.random.random((100, 32))

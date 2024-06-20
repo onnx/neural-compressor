@@ -16,9 +16,9 @@
 import onnx
 from onnx import onnx_pb as onnx_proto
 
-from onnx_neural_compressor.algorithms.post_training_quant.operators import base_op
-from onnx_neural_compressor.algorithms import utility as quant_utils
 from onnx_neural_compressor import constants
+from onnx_neural_compressor.algorithms import utility as quant_utils
+from onnx_neural_compressor.algorithms.post_training_quant.operators import base_op
 
 
 @base_op.op_registry(op_types="MatMul", mode=[constants.DYNAMIC_QUANT])
@@ -93,9 +93,7 @@ class MatMulOperator(base_op.Operator):
 
         scales_mul_node = quant_utils.find_by_name(scales_mul_op, self.quantizer.new_nodes)
         if scales_mul_node is None:
-            scales_mul_node = onnx.helper.make_node(
-                "Mul", [scale[0], scale[1]], [scales_mul_op + ":0"], scales_mul_op
-            )
+            scales_mul_node = onnx.helper.make_node("Mul", [scale[0], scale[1]], [scales_mul_op + ":0"], scales_mul_op)
             self.quantizer.new_nodes.append(scales_mul_node)
 
         scales_mul_op_output = scales_mul_node.output[0]
@@ -104,9 +102,7 @@ class MatMulOperator(base_op.Operator):
         # and make the output of this node the same as output of original matmul node.
         output_scale_mul_op = node.name + "_output_scale_mul"
         self.quantizer.new_nodes.append(
-            onnx.helper.make_node(
-                "Mul", [cast_op_output, scales_mul_op_output], [node.output[0]], output_scale_mul_op
-            )
+            onnx.helper.make_node("Mul", [cast_op_output, scales_mul_op_output], [node.output[0]], output_scale_mul_op)
         )
         if parents[1].op_type == "DequantizeLinear":
             self.quantizer.remove_nodes.append(parents[1])
@@ -138,9 +134,7 @@ class StaticMatMulOperator(MatMulOperator):
         """Convert to QOperator format."""
         node = self.node
         parents = self.quantizer.model.get_parents(node)
-        if len(self.quantizer.model.get_children(node)) == 0 or not node.name.endswith(
-            "_quant"
-        ):  # pragma: no cover
+        if len(self.quantizer.model.get_children(node)) == 0 or not node.name.endswith("_quant"):  # pragma: no cover
             return
 
         qlinear_matmul_inputs = []
@@ -166,8 +160,9 @@ class StaticMatMulOperator(MatMulOperator):
         self.quantizer.remove_nodes.append(node)
 
         # make sure parent DequantizeLinear of input 0 is not used by other ops
-        if len(self.quantizer.model.get_children(parents[0])) == 1 and \
-            not self.quantizer.model.is_graph_output(parents[0].output[0]):
+        if len(self.quantizer.model.get_children(parents[0])) == 1 and not self.quantizer.model.is_graph_output(
+            parents[0].output[0]
+        ):
             self.quantizer.remove_nodes.extend(parents)
         else:
             self.quantizer.remove_nodes.append(parents[1])

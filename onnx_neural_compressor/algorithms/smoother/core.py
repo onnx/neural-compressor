@@ -20,6 +20,7 @@ import pathlib
 import numpy as np
 import onnx
 import onnxruntime as ort
+
 from onnx_neural_compressor import data_reader, logger, onnx_model, utility
 from onnx_neural_compressor.algorithms import utility as quant_utils
 from onnx_neural_compressor.algorithms.smoother import calibrator

@@ -11,7 +11,6 @@ pip install onnx-neural-compressor
 pip install -r requirements.txt
 ```
 
-> Note: Validated ONNX Runtime [Version](/docs/installation_guide.md#validated-software-environment).
 
 ## 2. Prepare Dataset
 

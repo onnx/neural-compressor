@@ -5,12 +5,11 @@ import unittest
 
 import numpy as np
 import onnx
-from onnx_neural_compressor import quantization
-from onnx_neural_compressor.quantization import tuning
 from optimum.exporters.onnx import main_export
 
-from onnx_neural_compressor import config, logger, utility
+from onnx_neural_compressor import config, logger, quantization, utility
 from onnx_neural_compressor.quantization import algorithm_entry as algos
+from onnx_neural_compressor.quantization import tuning
 
 
 def find_onnx_file(folder_path):
@@ -68,7 +67,7 @@ class TestQuantizationConfig(unittest.TestCase):
         # print the test name
         logger.info(f"Running TestQuantizationConfig test: {self.id()}")
 
-    def _check_node_is_quantized(self, model, node_name, bits):
+    def _check_node_is_quantized(self, model, node_name):
         for node in model.graph.node:
             if (node.name == node_name or node.name == node_name + "_Q4") and node.op_type in [
                 "MatMulNBits",
@@ -164,7 +163,6 @@ class TestQuantizationConfig(unittest.TestCase):
 
             self.assertEqual(len(config_loader.config_set), 2)
 
-
     def test_static_quant_config(self):
         for execution_provider in ["CPUExecutionProvider", "CUDAExecutionProvider", "DnnlExecutionProvider"]:
             tuning_config = tuning.TuningConfig(
@@ -185,7 +183,9 @@ class TestQuantizationConfig(unittest.TestCase):
                 else:
                     self.assertFalse("add" in configs_mapping)
                 if idx in [0, 1]:
-                    self.assertEqual(configs_mapping["Matmul"]["calibrate_method"], quantization.CalibrationMethod.MinMax)
+                    self.assertEqual(
+                        configs_mapping["Matmul"]["calibrate_method"], quantization.CalibrationMethod.MinMax
+                    )
                 self.assertLess(idx, 16)
 
         for execution_provider in ["TensorrtExecutionProvider"]:
@@ -217,7 +217,9 @@ class TestQuantizationConfig(unittest.TestCase):
                 configs_mapping = quant_config.to_config_mapping(model_info=model_info)
                 if "Matmul" in configs_mapping:
                     self.assertFalse(configs_mapping["Matmul"]["per_channel"])
-                    self.assertEqual(configs_mapping["Matmul"]["calibrate_method"], quantization.CalibrationMethod.MinMax)
+                    self.assertEqual(
+                        configs_mapping["Matmul"]["calibrate_method"], quantization.CalibrationMethod.MinMax
+                    )
                 if "add" in configs_mapping:
                     self.assertEqual(configs_mapping["add"]["calibrate_method"], quantization.CalibrationMethod.MinMax)
                 self.assertLess(idx, 16)

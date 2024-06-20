@@ -13,16 +13,15 @@
 # limitations under the License.
 """Direct8Bit Operator."""
 
-from onnx_neural_compressor.algorithms.post_training_quant.operators import base_op
+from onnx_neural_compressor import constants, utility
 from onnx_neural_compressor.algorithms import utility as quant_utils
-from onnx_neural_compressor import constants
-from onnx_neural_compressor import utility
+from onnx_neural_compressor.algorithms.post_training_quant.operators import base_op
 
 
 @base_op.op_registry(
     op_types="Reshape, Transpose, Squeeze, Unsqueeze, Flatten, Expand, Slice, "
     "SpaceToDepth, DepthToSpace, Upsample, Tile, CenterCropPad",
-    mode=[constants.STATIC_QUANT]
+    mode=[constants.STATIC_QUANT],
 )
 class Direct8BitOperator(base_op.Operator):
     """Direct8Bit Operator."""
@@ -66,8 +65,9 @@ class Direct8BitOperator(base_op.Operator):
             for parent in parents:
                 if parent.op_type == "DequantizeLinear":
                     # make sure parent DequantizeLinear of input 0 is not used by other ops
-                    if len(self.quantizer.model.get_children(parent)) == 1 and \
-                        not self.quantizer.model.is_graph_output(parents[0].output[0]):
+                    if len(self.quantizer.model.get_children(parent)) == 1 and not self.quantizer.model.is_graph_output(
+                        parents[0].output[0]
+                    ):
                         self.quantizer.remove_nodes.append(parent)
                     self.node.input[0] = parent.input[0]
                     break

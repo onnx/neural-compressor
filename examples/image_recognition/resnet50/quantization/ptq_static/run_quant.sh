@@ -14,19 +14,19 @@ function init_params {
   do
     case $var in
       --input_model=*)
-          input_model=$(echo $var |cut -f2 -d=)
+          input_model=$(echo "$var" |cut -f2 -d=)
       ;;
       --output_model=*)
-          output_model=$(echo $var |cut -f2 -d=)
+          output_model=$(echo "$var" |cut -f2 -d=)
       ;;
       --dataset_location=*)
-          dataset_location=$(echo $var |cut -f2 -d=)
+          dataset_location=$(echo "$var" |cut -f2 -d=)
       ;;
       --label_path=*)
-          label_path=$(echo $var |cut -f2 -d=)
+          label_path=$(echo "$var" |cut -f2 -d=)
       ;;
       --quant_format=*)
-          quant_format=$(echo $var |cut -f2 -d=)
+          quant_format=$(echo "$var" |cut -f2 -d=)
       ;;
     esac
   done
@@ -36,11 +36,11 @@ function init_params {
 # run_tuning
 function run_tuning {
     python main.py \
-            --model_path ${input_model} \
-            --dataset_location ${dataset_location} \
-            --label_path ${label_path-${dataset_location}/../val.txt} \
-            --output_model ${output_model} \
-            --quant_format ${quant_format-QOperator} \
+            --model_path "${input_model}" \
+            --dataset_location "${dataset_location}" \
+            --label_path "${label_path-${dataset_location}/../val.txt}" \
+            --output_model "${output_model}" \
+            --quant_format "${quant_format-QOperator}" \
             --tune
 }
 

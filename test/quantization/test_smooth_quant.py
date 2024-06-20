@@ -19,10 +19,10 @@ import unittest
 
 import numpy as np
 import onnx
+import onnxruntime as ort
 from optimum.exporters.onnx import main_export
 
 from onnx_neural_compressor import config, data_reader
-import onnxruntime as ort
 from onnx_neural_compressor.quantization import QuantType
 from onnx_neural_compressor.quantization import algorithm_entry as algos
 from onnx_neural_compressor.quantization import quantize
@@ -113,13 +113,17 @@ class TestONNXRT3xSmoothQuant(unittest.TestCase):
 
     def test_smooth_quant_args(self):
         self.data_reader.rewind()
-        sq_config = config.SmoothQuantConfig(weight_type=QuantType.QUInt8, activation_type=QuantType.QUInt8, alpha="auto")
+        sq_config = config.SmoothQuantConfig(
+            weight_type=QuantType.QUInt8, activation_type=QuantType.QUInt8, alpha="auto"
+        )
         model = algos.smooth_quant_entry(self.gptj, sq_config, self.data_reader)
         num_muls = len([i for i in model.graph.node if i.name.endswith("_smooth_mul") and i.op_type == "Mul"])
         self.assertEqual(num_muls, 30)
 
         self.data_reader.rewind()
-        sq_config = config.SmoothQuantConfig(weight_type=QuantType.QUInt8, activation_type=QuantType.QUInt8, scales_per_op=False)
+        sq_config = config.SmoothQuantConfig(
+            weight_type=QuantType.QUInt8, activation_type=QuantType.QUInt8, scales_per_op=False
+        )
         model = algos.smooth_quant_entry(self.gptj, sq_config, self.data_reader)
         num_muls = len([i for i in model.graph.node if i.name.endswith("_smooth_mul") and i.op_type == "Mul"])
         self.assertEqual(num_muls, 15)
@@ -127,20 +131,23 @@ class TestONNXRT3xSmoothQuant(unittest.TestCase):
         sess_options = ort.SessionOptions()
         sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_EXTENDED
         sess_options.optimized_model_filepath = "Optimized_model.onnx"
-        sess = ort.InferenceSession(self.gptj,
-                                    sess_options,
-                                    providers=["CPUExecutionProvider"])
+        sess = ort.InferenceSession(self.gptj, sess_options, providers=["CPUExecutionProvider"])
         self.data_reader.rewind()
-        sq_config = config.SmoothQuantConfig(weight_type=QuantType.QUInt8, activation_type=QuantType.QUInt8, folding=True, scales_per_op=False)
+        sq_config = config.SmoothQuantConfig(
+            weight_type=QuantType.QUInt8, activation_type=QuantType.QUInt8, folding=True, scales_per_op=False
+        )
         model = algos.smooth_quant_entry("Optimized_model.onnx", sq_config, self.data_reader)
         num_muls = len([i for i in model.graph.node if i.name.endswith("_smooth_mul") and i.op_type == "Mul"])
         self.assertEqual(num_muls, 10)
 
         self.data_reader.rewind()
-        sq_config = config.SmoothQuantConfig(weight_type=QuantType.QUInt8, activation_type=QuantType.QUInt8, folding=False, scales_per_op=False)
+        sq_config = config.SmoothQuantConfig(
+            weight_type=QuantType.QUInt8, activation_type=QuantType.QUInt8, folding=False, scales_per_op=False
+        )
         model = algos.smooth_quant_entry("Optimized_model.onnx", sq_config, self.data_reader)
         num_muls = len([i for i in model.graph.node if i.name.endswith("_smooth_mul") and i.op_type == "Mul"])
         self.assertEqual(num_muls, 15)
+
 
 if __name__ == "__main__":
     unittest.main()

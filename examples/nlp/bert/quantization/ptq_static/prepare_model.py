@@ -1,14 +1,14 @@
 import argparse
 import os
 import sys
-import zipfile
 import urllib
+import zipfile
 
 import torch
 import transformers
 
 # Please refer to [Bert-GLUE_OnnxRuntime_quantization guide]
-# (https://github.com/microsoft/onnxruntime-inference-examples/blob/main/quantization/notebooks/bert/Bert-GLUE_OnnxRuntime_quantization.ipynb) 
+# (https://github.com/microsoft/onnxruntime-inference-examples/blob/main/quantization/notebooks/bert/Bert-GLUE_OnnxRuntime_quantization.ipynb)
 # for detailed model export.
 
 MODEL_URL = "https://download.pytorch.org/tutorial/MRPC.zip"
@@ -19,16 +19,13 @@ def parse_arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input_model", type=str, required=False, default="MRPC.zip")
     parser.add_argument("--output_model", type=str, required=True)
-    parser.add_argument('--max_len',
-                        type=int,
-                        default=128,
-                        help='Maximum length of the sentence pairs')
+    parser.add_argument("--max_len", type=int, default=128, help="Maximum length of the sentence pairs")
     return parser.parse_args()
 
 
 def progressbar(cur, total=100):
-    percent = '{:.2%}'.format(cur / total)
-    sys.stdout.write("\r[%-100s] %s" % ('#' * int(cur), percent))
+    percent = "{:.2%}".format(cur / total)
+    sys.stdout.write("\r[%-100s] %s" % ("#" * int(cur), percent))
     sys.stdout.flush()
 
 
@@ -42,15 +39,15 @@ def schedule(blocknum, blocksize, totalsize):
 
 def is_zip_file(filename):
     try:
-        with open(filename, 'rb') as f:
+        with open(filename, "rb") as f:
             magic_number = f.read(4)
-            return magic_number == b'PK\x03\x04'  # ZIP file magic number
+            return magic_number == b"PK\x03\x04"  # ZIP file magic number
     except OSError:
         return False
 
 
 def extrafile(filename, target_folder="."):
-    with zipfile.ZipFile(filename, 'r') as zin:
+    with zipfile.ZipFile(filename, "r") as zin:
         zin.extractall(target_folder)
 
 
@@ -80,30 +77,30 @@ def download_model(url, model_name, retry_times=5):
 def export_model(model, output_model, max_len=128):
     with torch.no_grad():
         inputs = {
-            'input_ids': torch.ones(1, max_len, dtype=torch.int64),
-            'attention_mask': torch.ones(1, max_len, dtype=torch.int64),
-            'token_type_ids': torch.ones(1, max_len, dtype=torch.int64)
+            "input_ids": torch.ones(1, max_len, dtype=torch.int64),
+            "attention_mask": torch.ones(1, max_len, dtype=torch.int64),
+            "token_type_ids": torch.ones(1, max_len, dtype=torch.int64),
         }
 
-        symbolic_names = {0: 'batch_size', 1: 'max_seq_len'}
+        symbolic_names = {0: "batch_size", 1: "max_seq_len"}
         torch.onnx.export(
             model,  # model being run
-            (inputs['input_ids'], inputs['attention_mask'],
-             inputs['token_type_ids']),  # model input (or a tuple for multiple inputs)
+            (
+                inputs["input_ids"],
+                inputs["attention_mask"],
+                inputs["token_type_ids"],
+            ),  # model input (or a tuple for multiple inputs)
             output_model,  # where to save the model (can be a file or file-like object)
             opset_version=14,  # the ONNX version to export the model
             do_constant_folding=True,  # whether to execute constant folding
-            input_names=[
-                'input_ids',  # the model's input names
-                'input_mask',
-                'segment_ids'
-            ],
-            output_names=['output'],  # the model's output names
+            input_names=["input_ids", "input_mask", "segment_ids"],  # the model's input names
+            output_names=["output"],  # the model's output names
             dynamic_axes={
-                'input_ids': symbolic_names,  # variable length axes
-                'input_mask': symbolic_names,
-                'segment_ids': symbolic_names
-            })
+                "input_ids": symbolic_names,  # variable length axes
+                "input_mask": symbolic_names,
+                "segment_ids": symbolic_names,
+            },
+        )
         assert os.path.exists(output_model), f"Export failed! {output_model} doesn't exist!"
         print("ONNX Model exported to {0}".format(output_model))
 
@@ -111,8 +108,7 @@ def export_model(model, output_model, max_len=128):
 def prepare_model(input_model, output_model, max_len):
     is_download_successful = download_model(MODEL_URL, input_model, MAX_TIMES_RETRY_DOWNLOAD)
     if is_download_successful:
-        folder_name = is_download_successful if isinstance(is_download_successful,
-                                                           str) else "./MRPC"
+        folder_name = is_download_successful if isinstance(is_download_successful, str) else "./MRPC"
         model = transformers.BertForSequenceClassification.from_pretrained(folder_name)
         export_model(model, output_model, max_len)
 

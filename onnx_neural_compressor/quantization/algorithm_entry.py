@@ -18,12 +18,11 @@ from typing import Union
 
 import onnx
 import onnxruntime as ort
-from onnx_neural_compressor.algorithms import utility as quant_utils
-from onnx_neural_compressor.algorithms.post_training_quant import calibrate
-from onnx_neural_compressor.algorithms.post_training_quant import quantizer
 from onnxruntime import quantization
 
 from onnx_neural_compressor import config, constants, data_reader, logger, utility
+from onnx_neural_compressor.algorithms import utility as quant_utils
+from onnx_neural_compressor.algorithms.post_training_quant import calibrate, quantizer
 from onnx_neural_compressor.algorithms.smoother import core
 from onnx_neural_compressor.algorithms.weight_only import awq, gptq, rtn
 
@@ -53,7 +52,7 @@ def gptq_quantize_entry(
     quant_config: config.GPTQConfig,
     calibration_data_reader: data_reader.CalibrationDataReader,
     *args,
-    **kwargs
+    **kwargs,
 ) -> onnx.ModelProto:
     """The main entry to apply gptq quantization."""
     assert calibration_data_reader is not None, "Please provide calibration_data_reader"
@@ -83,7 +82,7 @@ def awq_quantize_entry(
     quant_config: config.AWQConfig,
     calibration_data_reader: data_reader.CalibrationDataReader,
     *args,
-    **kwargs
+    **kwargs,
 ) -> onnx.ModelProto:
     """The main entry to apply awq quantization."""
     assert calibration_data_reader is not None, "Please provide calibration_data_reader"
@@ -104,6 +103,7 @@ def awq_quantize_entry(
     model = awq.apply_awq_on_model(model, config_mapping, calibration_data_reader)
     quant_utils.dump_woq_stats(model, config_mapping, quant_config.white_list)
     return model
+
 
 ###################### Static quant Entry ##################################
 @utility.register_algo(name=constants.STATIC_QUANT)
@@ -166,7 +166,7 @@ def smooth_quant_entry(
     calibration_data_reader: data_reader.CalibrationDataReader,
     model_output: Union[pathlib.Path, str] = None,
     *args,
-    **kwargs
+    **kwargs,
 ) -> Union[pathlib.Path, str, onnx.ModelProto]:
     """Apply smooth quant."""
     assert calibration_data_reader is not None, "Please provide calibration_data_reader"
@@ -179,7 +179,7 @@ def smooth_quant_entry(
     smoother = core.Smoother(
         model,
         calibration_data_reader,
-        execution_provider=getattr(quant_config, "execution_provider", "CPUExecutionProvider")
+        execution_provider=getattr(quant_config, "execution_provider", "CPUExecutionProvider"),
     )
     smoothed_model = smoother.transform(**quant_config.to_dict())
     with tempfile.TemporaryDirectory(prefix="ort.quant.") as tmp_dir:
@@ -235,7 +235,7 @@ def dynamic_quantize_entry(
         model,
         config_mapping,
         op_types_to_quantize=quant_config.op_types_to_quantize,
-        )
+    )
     _quantizer.quantize_model()
     if model_output is not None:
         _quantizer.model.save(model_output)

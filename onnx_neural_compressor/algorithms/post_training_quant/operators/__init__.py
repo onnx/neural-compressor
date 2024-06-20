@@ -13,8 +13,9 @@
 # limitations under the License.
 """Operators for onnx model."""
 
-from os import path
 import glob
+from os import path
+
 from onnx_neural_compressor.algorithms.post_training_quant.operators import base_op
 
 modules = glob.glob(path.join(path.dirname(__file__), "*.py"))

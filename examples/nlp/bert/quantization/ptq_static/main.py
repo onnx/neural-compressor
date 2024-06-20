@@ -16,70 +16,43 @@
 # under the License.
 # pylint:disable=redefined-outer-name,logging-format-interpolation
 
-import logging
-import pathlib
-import tempfile
 import argparse
 import dataclasses
+import logging
 import os
+import pathlib
+import tempfile
+from typing import List, Optional, Union
+
+import numpy as np
 import onnx
 import onnxruntime
-import transformers
+import time
 import torch
-import numpy as np
-from onnx_neural_compressor import data_reader
-from typing import List, Optional, Union
-from torch.utils import data
-from onnx_neural_compressor import config
-from onnx_neural_compressor import quantization
-from onnx_neural_compressor.quantization import tuning
+import transformers
 from onnxruntime.transformers import optimizer
 from onnxruntime.transformers.fusion_options import FusionOptions
+from torch.utils import data
+
+from onnx_neural_compressor import config, data_reader, quantization
+from onnx_neural_compressor.quantization import tuning
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(format = "%(asctime)s - %(levelname)s - %(name)s -   %(message)s",
-                    datefmt = "%m/%d/%Y %H:%M:%S",
-                    level = logging.WARN)
+logging.basicConfig(
+    format="%(asctime)s - %(levelname)s - %(name)s -   %(message)s", datefmt="%m/%d/%Y %H:%M:%S", level=logging.WARN
+)
 logger.info("Evaluating ONNXRuntime full precision accuracy and performance:")
 parser = argparse.ArgumentParser(
-description="BERT fine-tune examples for classification/regression tasks.",
-formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument(
-    "--model_path",
-    type=str,
-    help="Pre-trained model on onnx file"
+    description="BERT fine-tune examples for classification/regression tasks.",
+    formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 )
-parser.add_argument(
-    "--benchmark",
-    action="store_true", \
-    default=False
-)
-parser.add_argument(
-    "--tune",
-    action="store_true", \
-    default=False,
-    help="whether quantize the model"
-)
-parser.add_argument(
-    "--output_model",
-    type=str,
-    help="output model path"
-)
-parser.add_argument(
-    "--mode",
-    type=str,
-    help="benchmark mode of performance or accuracy"
-)
-parser.add_argument(
-    "--model_name_or_path",
-    type=str,
-    help="pretrained model name or path"
-)
-parser.add_argument(
-    "--data_path",
-    type=str,
-    help="input data path"
-)
+parser.add_argument("--model_path", type=str, help="Pre-trained model on onnx file")
+parser.add_argument("--benchmark", action="store_true", default=False)
+parser.add_argument("--tune", action="store_true", default=False, help="whether quantize the model")
+parser.add_argument("--output_model", type=str, help="output model path")
+parser.add_argument("--mode", type=str, help="benchmark mode of performance or accuracy")
+parser.add_argument("--model_name_or_path", type=str, help="pretrained model name or path")
+parser.add_argument("--data_path", type=str, help="input data path")
 parser.add_argument(
     "--batch_size",
     default=8,
@@ -89,41 +62,22 @@ parser.add_argument(
     "--task",
     type=str,
     default="mrpc",
-    choices=["mrpc", "qqp", "qnli", "rte", "sts-b", "cola", \
-            "mnli", "wnli", "sst-2"],
-    help="GLUE task name"
+    choices=["mrpc", "qqp", "qnli", "rte", "sts-b", "cola", "mnli", "wnli", "sst-2"],
+    help="GLUE task name",
 )
 parser.add_argument(
-    "--quant_format",
+    "--quant_format", type=str, default="QOperator", choices=["QDQ", "QOperator"], help="quantization format"
+)
+parser.add_argument("--dynamic_length", type=bool, default=False, help="dynamic length")
+parser.add_argument("--max_seq_length", type=int, default=128, help="max sequence length")
+parser.add_argument(
+    "--model_type", type=str, default="bert", choices=["distilbert", "bert", "mobilebert", "roberta"], help="model type"
+)
+parser.add_argument(
+    "--device",
     type=str,
-    default="QOperator", 
-    choices=["QDQ", "QOperator"],
-    help="quantization format"
-)
-parser.add_argument(
-    "--dynamic_length",
-    type=bool,
-    default=False, 
-    help="dynamic length"
-)
-parser.add_argument(
-    "--max_seq_length",
-    type=int,
-    default=128, 
-    help="max sequence length"
-)
-parser.add_argument(
-    "--model_type",
-    type=str,
-    default="bert", 
-    choices=["distilbert", "bert", "mobilebert", "roberta"],
-    help="model type"
-)
-parser.add_argument(
-    '--device',
-    type=str,
-    default='cpu',
-    choices=['cpu', 'npu'],
+    default="cpu",
+    choices=["cpu", "npu"],
 )
 args = parser.parse_args()
 
@@ -148,57 +102,77 @@ class ONNXRTBertDataset:
           filter (Filter objects, default=None): filter out examples according
                                                  to specific conditions.
     """
-    def __init__(self, model, data_dir, model_name_or_path, max_seq_length=128,\
-                do_lower_case=True, task="mrpc", model_type="bert", dynamic_length=False,\
-                evaluate=True, transform=None, filter=None):
+
+    def __init__(
+        self,
+        model,
+        data_dir,
+        model_name_or_path,
+        max_seq_length=128,
+        do_lower_case=True,
+        task="mrpc",
+        model_type="bert",
+        dynamic_length=False,
+        evaluate=True,
+        transform=None,
+        filter=None,
+    ):
         self.inputs = [inp.name for inp in onnx.load(model).graph.input]
         task = task.lower()
         model_type = model_type.lower()
-        assert task in ["mrpc", "qqp", "qnli", "rte", "sts-b", "cola", \
-            "mnli", "wnli", "sst-2"], "Unsupported task type"
-        assert model_type in ["distilbert", "bert", "mobilebert", "roberta"], "Unsupported \
+        assert task in ["mrpc", "qqp", "qnli", "rte", "sts-b", "cola", "mnli", "wnli", "sst-2"], "Unsupported task type"
+        assert model_type in [
+            "distilbert",
+            "bert",
+            "mobilebert",
+            "roberta",
+        ], "Unsupported \
             model type"
         self.dynamic_length = dynamic_length
         self.model_type = model_type
         self.max_seq_length = max_seq_length
-        tokenizer = transformers.AutoTokenizer.from_pretrained(model_name_or_path,
-            do_lower_case=do_lower_case)
-        self.dataset = load_and_cache_examples(data_dir, model_name_or_path, \
-            max_seq_length, task, model_type, tokenizer, evaluate)
+        tokenizer = transformers.AutoTokenizer.from_pretrained(model_name_or_path, do_lower_case=do_lower_case)
+        self.dataset = load_and_cache_examples(
+            data_dir, model_name_or_path, max_seq_length, task, model_type, tokenizer, evaluate
+        )
 
     def __len__(self):
         return len(self.dataset)
 
     def __getitem__(self, index):
         batch = tuple(t.detach().cpu().numpy() if not isinstance(t, np.ndarray) else t for t in self.dataset[index])
-        return batch[:len(self.inputs)], batch[-1]
+        return batch[: len(self.inputs)], batch[-1]
 
-def load_and_cache_examples(data_dir, model_name_or_path, max_seq_length, task, \
-    model_type, tokenizer, evaluate):
+
+def load_and_cache_examples(data_dir, model_name_or_path, max_seq_length, task, model_type, tokenizer, evaluate):
     processor = transformers.glue_processors[task]()
     output_mode = transformers.glue_output_modes[task]
     # Load data features from cache or dataset file
     if not os.path.exists("./dataset_cached"):
         os.makedirs("./dataset_cached")
-    cached_features_file = os.path.join("./dataset_cached", "cached_{}_{}_{}_{}".format(
-        "dev" if evaluate else "train",
-        list(filter(None, model_name_or_path.split("/"))).pop(),
-        str(max_seq_length),
-        str(task)))
+    cached_features_file = os.path.join(
+        "./dataset_cached",
+        "cached_{}_{}_{}_{}".format(
+            "dev" if evaluate else "train",
+            list(filter(None, model_name_or_path.split("/"))).pop(),
+            str(max_seq_length),
+            str(task),
+        ),
+    )
     if os.path.exists(cached_features_file):
         logger.info("Load features from cached file {}.".format(cached_features_file))
         features = torch.load(cached_features_file)
     else:
         logger.info("Create features from dataset file at {}.".format(data_dir))
         label_list = processor.get_labels()
-        examples = processor.get_dev_examples(data_dir) if evaluate else \
-            processor.get_train_examples(data_dir)
-        features = convert_examples_to_features(examples,
-                                                tokenizer,
-                                                task=task,
-                                                label_list=label_list,
-                                                max_length=max_seq_length,
-                                                output_mode=output_mode,
+        examples = processor.get_dev_examples(data_dir) if evaluate else processor.get_train_examples(data_dir)
+        features = convert_examples_to_features(
+            examples,
+            tokenizer,
+            task=task,
+            label_list=label_list,
+            max_length=max_seq_length,
+            output_mode=output_mode,
         )
         logger.info("Save features into cached file {}.".format(cached_features_file))
         torch.save(features, cached_features_file)
@@ -211,9 +185,9 @@ def load_and_cache_examples(data_dir, model_name_or_path, max_seq_length, task, 
         all_labels = torch.tensor([f.label for f in features], dtype=torch.long)
     elif output_mode == "regression":
         all_labels = torch.tensor([f.label for f in features], dtype=torch.float)
-    dataset = data.TensorDataset(all_input_ids, all_attention_mask, all_token_type_ids, \
-        all_seq_lengths, all_labels)
+    dataset = data.TensorDataset(all_input_ids, all_attention_mask, all_token_type_ids, all_seq_lengths, all_labels)
     return dataset
+
 
 def convert_examples_to_features(
     examples,
@@ -232,7 +206,7 @@ def convert_examples_to_features(
         logger.info("Use label list {} for task {}.".format(label_list, task))
     label_map = {label: i for i, label in enumerate(label_list)}
     features = []
-    for (ex_index, example) in enumerate(examples):
+    for ex_index, example in enumerate(examples):
         inputs = tokenizer.encode_plus(
             example.text_a,
             example.text_b,
@@ -251,19 +225,14 @@ def convert_examples_to_features(
         padding_length = max_length - len(input_ids)
 
         input_ids = input_ids + ([pad_token] * padding_length)
-        attention_mask = attention_mask + \
-            ([0 if mask_padding_with_zero else 1] * padding_length)
+        attention_mask = attention_mask + ([0 if mask_padding_with_zero else 1] * padding_length)
         token_type_ids = token_type_ids + ([pad_token_segment_id] * padding_length)
 
-        assert len(input_ids) == max_length, \
-            "Error with input_ids length {} vs {}".format(
-            len(input_ids), max_length)
-        assert len(attention_mask) == max_length, \
-            "Error with attention_mask length {} vs {}".format(
+        assert len(input_ids) == max_length, "Error with input_ids length {} vs {}".format(len(input_ids), max_length)
+        assert len(attention_mask) == max_length, "Error with attention_mask length {} vs {}".format(
             len(attention_mask), max_length
         )
-        assert len(token_type_ids) == max_length, \
-            "Error with token_type_ids length {} vs {}".format(
+        assert len(token_type_ids) == max_length, "Error with token_type_ids length {} vs {}".format(
             len(token_type_ids), max_length
         )
         if output_mode == "classification":
@@ -282,6 +251,7 @@ def convert_examples_to_features(
         )
         features.append(feats)
     return features
+
 
 @dataclasses.dataclass(frozen=True)
 class InputFeatures:
@@ -306,6 +276,7 @@ class InputFeatures:
     label: Optional[Union[int, float]] = None
     seq_length: Optional[List[int]] = None
 
+
 class ONNXRTGLUE:
     """Computes GLUE score.
 
@@ -315,9 +286,9 @@ class ONNXRTGLUE:
                                   sts-b, cola, mnli, wnli.
 
     """
+
     def __init__(self, task="mrpc"):
-        assert task in ["mrpc", "qqp", "qnli", "rte", "sts-b", "cola", \
-            "mnli", "wnli", "sst-2"], "Unsupported task type"
+        assert task in ["mrpc", "qqp", "qnli", "rte", "sts-b", "cola", "mnli", "wnli", "sst-2"], "Unsupported task type"
         self.pred_list = None
         self.label_list = None
         self.task = task
@@ -330,7 +301,7 @@ class ONNXRTGLUE:
             "qnli": "acc",
             "rte": "acc",
             "wnli": "acc",
-            "sst-2": "acc"
+            "sst-2": "acc",
         }
 
     def update(self, preds, labels):
@@ -358,21 +329,23 @@ class ONNXRTGLUE:
             processed_preds = np.argmax(self.pred_list, axis=1)
         elif output_mode == "regression":
             processed_preds = np.squeeze(self.pred_list)
-        result = transformers.glue_compute_metrics(\
-            self.task, processed_preds, self.label_list)
+        result = transformers.glue_compute_metrics(self.task, processed_preds, self.label_list)
         return result[self.return_key[self.task]]
+
 
 class DataReader(data_reader.CalibrationDataReader):
     def __init__(self, model_path, dynamic_length=False, batch_size=1, calibration_sampling_size=8):
         self.encoded_list = []
-        self.batch_size=batch_size
-        dataset = ONNXRTBertDataset(args.model_path,
+        self.batch_size = batch_size
+        dataset = ONNXRTBertDataset(
+            args.model_path,
             data_dir=args.data_path,
             model_name_or_path=args.model_name_or_path,
             max_seq_length=args.max_seq_length,
             task=args.task,
             model_type=args.model_type,
-            dynamic_length=args.dynamic_length)
+            dynamic_length=args.dynamic_length,
+        )
         dataloader = data.DataLoader(
             dataset,
             sampler=data.SequentialSampler(dataset),
@@ -381,7 +354,7 @@ class DataReader(data_reader.CalibrationDataReader):
         )
         model = onnx.load(model_path, load_external_data=False)
         inputs_names = [input.name for input in model.graph.input]
-        self.batch_size=batch_size
+        self.batch_size = batch_size
 
         for idx, batch in enumerate(dataloader):
             if idx + 1 > calibration_sampling_size:
@@ -403,17 +376,20 @@ class DataReader(data_reader.CalibrationDataReader):
     def rewind(self):
         self.iter_next = iter(self.encoded_list)
 
+
 if __name__ == "__main__":
     # set config for npu test
     provider = "DmlExecutionProvider" if args.device == "npu" else "CPUExecutionProvider"
 
-    dataset = ONNXRTBertDataset(args.model_path,
+    dataset = ONNXRTBertDataset(
+        args.model_path,
         data_dir=args.data_path,
         model_name_or_path=args.model_name_or_path,
         max_seq_length=args.max_seq_length,
         task=args.task,
         model_type=args.model_type,
-        dynamic_length=args.dynamic_length)
+        dynamic_length=args.dynamic_length,
+    )
     dataloader = data.DataLoader(
         dataset,
         sampler=data.SequentialSampler(dataset),
@@ -428,11 +404,10 @@ if __name__ == "__main__":
         len_inputs = len(session.get_inputs())
         inputs_names = [session.get_inputs()[i].name for i in range(len_inputs)]
 
-        batch_seq_length = args.max_seq_length if not args.dynamic_length else torch.max(batch[-2], 0)[0].item()
-
         for idx, batch in enumerate(dataloader):
             label = batch[-1]
             batch = tuple(t.detach().cpu().numpy() if not isinstance(t, np.ndarray) else t for t in batch[0])
+            batch_seq_length = args.max_seq_length if not args.dynamic_length else torch.max(batch[-2], 0)[0].item()
             inputs = [
                 batch[0][:, :batch_seq_length],
                 batch[1][:, :batch_seq_length],
@@ -446,24 +421,25 @@ if __name__ == "__main__":
 
     if args.benchmark:
         model = onnx.load(args.model_path)
-        if args.mode == 'performance':
+        if args.mode == "performance":
             total_time = 0.0
             num_iter = 100
             num_warmup = 10
 
-            sess_options = ort.SessionOptions()
+            sess_options = onnxruntime.SessionOptions()
             sess_options.intra_op_num_threads = args.intra_op_num_threads
-            session = onnxruntime.InferenceSession(model.SerializeToString(),
-                                                   sess_options,
-                                                   providers=onnxruntime.get_available_providers())
+            session = onnxruntime.InferenceSession(
+                model.SerializeToString(), sess_options, providers=onnxruntime.get_available_providers()
+            )
             ort_inputs = {}
             len_inputs = len(session.get_inputs())
             inputs_names = [session.get_inputs()[i].name for i in range(len_inputs)]
-            
+
             for idx, batch in enumerate(dataloader):
                 if idx + 1 > num_iter:
                     break
                 batch = tuple(t.detach().cpu().numpy() if not isinstance(t, np.ndarray) else t for t in batch)
+                batch_seq_length = args.max_seq_length if not args.dynamic_length else torch.max(batch[-2], 0)[0].item()
                 inputs = [
                     batch[0][:, :batch_seq_length],
                     batch[1][:, :batch_seq_length],
@@ -481,7 +457,7 @@ if __name__ == "__main__":
             print(args)
             throughput = (num_iter - num_warmup) / total_time
             print("Throughput: {} samples/s".format(throughput))
-        elif args.mode == 'accuracy':
+        elif args.mode == "accuracy":
             acc_result = eval_func(model)
             print("Batch size = %d" % args.batch_size)
             print("Accuracy: %.5f" % acc_result)
@@ -493,11 +469,8 @@ if __name__ == "__main__":
             opt_options.enable_embed_layer_norm = False
 
             model_optimizer = optimizer.optimize_model(
-                args.model_path,
-                "bert",
-                num_heads=12,
-                hidden_size=768,
-                optimization_options=opt_options)
+                args.model_path, "bert", num_heads=12, hidden_size=768, optimization_options=opt_options
+            )
             model = model_optimizer.model
 
             # check the optimized model is valid
@@ -507,14 +480,17 @@ if __name__ == "__main__":
                 model = pathlib.Path(tmp_dir).joinpath("opt.onnx").as_posix()
             except Exception as e:
                 logger.warning("Optimized model is invalid: {}. ".format(e))
-                logger.warning("Model optimizer will be skipped. " \
-                               "Try to upgrade onnxruntime to avoid this error")
+                logger.warning("Model optimizer will be skipped. " "Try to upgrade onnxruntime to avoid this error")
                 model = args.model_path
 
             calibration_data_reader = DataReader(args.model_path, calibration_sampling_size=8)
             custom_tune_config = tuning.TuningConfig(
                 config_set=config.StaticQuantConfig.get_config_set_for_tuning(
-                    quant_format=quantization.QuantFormat.QOperator if args.quant_format == "QOperator" else quantization.QuantFormat.QDQ,
+                    quant_format=(
+                        quantization.QuantFormat.QOperator
+                        if args.quant_format == "QOperator"
+                        else quantization.QuantFormat.QDQ
+                    ),
                     calibration_sampling_size=8,
                     extra_options={"optypes_to_exclude_output_quant": ["MatMul", "Gemm", "Attention", "FusedGemm"]},
                     execution_provider=provider,

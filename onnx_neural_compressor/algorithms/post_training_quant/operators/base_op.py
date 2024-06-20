@@ -13,8 +13,9 @@
 # limitations under the License.
 """Base Operator."""
 
-from onnx_neural_compressor import constants
 from onnxruntime import quantization
+
+from onnx_neural_compressor import constants
 
 OPERATORS = {
     "dynamic_quant": {},

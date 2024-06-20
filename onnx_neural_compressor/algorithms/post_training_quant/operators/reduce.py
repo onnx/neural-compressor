@@ -13,14 +13,14 @@
 # limitations under the License.
 """Reduce Operator."""
 
-from onnx_neural_compressor.algorithms.post_training_quant.operators import base_op
+from onnx_neural_compressor import constants, utility
 from onnx_neural_compressor.algorithms import utility as quant_utils
-from onnx_neural_compressor import constants
-from onnx_neural_compressor import utility
+from onnx_neural_compressor.algorithms.post_training_quant.operators import base_op
 
 
 @base_op.op_registry(
-    op_types="ReduceMean, ReduceLogSum, ReduceLogSumExp, " "ReduceL1, ReduceL2, ReduceProd, ReduceSum, ReduceSumSquare" , mode=[constants.STATIC_QUANT]
+    op_types="ReduceMean, ReduceLogSum, ReduceLogSumExp, " "ReduceL1, ReduceL2, ReduceProd, ReduceSum, ReduceSumSquare",
+    mode=[constants.STATIC_QUANT],
 )
 class ReduceOperator(base_op.Operator):
     """Reduce Operator."""

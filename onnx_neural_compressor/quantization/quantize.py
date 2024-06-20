@@ -13,13 +13,13 @@
 # limitations under the License.
 
 import pathlib
+import tempfile
 from typing import Union
 
 import onnx
+import onnxruntime as ort
 from onnxruntime.quantization.quantize import QuantConfig
 
-import onnxruntime as ort
-import tempfile
 from onnx_neural_compressor import config
 from onnx_neural_compressor.quantization import algorithm_entry as algos
 
@@ -35,7 +35,7 @@ def quantize(
         if optimization_level != ort.GraphOptimizationLevel.ORT_DISABLE_ALL:
             sess_options = ort.SessionOptions()
             sess_options.graph_optimization_level = optimization_level
-            sess_options.optimized_model_filepath =  pathlib.Path(tmp_dir).joinpath("opt.onnx").as_posix()
+            sess_options.optimized_model_filepath = pathlib.Path(tmp_dir).joinpath("opt.onnx").as_posix()
             session = ort.InferenceSession(model_input, sess_options)
             del session
             model_input = sess_options.optimized_model_filepath
@@ -50,8 +50,8 @@ def quantize(
                     model_input, quant_config, quant_config.calibration_data_reader, model_output=model_output
                 )
         elif isinstance(quant_config, config.DynamicQuantConfig):
-            algos.dynamic_quantize_entry(
-                model_input, quant_config, model_output=model_output
-                )
+            algos.dynamic_quantize_entry(model_input, quant_config, model_output=model_output)
         else:
-            raise TypeError("Invalid quantization config type, it must be either StaticQuantConfig or DynamicQuantConfig.")
+            raise TypeError(
+                "Invalid quantization config type, it must be either StaticQuantConfig or DynamicQuantConfig."
+            )

@@ -5,9 +5,9 @@ import unittest
 
 import numpy as np
 import onnx
+
 from onnx_neural_compressor import data_reader
-from onnx_neural_compressor.algorithms.post_training_quant import calibrate
-from onnx_neural_compressor.algorithms.post_training_quant import calibrator
+from onnx_neural_compressor.algorithms.post_training_quant import calibrate, calibrator
 
 
 def generate_input_initializer(tensor_shape, tensor_dtype, input_name):
@@ -16,18 +16,31 @@ def generate_input_initializer(tensor_shape, tensor_dtype, input_name):
     init = onnx.numpy_helper.from_array(tensor, input_name)
     return init
 
+
 class DataReader(data_reader.CalibrationDataReader):
 
     def __init__(self):
         self.data_list = []
         self.data_list.append(
-            {"input0": np.array([[[[0.45, 0.60, 0.75]], [[0.25, 0.50, 0.75]], [[0.90, 0.70, 0.50]]]]).astype(np.float32)}
+            {
+                "input0": np.array([[[[0.45, 0.60, 0.75]], [[0.25, 0.50, 0.75]], [[0.90, 0.70, 0.50]]]]).astype(
+                    np.float32
+                )
+            }
         )
         self.data_list.append(
-            {"input0": np.array([[[[0.62, 0.94, 0.38]], [[0.70, 0.13, 0.07]], [[0.89, 0.75, 0.84]]]]).astype(np.float32)}
+            {
+                "input0": np.array([[[[0.62, 0.94, 0.38]], [[0.70, 0.13, 0.07]], [[0.89, 0.75, 0.84]]]]).astype(
+                    np.float32
+                )
+            }
         )
         self.data_list.append(
-            {"input0": np.array([[[[0.64, 0.24, 0.97]], [[0.82, 0.58, 0.27]], [[0.019, 0.34, 0.02]]]]).astype(np.float32)}
+            {
+                "input0": np.array([[[[0.64, 0.24, 0.97]], [[0.82, 0.58, 0.27]], [[0.019, 0.34, 0.02]]]]).astype(
+                    np.float32
+                )
+            }
         )
         self.enum_data = None
 

@@ -20,6 +20,7 @@
 """Calibrator for onnx models."""
 
 import copy
+
 import numpy as np
 from scipy import stats
 

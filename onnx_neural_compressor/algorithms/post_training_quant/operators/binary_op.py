@@ -15,10 +15,9 @@
 
 import onnx
 
-from onnx_neural_compressor.algorithms.post_training_quant.operators import base_op
+from onnx_neural_compressor import constants, utility
 from onnx_neural_compressor.algorithms import utility as quant_utils
-from onnx_neural_compressor import constants
-from onnx_neural_compressor import utility
+from onnx_neural_compressor.algorithms.post_training_quant.operators import base_op
 
 
 @base_op.op_registry(op_types="Add, Mul", mode=[constants.STATIC_QUANT])
@@ -139,7 +138,10 @@ class BinaryDirect8BitOperator(base_op.Operator):
                     self.quantizer.model.replace_input_of_all_nodes(child.output[0], node.output[0] + "_quantized")
             node.output[0] = node.output[0] + "_quantized"
 
-@base_op.op_registry(op_types="Sum, Sub, Div, Pow, Equal, Greater, GreaterOrEqual, Less, LessOrEqual", mode=[constants.STATIC_QUANT])
+
+@base_op.op_registry(
+    op_types="Sum, Sub, Div, Pow, Equal, Greater, GreaterOrEqual, Less, LessOrEqual", mode=[constants.STATIC_QUANT]
+)
 class Float16BinaryOperator(base_op.Operator):
     """Float16 Binary operator."""
 

@@ -14,16 +14,16 @@ function init_params {
   do
     case $var in
       --input_model=*)
-          input_model=$(echo $var |cut -f2 -d=)
+          input_model=$(echo "$var" |cut -f2 -d=)
       ;;
       --mode=*)
-          mode=$(echo $var |cut -f2 -d=)
+          mode=$(echo "$var" |cut -f2 -d=)
       ;;
       --dataset_location=*)
-          dataset_location=$(echo $var |cut -f2 -d=)
+          dataset_location=$(echo "$var" |cut -f2 -d=)
       ;;
       --batch_size=*)
-          batch_size=$(echo $var |cut -f2 -d=)
+          batch_size=$(echo "$var" |cut -f2 -d=)
       ;;
     esac
   done
@@ -43,16 +43,15 @@ function run_benchmark {
 
     model_name_or_path="bert-base-uncased"
     task_name="mrpc"
-    model_type="bert"
 
     python main.py \
-           --model_path ${input_model} \
-           --model_name_or_path ${model_name_or_path} \
-           --data_path ${dataset_location} \
-           --task ${task_name} \
-           --batch_size ${batch_size} \
-           --mode ${mode} \
-           --dynamic_length ${dynamic_length} \
+           --model_path "${input_model}" \
+           --model_name_or_path "${model_name_or_path}" \
+           --data_path "${dataset_location}" \
+           --task "${task_name}" \
+           --batch_size "${batch_size}" \
+           --mode "${mode}" \
+           --dynamic_length "${dynamic_length}" \
            --benchmark
             
 }

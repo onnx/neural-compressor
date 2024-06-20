@@ -21,10 +21,10 @@ import traceback
 import uuid
 
 import onnx
-
-from onnx_neural_compressor import config, data_reader, logger, utility
 import onnxruntime as ort
 from onnx import external_data_helper
+
+from onnx_neural_compressor import config, data_reader, logger, utility
 
 from typing import Any, Callable, Dict, Generator, Iterator, List, Optional, Sized, Tuple, Union  # isort: skip
 
@@ -103,7 +103,9 @@ class Evaluator:
             {
                 self.EVAL_FN: user_eval_fn_pair[self.EVAL_FN],
                 self.WEIGHT: user_eval_fn_pair.get(self.WEIGHT, 1.0),
-                self.FN_NAME: user_eval_fn_pair.get(self.FN_NAME, getattr(user_eval_fn_pair[self.EVAL_FN], "__name__", "custom_func")),
+                self.FN_NAME: user_eval_fn_pair.get(
+                    self.FN_NAME, getattr(user_eval_fn_pair[self.EVAL_FN], "__name__", "custom_func")
+                ),
             }
             for user_eval_fn_pair in user_eval_fns
         ]
@@ -252,6 +254,7 @@ class ConfigLoader:
             self.verify_config_list.append(new_config)
             yield new_config
 
+
 class TuningConfig:
     """Config for auto tuning pipeline.
 
@@ -367,6 +370,7 @@ class TuningMonitor:
             logger.info("quant config: {}".format(config))
         else:
             logger.info("quant config difference: {}".format(config.get_diff_dict(self.tuning_history[0].quant_config)))
+
 
 class TuningLogger:
     """A unified logger for the tuning/quantization process.
@@ -540,9 +544,7 @@ def autotune(
                 pathlib.Path(model_input).parent.joinpath("config.json").as_posix(),
                 pathlib.Path(tmp_folder.name).joinpath("config.json").as_posix(),
             )
-        eval_result: float = eval_func_wrapper.evaluate(
-            pathlib.Path(tmp_folder.name).joinpath("eval.onnx").as_posix()
-        )
+        eval_result: float = eval_func_wrapper.evaluate(pathlib.Path(tmp_folder.name).joinpath("eval.onnx").as_posix())
         tuning_logger.evaluation_end()
         logger.info("Evaluation result: %.4f", eval_result)
         tuning_monitor.add_trial_result(trial_index, eval_result, quant_config)
@@ -554,8 +556,10 @@ def autotune(
 
     tuning_logger.tuning_end()
     if best_quant_model is None:
-        logger.info("Don't find the quantized model which meets accuracy requirement. "
-            "Please try other configs or adjust tolerable_loss.")
+        logger.info(
+            "Don't find the quantized model which meets accuracy requirement. "
+            "Please try other configs or adjust tolerable_loss."
+        )
         exit(0)
 
     tmp_folder.cleanup()

@@ -17,17 +17,17 @@
 
 import enum
 import os
+import pathlib
 import re
 import struct
 import sys
 from importlib import util
 
 import numpy as np
+from onnxruntime.quantization import onnx_model
 from packaging import version
 
-from onnx_neural_compressor import constants
-from onnx_neural_compressor import utility
-from onnxruntime.quantization import onnx_model
+from onnx_neural_compressor import constants, utility, logger
 
 if sys.version_info < (3, 11) and util.find_spec("onnxruntime_extensions"):  # pragma: no cover
     import onnxruntime_extensions
@@ -80,6 +80,7 @@ ONNX_INT_TYPE_REDUCED_RANGE = {
     onnx.TensorProto.INT8: (-64, 64),
 }
 
+
 def check_model_with_infer_shapes(model):
     """Check if the model has been shape inferred."""
     if isinstance(model, (pathlib.Path, str)):
@@ -89,6 +90,7 @@ def check_model_with_infer_shapes(model):
     if len(model.graph.value_info) > 0:
         return True
     return False
+
 
 def find_by_name(name, item_list):
     """Helper function to find item by name in a list."""
@@ -102,8 +104,10 @@ def find_by_name(name, item_list):
     else:
         return None
 
+
 def is_quantizable_type(data_type):
     return data_type in [onnx.TensorProto.FLOAT, onnx.TensorProto.FLOAT16, onnx.TensorProto.BFLOAT16]
+
 
 def get_qmin_qmax_for_qType(qType, reduce_range=False, sym=False):  # noqa: N802
     """Get qmin, qmax for qType."""
@@ -123,6 +127,7 @@ def get_qmin_qmax_for_qType(qType, reduce_range=False, sym=False):  # noqa: N802
         raise ValueError(f"Unexpected data type {qType} requested. Only INT8 and UINT8 are supported.")
 
     return qrange
+
 
 def dtype_to_name(dtype_mapping, dtype):
     """Map data type and its string representation."""
@@ -439,21 +444,24 @@ def calculate_scale_zp(rmin, rmax, quantize_range, qType, sym):
     if isinstance(rmax, np.ndarray):
         if sym:
             max_range = np.maximum(abs(rmin), abs(rmax))
-            rmin = - max_range
+            rmin = -max_range
             rmax = max_range
         scale = (rmax - rmin) / (qmax - qmin)
         scale[scale < np.finfo(rmax.dtype).tiny] = 1
-        zero_point = np.multiply(np.ones(rmax.shape), np.round((qmax + qmin) / 2.0)).astype(dtype) if sym else \
-            np.round(qmin - rmin / scale).astype(dtype)
+        zero_point = (
+            np.multiply(np.ones(rmax.shape), np.round((qmax + qmin) / 2.0)).astype(dtype)
+            if sym
+            else np.round(qmin - rmin / scale).astype(dtype)
+        )
     else:
         if sym:
             max_range = max(abs(rmin), abs(rmax))
             scale = (float(max_range) * 2) / (qmax - qmin) if max_range > 0 else 1
         else:
             scale = (float(rmax) - float(rmin)) / (qmax - qmin) if rmin != rmax else 1
-        zero_point = np.round((qmax + qmin) / 2.0).astype(dtype) if sym else \
-            np.round(qmin - rmin / scale).astype(dtype)
+        zero_point = np.round((qmax + qmin) / 2.0).astype(dtype) if sym else np.round(qmin - rmin / scale).astype(dtype)
     return np.float32(scale), zero_point
+
 
 def quantize_data(data, quantize_range, qType, sym):
     """Quantize data.
@@ -492,6 +500,7 @@ def get_node_original_name(node) -> str:
     else:
         # For unquantized nodes
         return node_name
+
 
 class QuantType(enum.Enum):  # pragma: no cover
     """Represent QuantType value."""
@@ -758,6 +767,7 @@ def infer_shapes(in_mp, int_max=2**31 - 1, auto_merge=False, guess_output_rank=F
         raise Exception("Incomplete symbolic shape inference")
     return symbolic_shape_inference.out_mp_
 
+
 def dump_model_op_stats(model, quantize_config, fp32_op_list):
     qdq_ops = ["QuantizeLinear", "DequantizeLinear", "DynamicQuantizeLinear"]
     res = {}
@@ -799,6 +809,7 @@ def dump_model_op_stats(model, quantize_config, fp32_op_list):
     ]
 
     utility.Statistics(output_data, header="Quantization Statistics", field_names=field_names).print_stat()
+
 
 def dump_woq_stats(model, quantize_config, fp32_op_list):
     res = {}

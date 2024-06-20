@@ -15,10 +15,9 @@
 
 import onnx
 
-from onnx_neural_compressor.algorithms.post_training_quant.operators import base_op
+from onnx_neural_compressor import constants, utility
 from onnx_neural_compressor.algorithms import utility as quant_utils
-from onnx_neural_compressor import constants
-from onnx_neural_compressor import utility
+from onnx_neural_compressor.algorithms.post_training_quant.operators import base_op
 
 
 @base_op.op_registry(op_types="LeakyRelu, Sigmoid", mode=[constants.STATIC_QUANT])
@@ -101,7 +100,10 @@ class RemovableActivationOperator(base_op.Operator):
             self.quantizer.model.replace_input_of_all_nodes(node.output[0], node.input[0])
             self.quantizer.remove_nodes.append(node)
 
-@base_op.op_registry(op_types="Softmax, BiasGelu, Elu, Exp, FastGelu, Gelu, Softplus, Tanh", mode=[constants.STATIC_QUANT])
+
+@base_op.op_registry(
+    op_types="Softmax, BiasGelu, Elu, Exp, FastGelu, Gelu, Softplus, Tanh", mode=[constants.STATIC_QUANT]
+)
 class Float16ActivationOperator(base_op.Operator):
     """Float16 Activation operator."""
 

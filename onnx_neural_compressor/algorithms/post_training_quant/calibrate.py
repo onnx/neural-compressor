@@ -30,10 +30,11 @@ import onnx
 import onnxruntime
 from onnxruntime import quantization as ort_quant
 from packaging import version
-from onnx_neural_compressor.algorithms.post_training_quant import calibrator
+
+from onnx_neural_compressor import logger, onnx_model
 from onnx_neural_compressor.algorithms import utility as quant_utils
-from onnx_neural_compressor import onnx_model
-from onnx_neural_compressor import logger
+from onnx_neural_compressor.algorithms.post_training_quant import calibrator
+
 if sys.version_info < (3, 11) and util.find_spec("onnxruntime_extensions"):
     import onnxruntime_extensions
 
@@ -68,7 +69,11 @@ class ONNXRTAugment:
             execution_provider (list, optional): execution provider for onnxruntime. Defaults to 'CPUExecutionProvider'.
             reduce_range (bool, optional): use 7 bit or not. Defaults to False.
         """
-        self.model_wrapper = model_wrapper if isinstance(model_wrapper, onnx_model.ONNXModel) else onnx_model.ONNXModel(model_wrapper, load_external_data=True)
+        self.model_wrapper = (
+            model_wrapper
+            if isinstance(model_wrapper, onnx_model.ONNXModel)
+            else onnx_model.ONNXModel(model_wrapper, load_external_data=True)
+        )
         self.model = self.model_wrapper.model
         ai_onnx_domain = [opset for opset in self.model.opset_import if not opset.domain or opset.domain == "ai.onnx"]
         self.opset_version = ai_onnx_domain[0].version
@@ -224,11 +229,17 @@ class ONNXRTAugment:
         if sys.version_info < (3, 11) and util.find_spec("onnxruntime_extensions"):
             so.register_custom_ops_library(onnxruntime_extensions.get_library_path())
 
-        execution_provider = self.execution_provider if self.execution_provider != "TensorrtExecutionProvider" else "CUDAExecutionProvider"
+        execution_provider = (
+            self.execution_provider
+            if self.execution_provider != "TensorrtExecutionProvider"
+            else "CUDAExecutionProvider"
+        )
         session = (
             onnxruntime.InferenceSession(self.augmented_model.SerializeToString(), so, providers=[execution_provider])
             if not self.model_wrapper.is_large_model
-            else onnxruntime.InferenceSession(self.model_wrapper.model_path + "_augment.onnx", so, providers=[execution_provider])
+            else onnxruntime.InferenceSession(
+                self.model_wrapper.model_path + "_augment.onnx", so, providers=[execution_provider]
+            )
         )
 
         len_inputs = len(session.get_inputs())
@@ -268,7 +279,9 @@ class ONNXRTAugment:
                     node_name = name_to_node[node_output_names[output_idx]]
                     if node_output_names[output_idx] not in name_to_calibrator:
                         calib_method = (
-                            q_config[node_name]["calibrate_method"].name if q_config and node_name in q_config else ort_quant.CalibrationMethod.MinMax.name
+                            q_config[node_name]["calibrate_method"].name
+                            if q_config and node_name in q_config
+                            else ort_quant.CalibrationMethod.MinMax.name
                         )
                         assert calib_method in calibrator.CALIBRATOR, "Calibration method {} is not registered.".format(
                             calib_method
@@ -283,17 +296,12 @@ class ONNXRTAugment:
                     # per iteration in the future.
                     if _calibrator.method_name == ort_quant.CalibrationMethod.MinMax.name:
                         _calibrator.collect(output)
-                        activation_tensors_calib_range[node_output_names[output_idx]] = [
-                            list(_calibrator.calib_range)
-                        ]
+                        activation_tensors_calib_range[node_output_names[output_idx]] = [list(_calibrator.calib_range)]
                         name_to_calibrator[node_output_names[output_idx]] = _calibrator
                     else:
-                        intermediate_tensor.setdefault((node_output_names[output_idx], node_name), []).append(
-                            output
-                        )
+                        intermediate_tensor.setdefault((node_output_names[output_idx], node_name), []).append(output)
                 elif q_config is None:
                     activation_tensors_calib_range.setdefault(node_output_names[output_idx], []).append(output)
-
 
         idx = 0
         while True:
@@ -314,10 +322,12 @@ class ONNXRTAugment:
         for (output_name, node_name), datas in merged_dict.items():
             if any([data is None for data in datas]):
                 continue
-            if any([data.dtype in [bool] for data in datas]): # output type of some ops is bool, skip
+            if any([data.dtype in [bool] for data in datas]):  # output type of some ops is bool, skip
                 continue
             calib_method = (
-                q_config[node_name]["calibrate_method"].name if q_config and node_name in q_config else ort_quant.CalibrationMethod.MinMax.name
+                q_config[node_name]["calibrate_method"].name
+                if q_config and node_name in q_config
+                else ort_quant.CalibrationMethod.MinMax.name
             )
             _calibrator = calibrator.CALIBRATOR[calib_method]()
             _calibrator.collect(datas)
@@ -386,7 +396,9 @@ class ONNXRTAugment:
                     os.path.dirname(self.model_wrapper.model_path) if self.model_wrapper.model_path is not None else ""
                 ),
             )
-            _calibrator = calibrator.CALIBRATOR[ort_quant.CalibrationMethod.MinMax.name]()  # use minmax method to calibrate initializer tensors
+            _calibrator = calibrator.CALIBRATOR[
+                ort_quant.CalibrationMethod.MinMax.name
+            ]()  # use minmax method to calibrate initializer tensors
             if initializer_tensor.flatten().size > 0:
                 _calibrator.collect(initializer_tensor)
                 weight_tensors_calib_range[initializer_tensor_name] = [list(_calibrator.calib_range)]
@@ -560,16 +572,19 @@ class ONNXRTAugment:
             qType = 2  # uint8
 
             # input and output tensor follow activation_type and activation_sym
-            if tensor_name in input_name_to_nodes and \
-                any([i.name in q_config for i in input_name_to_nodes[tensor_name]]):
+            if tensor_name in input_name_to_nodes and any(
+                [i.name in q_config for i in input_name_to_nodes[tensor_name]]
+            ):
                 for child in input_name_to_nodes[tensor_name]:
                     if child.name in q_config and q_config[child.name] not in ["fp32", "fp16", "bf16"]:
                         sym = q_config[child.name]["activation_sym"]
                         qType = q_config[child.name]["activation_type"]
                         break
-            elif tensor_name in output_name_to_node and \
-                output_name_to_node[tensor_name].name in q_config and \
-                q_config[output_name_to_node[tensor_name].name] not in ["fp32", "fp16", "bf16"]:
+            elif (
+                tensor_name in output_name_to_node
+                and output_name_to_node[tensor_name].name in q_config
+                and q_config[output_name_to_node[tensor_name].name] not in ["fp32", "fp16", "bf16"]
+            ):
                 sym = q_config[output_name_to_node[tensor_name].name]["activation_sym"]
                 qType = q_config[output_name_to_node[tensor_name].name]["activation_type"]
             if self.execution_provider in ["TensorrtExecutionProvider"]:
