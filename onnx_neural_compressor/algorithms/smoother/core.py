@@ -20,8 +20,8 @@ import pathlib
 import numpy as np
 import onnx
 import onnxruntime as ort
-
 from onnx_neural_compressor import data_reader, logger, onnx_model, utility
+from onnx_neural_compressor.algorithms import utility as quant_utils
 from onnx_neural_compressor.algorithms.smoother import calibrator
 
 from typing import List, Union  # isort: skip
@@ -73,16 +73,19 @@ def _make_sub_graph(node, inits, input_data, output_data, opset, ir_version):
     return model
 
 
-def _quant_dequant_data(data, qType=3, scheme="sym"):
+def _quant_dequant_data(data, qType=3, sym=True):
     """Quantize and then dequantize data.
 
     Args:
         data (numpy.ndarray): target data
         qType (int): data type
-        scheme (str): sym or asym quantization
+        sym (bool): sym or asym quantization
     """
-    rmin, rmax, zero_point, scale, quantized_data = utility.quantize_data(
-        data.flatten().tolist(), utility.get_qrange_for_qType(qType, False), qType, scheme
+    rmin, rmax, zero_point, scale, quantized_data = quant_utils.quantize_data(
+        data.flatten().tolist(),
+        quant_utils.get_qmin_qmax_for_qType(qType, False, sym),
+        qType,
+        sym,
     )
     return ((quantized_data - zero_point) * scale).astype(data.dtype).reshape(data.shape)
 
@@ -102,7 +105,7 @@ class Smoother:
         self,
         model: Union[onnx.ModelProto, onnx_model.ONNXModel, pathlib.Path, str],
         dataloader: data_reader.CalibrationDataReader,
-        providers: List[str] = ["CPUExecutionProvider"],
+        execution_provider: str = "CPUExecutionProvider",
     ):
         """Initialize the attributes of class."""
         self.model = (
@@ -112,7 +115,7 @@ class Smoother:
         self.value_infos.update({ot.name: ot for ot in self.model.model.graph.output})
         self.value_infos.update({it.name: it for it in self.model.model.graph.input})
         self.dataloader = dataloader
-        self.providers = providers
+        self.providers = [execution_provider]
         self.tensor_scales_info = {}
         self.new_added_mul_nodes = []
         self.new_added_value_info = []
@@ -204,7 +207,7 @@ class Smoother:
             self.model,
             self.dataloader,
             iterations=list(range(0, iterations)),
-            backend=self.providers,
+            execution_provider=self.providers,
         )
 
         self.max_vals_per_channel, self.shape_info, self.tensors_to_node = sq_calibrator.calib_smooth(
@@ -468,7 +471,7 @@ class Smoother:
                     self._adjust_weights(scale)
                     input_scale = (
                         self._reshape_scale_for_input(tensor_name, key)
-                        if not (node.op_type == "Gemm" and utility.is_B_transposed(node))
+                        if not (node.op_type == "Gemm" and quant_utils.is_B_transposed(node))
                         else self.tensor_scales_info[key]
                     )
                     loss = self._get_output_loss(node_info[0], input_scale, calib_iter)
@@ -505,7 +508,6 @@ class Smoother:
         Returns:
             the smooth scales for weights, currently one input tensor only have one scale
         """
-        logger.info("Start smooth scales collection.")
         scales = {}
         for tensor, nodes in self.tensors_to_node.items():
             # if scales_per_op the key of scales is the node name, otherwise the activation of node
@@ -519,7 +521,7 @@ class Smoother:
                         base_dir=os.path.dirname(self.model.model_path) if self.model.model_path is not None else "",
                     )
                     if (len(weight.shape) == 4 and weight.shape[1] != 1) or (
-                        node.op_type == "Gemm" and utility.is_B_transposed(node)
+                        node.op_type == "Gemm" and quant_utils.is_B_transposed(node)
                     ):
                         weight = np.moveaxis(weight, 0, 1)
                     specific_alpha = alpha[node_info[0]] if isinstance(alpha, dict) else alpha
@@ -535,7 +537,7 @@ class Smoother:
                         base_dir=os.path.dirname(self.model.model_path) if self.model.model_path is not None else "",
                     )
                     if (len(weight.shape) == 4 and weight.shape[1] != 1) or (
-                        node.op_type == "Gemm" and utility.is_B_transposed(node)
+                        node.op_type == "Gemm" and quant_utils.is_B_transposed(node)
                     ):
                         weight = np.moveaxis(weight, 0, 1)
                     weight = weight.reshape(weight.shape[0], -1)
@@ -588,7 +590,7 @@ class Smoother:
             name = key + "_" + "smooth_scale"
             scale_tensor = onnx.helper.make_tensor(
                 name=key + "_" + "smooth_scale",
-                data_type=onnx.onnx_pb.TensorProto.FLOAT,
+                data_type=onnx.TensorProto.FLOAT,
                 dims=scale_factor.shape,
                 vals=scale_factor.flatten().tolist(),
             )
@@ -632,7 +634,7 @@ class Smoother:
                 if len(weight.shape) == 2:
                     scale = (
                         np.expand_dims(scales[key], axis=0)
-                        if node.op_type == "Gemm" and utility.is_B_transposed(node)
+                        if node.op_type == "Gemm" and quant_utils.is_B_transposed(node)
                         else np.expand_dims(scales[key], axis=-1)
                     )
                     new_weight = weight * scale

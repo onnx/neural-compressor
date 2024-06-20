@@ -299,10 +299,21 @@ class ONNXModel(onnx_model.ONNXModel):
                 if node.op_type not in black_optype:
                     ONNXModel.replace_node_output(node, old_output_name, new_output_name)
 
+    def remove_duplicate_nodes(self):
+        """remove duplicate nodes"""
+        new_nodes = []
+        for node in self.nodes():
+            if node not in new_nodes:
+                new_nodes.append(node)
+        self.model.graph.ClearField("node")
+        self.model.graph.node.extend(new_nodes)
+        self.update()
+
     def remove_unused_nodes(self):
         """Remove unused nodes."""
         unused_nodes = []
         nodes = self.nodes()
+
         if len(self._input_name_to_nodes) == 0:
             self._input_name_to_nodes = self.input_name_to_nodes()
         if len(self._output_name_to_node) == 0:
@@ -314,31 +325,22 @@ class ONNXModel(onnx_model.ONNXModel):
                 and node.output[0] not in self._input_name_to_nodes
             ):
                 unused_nodes.append(node)
-            elif (
-                node.op_type == "QuantizeLinear"
-                and len(self.get_children(node)) == 1
-                and self.get_children(node)[0].op_type == "DequantizeLinear"
-                and node.input[0] not in self._output_name_to_node
-                and self.get_children(node)[0].output[0] not in self._input_name_to_nodes
-            ):
-                unused_nodes.append(node)
-                unused_nodes.extend(self.get_children(node))
-            else:
-                # remove the node if it does not serve as the input or output of any other nodes
-                unused = True
-                for output in node.output:
-                    if output in self._input_name_to_nodes or output in self.output():
-                        unused = False
-                        break
-                for input in node.input:
-                    if self.get_initializer(input) is not None:
-                        continue
-                    elif input in self._output_name_to_node or input in self.input():
-                        unused = False
-                        break
-                if unused:
-                    unused_nodes.append(node)
+
         self.remove_nodes(unused_nodes)
+
+        unvalid_nodes = [
+            i
+            for i in self.model.graph.node
+            if all(out not in self._input_name_to_nodes and not self.is_graph_output(out) for out in i.output)
+        ]
+        while len(unvalid_nodes) > 0:
+            self.remove_nodes(unvalid_nodes)
+            self._input_name_to_nodes = self.input_name_to_nodes()
+            unvalid_nodes = [
+                i
+                for i in self.model.graph.node
+                if all([out not in self._input_name_to_nodes and not self.is_graph_output(out) for out in i.output])
+            ]
 
         ununsed_weights = []
         for w in self.model.graph.initializer:
@@ -351,6 +353,7 @@ class ONNXModel(onnx_model.ONNXModel):
 
         self.remove_initializers(ununsed_weights)
         self.update()
+        self.topological_sort()
 
     def topological_sort(self, enable_subgraph=False):
         """Topological sort the model."""
@@ -402,43 +405,6 @@ class ONNXModel(onnx_model.ONNXModel):
         assert len(list(set([n.name for n in nodes]))) == len(list(set([n.name for n in self.model.graph.node])))
         self.model.graph.ClearField("node")
         self.model.graph.node.extend(nodes)
-
-    def get_nodes_chain(self, start, stop, result_chain=[]):
-        """Get nodes chain with given start node and stop node."""
-        # process start node list
-        start_node = collections.deque()
-        for node in start:
-            if isinstance(node, str):
-                start_node.append(node)
-            elif isinstance(node, onnx.NodeProto):
-                start_node.append(node.name)
-            else:
-                assert False, "'get_nodes_chain' function only support list[string]" "or list[NodeProto] params"
-
-        # process stop node list
-        stop_node = []
-        for node in stop:
-            if isinstance(node, str):
-                stop_node.append(node)
-            elif isinstance(node, onnx.NodeProto):
-                stop_node.append(node.name)
-            else:
-                assert False, "'get_nodes_chain' function only support list[string]" "or list[NodeProto] params"
-
-        while start_node:
-            node_name = start_node.popleft()
-            if node_name in stop_node:
-                continue
-            if node_name not in result_chain:
-                result_chain.append(node_name)
-            else:
-                continue
-
-            node = utility.find_by_name(node_name, list(self.model.graph.node))
-            for parent in self.get_parents(node):
-                start_node.append(parent.name)
-
-        return result_chain
 
     def find_split_node_for_layer_wise_quantization(self):
         """Find split node for layer wise quantization."""
@@ -800,22 +766,7 @@ class ONNXModel(onnx_model.ONNXModel):
         # origin model : ... -> node_1 -> split_node -> node_2 -> ...
         # split model 1: ... -> node_1 -> split_node
         # split model 2: node_2 -> ...
-
-        # remove nodes which are not followed by other nodes
-        unvalid_nodes = [
-            i
-            for i in self.model.graph.node
-            if all(out not in self._input_name_to_nodes and not self.is_graph_output(out) for out in i.output)
-        ]
-        while len(unvalid_nodes) > 0:
-            self.remove_nodes(unvalid_nodes)
-            self._input_name_to_nodes = self.input_name_to_nodes()
-            unvalid_nodes = [
-                i
-                for i in self.model.graph.node
-                if all([out not in self._input_name_to_nodes and not self.is_graph_output(out) for out in i.output])
-            ]
-        self.topological_sort()
+        self.remove_unused_nodes()
 
         split_model_part_1 = onnx.ModelProto()
         split_model_part_1.CopyFrom(self.model)

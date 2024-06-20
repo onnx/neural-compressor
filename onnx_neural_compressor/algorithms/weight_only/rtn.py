@@ -1,10 +1,7 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-#
 # Copyright (c) 2023 MIT HAN Lab
 # This source code is licensed under the MIT license
 #
-# Copyright (c) 2023 Intel Corporation
+# Copyright (c) 2024 Intel Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -28,7 +25,7 @@ from packaging import version
 
 from onnx_neural_compressor import config, constants, onnx_model, utility
 from onnx_neural_compressor.algorithms.layer_wise import core
-from onnx_neural_compressor.algorithms.weight_only import utility as woq_utility
+from onnx_neural_compressor.algorithms import utility as quant_utils
 
 from typing import List, Union  # isort: skip
 
@@ -38,7 +35,7 @@ def rtn_quantize(
     weight_config: dict = {},
     num_bits: int = 4,
     group_size: int = 32,
-    scheme: str = "asym",
+    sym: bool = False,
     ratios: dict = {},
     accuracy_level: int = 0,
     providers: List[str] = ["CPUExecutionProvider"],
@@ -62,7 +59,7 @@ def rtn_quantize(
             }. Defaults to {}.
         num_bits (int, optional): number of bits used to represent weights. Defaults to 4.
         group_size (int, optional): size of weight groups. Defaults to 32.
-        scheme (str, optional): indicates whether weights are symmetric. Defaults to "asym".
+        sym (bool, optional): indicates whether weights are symmetric. Defaults to False.
         ratios (dict, optional): percentile of clip. Defaults to {}.
         accuracy_level (int, optional):
             accuracy level. Support 0 (unset), 1(fp32 compute type of jblas kernel),
@@ -92,7 +89,7 @@ def rtn_quantize(
         if (
             node.op_type in ["MatMul"]  # check op_type of node is MatMul
             and model.get_initializer(node.input[1]) is not None
-            and weight_config.get((node.name, node.op_type), {}).get("weight_dtype", "fp32") != "fp32"
+            and weight_config.get(node.name, {}).get("weight_dtype", "fp32") != "fp32"
         ):
             weight_tensor = model.get_initializer(node.input[1])
             weight = onnx.numpy_helper.to_array(weight_tensor, base_dir=base_dir).copy()
@@ -100,11 +97,11 @@ def rtn_quantize(
                 continue
 
             dtype = weight.dtype
-            if (node.name, node.op_type) in weight_config:
-                num_bits = weight_config[(node.name, node.op_type)].get("weight_bits", 4)
-                group_size = weight_config[(node.name, node.op_type)].get("weight_group_size", 32)
-                scheme = "sym" if weight_config[(node.name, node.op_type)].get("weight_sym", True) else "asym"
-                accuracy_level = weight_config[(node.name, node.op_type)].get("accuracy_level", 0)
+            if node.name in weight_config:
+                num_bits = weight_config[node.name].get("weight_bits", 4)
+                group_size = weight_config[node.name].get("weight_group_size", 32)
+                sym = weight_config[node.name].get("weight_sym", True)
+                accuracy_level = weight_config[node.name].get("accuracy_level", 0)
 
             org_w_shape = weight.shape  # ic, oc
             group_size = group_size if group_size != -1 else org_w_shape[0]
@@ -112,7 +109,7 @@ def rtn_quantize(
             k_blocks = (org_w_shape[0] - 1) // group_size + 1
             init_share_num = model.get_initializer_share_num(node.input[1])
 
-            weight = woq_utility.pad_tensor(weight, group_size, k_blocks)
+            weight = quant_utils.pad_tensor(weight, group_size, k_blocks)
 
             satisfy_MatMulNBits_condition = (
                 version.Version(ort.__version__) > constants.ONNXRT1161_VERSION and num_bits == 4
@@ -126,10 +123,10 @@ def rtn_quantize(
             ):  # pragma: no cover
                 # MatMulFpQ4 support 4 bits and 32 group_size with ort 1.16.0 and 1.16.1 versions, supported by CPU EP
                 # MatMulNBits supports 4 bits and 2^n group_size with ort > 1.16.1, supported by CPU EP AND CUDA EP
-                q_weight, scale, zp = woq_utility.quant_tensor(
-                    weight.T, num_bits, group_size, scheme, "uint", ratios.get(node.input[1], 1)
+                q_weight, scale, zp = quant_utils.quant_tensor(
+                    weight.T, num_bits, group_size, sym, "uint", ratios.get(node.input[1], 1)
                 )
-                q_matmul_node, new_inits = woq_utility.make_matmul_weight_only_node(
+                q_matmul_node, new_inits = quant_utils.make_matmul_weight_only_node(
                     node=node,
                     weight_shape=org_w_shape,
                     num_bits=num_bits,
@@ -137,7 +134,7 @@ def rtn_quantize(
                     k_blocks=k_blocks,
                     q_weight=q_weight.astype("uint8"),
                     scale=scale.astype(dtype),
-                    zero_point=zp if scheme == "asym" else None,
+                    zero_point=zp if not sym else None,
                     accuracy_level=accuracy_level,
                 )
 
@@ -145,15 +142,15 @@ def rtn_quantize(
                 remove_nodes.append(node)
                 new_nodes.append(q_matmul_node)
             else:
-                q_weight = woq_utility.qdq_tensor(
-                    weight.T, num_bits, group_size, scheme, "int", ratios.get(node.input[1], 1)
+                q_weight = quant_utils.qdq_tensor(
+                    weight.T, num_bits, group_size, sym, "int", ratios.get(node.input[1], 1)
                 )
                 q_weight = np.reshape(q_weight, (org_w_shape[1], -1))
                 q_weight = np.transpose(q_weight)
                 q_weight = q_weight[: org_w_shape[0], :].astype(dtype)
                 q_weight_tensor = onnx.helper.make_tensor(
                     name=node.input[1] + "_Q{}G{}".format(str(num_bits), str(group_size)),
-                    data_type=utility.dtype_mapping[str(dtype)],
+                    data_type=quant_utils.dtype_mapping[str(dtype)],
                     dims=weight.shape,
                     vals=q_weight.tobytes(),
                     raw=True,

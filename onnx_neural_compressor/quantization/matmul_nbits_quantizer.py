@@ -15,6 +15,9 @@
 from typing import List, Union  # isort: skip
 
 import onnx
+import onnxruntime as ort
+import pathlib
+import tempfile
 from onnxruntime.quantization import matmul_4bits_quantizer
 
 from onnx_neural_compressor import config, data_reader, logger, onnx_model, utility
@@ -84,6 +87,7 @@ class MatMulNBitsQuantizer:
         algo_config: matmul_4bits_quantizer.WeightOnlyQuantConfig = None,
         n_bits: int = 4,
         providers: List[str] = ["CPUExecutionProvider"],
+        optimization_level: ort.GraphOptimizationLevel = ort.GraphOptimizationLevel.ORT_ENABLE_BASIC,
     ):
         if nodes_to_exclude is None:
             nodes_to_exclude = []
@@ -98,6 +102,7 @@ class MatMulNBitsQuantizer:
         self.n_bits = n_bits
         self.providers = providers
         self.algorithm = self.algo_config.algorithm
+        self.optimization_level = optimization_level
         assert self.algorithm in [
             "RTN",
             "AWQ",
@@ -106,7 +111,6 @@ class MatMulNBitsQuantizer:
 
     def _generate_nc_config(self):
         config_class = config.config_registry.get_cls_configs()[self.algorithm.lower()]
-
         quant_kwargs = {
             "weight_bits": self.n_bits,
             "weight_group_size": self.block_size,
@@ -124,7 +128,7 @@ class MatMulNBitsQuantizer:
             quant_kwargs.update(
                 {
                     "percdamp": self.algo_config.percdamp,
-                    "blocksize": self.algo_config.block_size,
+                    "block_size": self.algo_config.block_size,
                     "actorder": self.algo_config.actorder,
                     "mse": self.algo_config.mse,
                     "perchannel": self.algo_config.perchannel,
@@ -148,9 +152,22 @@ class MatMulNBitsQuantizer:
 
     def int4_quant_algo(self):
         qconfig = self._generate_nc_config()
+        model = self.model_path or self.model
+        opt_tmp_file = tempfile.TemporaryDirectory()
+
+        # do graph optimization if not layer_wise_quant
+        if not getattr(self.algo_config, "layer_wise_quant", False) and self.optimization_level != ort.GraphOptimizationLevel.ORT_DISABLE_ALL:
+            if not isinstance(model, str):
+                onnx.save(model, pathlib.Path(opt_tmp_file.name).joinpath("tmp.onnx").as_posix())
+                model = pathlib.Path(opt_tmp_file.name).joinpath("tmp.onnx").as_posix()
+            sess_options = ort.SessionOptions()
+            sess_options.graph_optimization_level = self.optimization_level
+            sess_options.optimized_model_filepath = pathlib.Path(opt_tmp_file.name).joinpath("opt.onnx").as_posix()
+            session = ort.InferenceSession(model, sess_options)
+            model = sess_options.optimized_model_filepath
+            del session
 
         logger.info(f"start to quantize model with {self.algorithm} algorithm...")
-        model = self.model_path or self.model
         if self.algorithm == "RTN":
             self.model = algos.rtn_quantize_entry(model, qconfig)
         elif self.algorithm == "GPTQ":
@@ -158,6 +175,8 @@ class MatMulNBitsQuantizer:
         elif self.algorithm == "AWQ":
             self.model = algos.awq_quantize_entry(model, qconfig, self.algo_config.calibration_data_reader)
         logger.info(f"complete quantization of model with {self.algorithm} algorithm.")
+        opt_tmp_file.cleanup()
 
     def process(self):
         self.int4_quant_algo()
+

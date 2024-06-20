@@ -26,7 +26,7 @@ from packaging.version import Version
 
 from onnx_neural_compressor import config, constants, data_reader, onnx_model, utility
 from onnx_neural_compressor.algorithms.layer_wise import core
-from onnx_neural_compressor.algorithms.weight_only import utility as woq_utility
+from onnx_neural_compressor.algorithms import utility as quant_utils
 
 from typing import List, Union  # isort: skip
 
@@ -36,8 +36,8 @@ def _gptq(
     H: np.array,
     num_bits: int = 4,
     group_size: int = 32,
-    scheme: str = "asym",
-    blocksize: int = 128,
+    sym: bool = False,
+    block_size: int = 128,
     percdamp: float = 0.01,
     actorder: bool = False,
     mse: bool = False,
@@ -50,8 +50,8 @@ def _gptq(
         H (np.array): Hessian matrix.
         num_bits (int, optional): num_bits. Default is 4.
         group_size (int, optional): how many elements share one scale/zp. Default is 32.
-        scheme (str, optional): sym or asym. Defaults to "asym".
-        blocksize (int, optional): blocksize to quantize weight.
+        sym (bool, optional): sym or asym. Defaults to False.
+        block_size (int, optional): block_size to quantize weight.
         percdamp (float, optional): percent of the average Hessian diagonal to use for dampening.
         actorder (bool, optional): whether rearrange Hessian matrix considering the diag's value.
         mse (bool, optional): whether get scale and zero point with mse error.
@@ -74,7 +74,7 @@ def _gptq(
         tmp = np.zeros(weight.shape[1])
         xmin = np.minimum(np.min(weight, axis=0), tmp)
         xmax = np.maximum(np.max(weight, axis=0), tmp)
-        if scheme == "sym":
+        if sym:
             xmax = np.maximum(np.abs(xmin), xmax)
             tmp = xmin < 0
             if np.any(tmp):
@@ -84,7 +84,7 @@ def _gptq(
         xmax[tmp] = +1
 
         scale = (xmax - xmin) / maxq
-        if scheme == "sym":
+        if sym:
             zero = np.ones(scale.shape) * (maxq + 1) / 2
         else:
             zero = np.round(-xmin / scale)
@@ -95,7 +95,7 @@ def _gptq(
                 xmin1 = p * xmin
                 xmax1 = p * xmax
                 scale1 = (xmax1 - xmin1) / maxq
-                zero1 = np.round(-xmin1 / scale1) if scheme != "sym" else zero
+                zero1 = np.round(-xmin1 / scale1) if not sym else zero
                 q = np.clip(np.round(weight / scale1) + zero1, 0, maxq)
                 q -= weight
                 q = np.power(np.abs(q), norm)
@@ -134,8 +134,8 @@ def _gptq(
     H[diag, diag] += damp  # add a average value of
     H = np.linalg.cholesky(np.linalg.inv(H)).T
     Hinv = H
-    for i1 in range(0, shape[0], blocksize):
-        i2 = min(i1 + blocksize, shape[0])
+    for i1 in range(0, shape[0], block_size):
+        i2 = min(i1 + block_size, shape[0])
         count = i2 - i1
 
         W1 = copy.deepcopy(W[i1:i2, :])
@@ -180,9 +180,9 @@ def gptq_quantize(
     weight_config: dict = {},
     num_bits: int = 4,
     group_size: int = 32,
-    scheme: str = "asym",
+    sym: bool = False,
     percdamp: float = 0.01,
-    blocksize: int = 128,
+    block_size: int = 128,
     actorder: bool = False,
     mse: bool = False,
     perchannel: bool = True,
@@ -208,10 +208,10 @@ def gptq_quantize(
                     }. Defaults to {}.
         num_bits (int, optional): number of bits used to represent weights. Defaults to 4.
         group_size (int, optional): size of weight groups. Defaults to 32.
-        scheme (str, optional): indicates whether weights are symmetric. Defaults to "asym".
+        sym (bool, optional): indicates whether weights are symmetric. Defaults to False.
         percdamp (float, optional): percentage of Hessian's diagonal values' average, which will be added
             to Hessian's diagonal to increase numerical stability. Defaults to 0.01.
-        blocksize (int, optional): execute GPTQ quantization per block. Defaults to 128.
+        block_size (int, optional): execute GPTQ quantization per block. Defaults to 128.
         actorder (bool, optional): whether to sort Hessian's diagonal values to rearrange channel-wise
             quantization order. Defaults to False.
         mse (bool, optional): whether get scale and zero point with mse error. Defaults to False.
@@ -230,7 +230,7 @@ def gptq_quantize(
         model = onnx_model.ONNXModel(model)
     base_dir = os.path.dirname(model.model_path) if model.model_path is not None else ""
 
-    inputs, so = woq_utility.prepare_inputs(model, data_reader, providers)
+    inputs, so = quant_utils.prepare_inputs(model, data_reader, providers)
     del data_reader
     org_output = copy.deepcopy(model.model.graph.output)
     model.remove_tensors_from_outputs([i.name for i in org_output])
@@ -242,7 +242,7 @@ def gptq_quantize(
         if (
             node.op_type in ["MatMul"]
             and model.get_initializer(node.input[1]) is not None
-            and weight_config.get((node.name, node.op_type), {}).get("weight_dtype", "fp32") != "fp32"
+            and weight_config.get(node.name, {}).get("weight_dtype", "fp32") != "fp32"
         ):
             output_names.append(node.input[0])
     output_names = list(set(output_names))
@@ -274,7 +274,7 @@ def gptq_quantize(
             if (
                 node.op_type in ["MatMul"]
                 and model.get_initializer(node.input[1]) is not None
-                and weight_config.get((node.name, node.op_type), {}).get("weight_dtype", "fp32") != "fp32"
+                and weight_config.get(node.name, {}).get("weight_dtype", "fp32") != "fp32"
             ):
                 weight = onnx.numpy_helper.to_array(
                     model.get_initializer(model.get_node(node.name).input[1]), base_dir
@@ -304,11 +304,11 @@ def gptq_quantize(
             weight,
             H,
         ) in zip(node_list, weights, Hs):
-            if (node.name, node.op_type) in weight_config:
-                num_bits = weight_config[(node.name, node.op_type)].get("weight_bits", 4)
-                group_size = weight_config[(node.name, node.op_type)].get("weight_group_size", 32)
-                scheme = "sym" if weight_config[(node.name, node.op_type)].get("weight_sym", True) else "asym"
-                accuracy_level = weight_config[(node.name, node.op_type)].get("accuracy_level", 0)
+            if node.name in weight_config:
+                num_bits = weight_config[node.name].get("weight_bits", 4)
+                group_size = weight_config[node.name].get("weight_group_size", 32)
+                sym = weight_config[node.name].get("weight_sym", True)
+                accuracy_level = weight_config[node.name].get("accuracy_level", 0)
             group_size = group_size if group_size != -1 else weight.shape[0]
             dtype = weight.dtype
 
@@ -317,8 +317,8 @@ def gptq_quantize(
                 H,
                 num_bits=num_bits,
                 group_size=group_size,
-                scheme=scheme,
-                blocksize=blocksize,
+                sym=sym,
+                block_size=block_size,
                 percdamp=percdamp,
                 actorder=actorder,
                 mse=mse,
@@ -340,10 +340,9 @@ def gptq_quantize(
                 # MatMulNBits supports 4 bits and 2^n group_size with ort > 1.16.1, supported by CPU EP AND CUDA EP
                 org_shape = weight.shape
                 k_blocks = (org_shape[0] + group_size - 1) // group_size
-                q_weight = woq_utility.pad_tensor(q_weight, group_size, k_blocks)
-                q_weight, scale, zp = woq_utility.quant_tensor(q_weight.T, num_bits, group_size, scheme, "uint")
-
-                q_matmul_node, new_inits = woq_utility.make_matmul_weight_only_node(
+                q_weight = quant_utils.pad_tensor(q_weight, group_size, k_blocks)
+                q_weight, scale, zp = quant_utils.quant_tensor(q_weight.T, num_bits, group_size, sym, "uint")
+                q_matmul_node, new_inits = quant_utils.make_matmul_weight_only_node(
                     node=node,
                     weight_shape=org_shape,
                     num_bits=num_bits,
@@ -351,7 +350,7 @@ def gptq_quantize(
                     k_blocks=k_blocks,
                     q_weight=q_weight.astype("uint8"),
                     scale=scale.astype(dtype),
-                    zero_point=zp if scheme == "asym" else None,
+                    zero_point=zp if not sym else None,
                     accuracy_level=accuracy_level,
                 )
 
@@ -361,7 +360,7 @@ def gptq_quantize(
             else:
                 q_weight_tensor = onnx.helper.make_tensor(
                     name=node.input[1] + "_Q{}G{}".format(str(num_bits), str(group_size)),
-                    data_type=utility.dtype_mapping[str(dtype)],
+                    data_type=quant_utils.dtype_mapping[str(dtype)],
                     dims=q_weight.shape,
                     vals=q_weight.astype(dtype).tobytes(),
                     raw=True,
