@@ -27,7 +27,7 @@ import numpy as np
 from onnxruntime.quantization import onnx_model
 from packaging import version
 
-from onnx_neural_compressor import constants, utility, logger
+from onnx_neural_compressor import constants, logger, utility
 
 if sys.version_info < (3, 11) and util.find_spec("onnxruntime_extensions"):  # pragma: no cover
     import onnxruntime_extensions

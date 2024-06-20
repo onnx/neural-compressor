@@ -22,12 +22,12 @@ import logging
 import os
 import pathlib
 import tempfile
+import time
 from typing import List, Optional, Union
 
 import numpy as np
 import onnx
 import onnxruntime
-import time
 import torch
 import transformers
 from onnxruntime.transformers import optimizer
