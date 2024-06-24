@@ -19,7 +19,7 @@ for i in "$@"; do
 done
 
 CONFIG_PATH=/neural-compressor/examples/.config/model_params_onnxrt.json
-model_src_dir=nlp/huggingface_model/text_generation/llama/quantization/weight_only
+model_src_dir=/neural-compressor/examples/nlp/huggingface_model/text_generation/llama/quantization/weight_only
 dataset_location=NeelNanda/pile-10k
 input_model=/tf_dataset2/models/huggingface/opt-125m
 batch_size=16
