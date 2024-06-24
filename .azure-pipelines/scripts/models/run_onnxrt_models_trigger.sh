@@ -6,10 +6,10 @@ PATTERN='[-a-zA-Z0-9_]*='
 for i in "$@"; do
     case $i in
     --stage=*)
-        stage=${i//"$PATTERN"/}
+        stage=${i//${PATTERN}/}
         ;;
     --model=*)
-        model=${i//"$PATTERN"/}
+        model=${i//${PATTERN}/}
         ;;
     *)
         echo "Parameter $i not recognized."
