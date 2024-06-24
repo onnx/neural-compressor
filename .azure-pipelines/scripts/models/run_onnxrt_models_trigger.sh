@@ -6,10 +6,10 @@ PATTERN='[-a-zA-Z0-9_]*='
 for i in "$@"; do
     case $i in
     --stage=*)
-        stage=$(echo ${i//$PATTERN/})
+        stage=${i//"$PATTERN"/}
         ;;
     --model=*)
-        model=$(echo ${i//$PATTERN/})
+        model=${i//"$PATTERN"/}
         ;;
     *)
         echo "Parameter $i not recognized."
@@ -42,7 +42,7 @@ function run_accuracy() {
     bash run_benchmark.sh --input_model="./model_tune" \
         --dataset_location="$dataset_location" \
         --label_path="$model" \
-        --mode=$1 | tee -a accuracy.log
+        --mode="$1" | tee -a accuracy.log
 }
 
 function main() {
