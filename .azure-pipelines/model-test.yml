@@ -12,6 +12,8 @@ pr:
       - setup.py
       - requirements.txt
       - .azure-pipelines/scripts/models
+      - .azure-pipelines/model-test.yml
+      - .azure-pipelines/template/model-template.yml
     exclude:
       - test
 
