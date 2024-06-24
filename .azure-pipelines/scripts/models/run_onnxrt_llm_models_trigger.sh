@@ -37,7 +37,7 @@ function run_quantize() {
         --algorithm=WOQ_TUNE
 }
 
-function run_accuray() {
+function run_accuracy() {
     bash run_benchmark.sh --input_model="./model_tune" \
         --batch_size="$batch_size" \
         --mode=accuracy \
@@ -52,7 +52,7 @@ function main() {
     elif [ "$stage" == "quantize" ]; then
         run_quantize
     elif [ "$stage" == "accuracy" ]; then
-        run_accuray
+        run_accuracy
     else
         exit 1
     fi

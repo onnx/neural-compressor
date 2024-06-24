@@ -38,7 +38,7 @@ function run_quantize() {
         --output_model="./model_tune"
 }
 
-function run_accuray() {
+function run_accuracy() {
     bash run_benchmark.sh --input_model="./model_tune" \
         --dataset_location=$dataset_location \
         --label_path="$model" \
@@ -52,9 +52,9 @@ function main() {
     elif [ "$stage" == "quantize" ]; then
         run_quantize
     elif [ "$stage" == "accuracy" ]; then
-        run_accuray "accuracy"
+        run_accuracy "accuracy"
     elif [ "$stage" == "performance" ]; then
-        run_accuray "performance"
+        run_accuracy "performance"
     else
         exit 1
     fi
