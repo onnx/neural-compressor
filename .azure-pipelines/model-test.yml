@@ -46,7 +46,7 @@ stages:
             steps:
               - template: template/model-template.yml
                 parameters:
-                  model: "facebook/opt-125m"
+                  modelName: "facebook/opt-125m"
                   algorithm: "${{ algorithm }}"
                   script_path: "run_onnxrt_llm_models_trigger.sh"
 
@@ -60,7 +60,7 @@ stages:
             steps:
               - template: template/model-template.yml
                 parameters:
-                  model: "${{ model }}"
+                  modelName: "${{ model }}"
                   algorithm: "Quantize"
                   script_path: "run_onnxrt_models_trigger.sh"
 
