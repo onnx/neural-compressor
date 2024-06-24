@@ -25,10 +25,17 @@ parameters:
     default:
       - SQ
       - WOQ
+  - name: models
+    type: object
+    default:
+      - bert_base_MRPC
+      - bert_base_MRPC_dynamic
+      - resnet50-v1-12_qdq
+      - resnet50-v1-12
 
 stages:
-  - stage: ONNXModels
-    displayName: Run ONNX Model
+  - stage: ONNX_LLM_Models
+    displayName: Run ONNX LLM Model
     pool: ICX-16C
     dependsOn: []
     jobs:
@@ -37,7 +44,23 @@ stages:
             steps:
               - template: template/model-template.yml
                 parameters:
+                  model: "facebook/opt-125m"
                   algorithm: "${{ algorithm }}"
+                  script_path: "run_onnxrt_llm_models_trigger.sh"
+
+  - stage: ONNX_Models
+    displayName: Run ONNX Model
+    pool: ICX-16C
+    dependsOn: []
+    jobs:
+      - ${{ each model in parameters.models }}:
+          - job:
+            steps:
+              - template: template/model-template.yml
+                parameters:
+                  model: "${{ model }}"
+                  algorithm: "Quantize"
+                  script_path: "run_onnxrt_models_trigger.sh"
 
   # - stage: GenerateLogs
   #   displayName: Generate Report

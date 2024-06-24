@@ -1,12 +1,14 @@
 parameters:
   - name: modelName
     type: string
-    default: "meta-llama/Llama-2-7b-hf"
   - name: modelContainerName
     type: string
     default: "ONC"
   - name: algorithm
     type: string
+  - name: script_path
+    type: string
+    default: "run_onnxrt_models_trigger.sh"
 
 steps:
   - template: docker-template.yml
@@ -38,18 +40,24 @@ steps:
 
   - script: |
       docker exec ${{ parameters.modelContainerName }} bash -c "cd /neural-compressor/.azure-pipelines/scripts/models \
-      && bash run_onnxrt_models_trigger.sh --model=${{ parameters.modelName }} --stage='prepare_model'"
+      && bash ${{ parameters.script_path }} --model=${{ parameters.modelName }} --stage='prepare_model'"
     displayName: Export Models
 
   - script: |
       docker exec ${{ parameters.modelContainerName }} bash -c "cd /neural-compressor/.azure-pipelines/scripts/models \
-      && bash run_onnxrt_models_trigger.sh --model=${{ parameters.modelName }} --stage='quantize'"
+      && bash ${{ parameters.script_path }} --model=${{ parameters.modelName }} --stage='quantize'"
     displayName: Qunatize
 
   - script: |
       docker exec ${{ parameters.modelContainerName }} bash -c "cd /neural-compressor/.azure-pipelines/scripts/models \
-      && bash run_onnxrt_models_trigger.sh --model=${{ parameters.modelName }} --stage='accuracy'"
-    displayName: Benchmark
+      && bash ${{ parameters.script_path }} --model=${{ parameters.modelName }} --stage='accuracy'"
+    displayName: Run Accuracy Test
+
+  - ${{ if eq(parameters.algorithm, 'Quantize') }}:
+      - script: |
+          docker exec ${{ parameters.modelContainerName }} bash -c "cd /neural-compressor/.azure-pipelines/scripts/models \
+          && bash ${{ parameters.script_path }} --model=${{ parameters.modelName }} --stage='accuracy'"
+        displayName: Run Performance Test
 
   # - task: Bash@3
   #   inputs:

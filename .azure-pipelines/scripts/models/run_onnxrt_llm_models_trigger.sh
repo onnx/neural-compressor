@@ -19,30 +19,30 @@ for i in "$@"; do
 done
 
 CONFIG_PATH=/neural-compressor/examples/.config/model_params_onnxrt.json
-model_src_dir=$(jq .onnxrt.$model.model_src_dir $CONFIG_PATH)
-dataset_location=$(jq .onnxrt.$model.dataset_location $CONFIG_PATH)
-input_model=$(jq .onnxrt.$model.input_model $CONFIG_PATH)
+model_src_dir=nlp/huggingface_model/text_generation/llama/quantization/weight_only
+dataset_location=NeelNanda/pile-10k
+input_model=/tf_dataset2/models/huggingface/opt-125m
+batch_size=16
 
 function run_prepare_model() {
-    if [ -f "$input_model" ]; then
-        echo "model exists"
-    else
-        echo "model not found" && exit 1
-    fi
+    python prepare_model.py --input_model="$model" --output_model="./model_export" --task=text-generation-with-past
 }
 
 function run_quantize() {
-    bash run_quant.sh --input_model="$input_model" \
-        --dataset_location=$dataset_location \
-        --label_path="$model" \
-        --output_model="./model_tune"
+    bash run_quant.sh --input_model="./model_export" \
+        --output_model="./model_tune" \
+        --batch_size="$batch_size" \
+        --dataset=NeelNanda/pile-10k \
+        --tokenizer="$model" \
+        --algorithm=WOQ_TUNE
 }
 
 function run_accuray() {
     bash run_benchmark.sh --input_model="./model_tune" \
-        --dataset_location=$dataset_location \
-        --label_path="$model" \
-        --mode=$1 | tee -a accuracy.log
+        --batch_size="$batch_size" \
+        --mode=accuracy \
+        --tokenizer="$model" \
+        --tasks=lambada_openai | tee -a accuracy.log
 }
 
 function main() {
@@ -52,9 +52,7 @@ function main() {
     elif [ "$stage" == "quantize" ]; then
         run_quantize
     elif [ "$stage" == "accuracy" ]; then
-        run_accuray "accuracy"
-    elif [ "$stage" == "performance" ]; then
-        run_accuray "performance"
+        run_accuray
     else
         exit 1
     fi
