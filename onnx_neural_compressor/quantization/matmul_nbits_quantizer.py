@@ -19,20 +19,36 @@ import tempfile
 
 import onnx
 import onnxruntime as ort
-from onnxruntime.quantization import matmul_4bits_quantizer
 
-from onnx_neural_compressor import config, data_reader, logger, onnx_model, utility
+from onnx_neural_compressor import data_reader, logger, onnx_model, utility
 from onnx_neural_compressor.quantization import algorithm_entry as algos
+from onnx_neural_compressor.quantization import config
 
 
-class RTNWeightOnlyQuantConfig(matmul_4bits_quantizer.RTNWeightOnlyQuantConfig):
+class WeightOnlyQuantConfig:
+    def __init__(self, algorithm):
+        """This is the Base class for Weight Only Quant Configuration.
+
+        Args:
+            algorithm:
+                weight only quantize algorithm name.
+        """
+        self.algorithm = algorithm
+
+
+class RTNWeightOnlyQuantConfig(WeightOnlyQuantConfig):
 
     def __init__(self, ratios=None, layer_wise_quant=False):
-        super().__init__(ratios=ratios)
+        super().__init__(
+            algorithm="RTN",
+        )
+        if ratios is None:
+            ratios = {}
+        self.ratios = ratios
         self.layer_wise_quant = layer_wise_quant
 
 
-class GPTQWeightOnlyQuantConfig(matmul_4bits_quantizer.GPTQWeightOnlyQuantConfig):
+class GPTQWeightOnlyQuantConfig(WeightOnlyQuantConfig):
 
     def __init__(
         self,
@@ -45,17 +61,17 @@ class GPTQWeightOnlyQuantConfig(matmul_4bits_quantizer.GPTQWeightOnlyQuantConfig
         layer_wise_quant=False,
     ):
         super().__init__(
-            calibration_data_reader=calibration_data_reader,
-            percdamp=percdamp,
-            block_size=block_size,
-            actorder=actorder,
-            mse=mse,
-            perchannel=perchannel,
+            algorithm="GPTQ",
         )
+        self.calibration_data_reader = calibration_data_reader
+        self.percdamp = percdamp
+        self.block_size = block_size
+        self.actorder = actorder
+        self.mse = mse
+        self.perchannel = perchannel
         self.layer_wise_quant = layer_wise_quant
 
-
-class AWQWeightOnlyQuantConfig(matmul_4bits_quantizer.WeightOnlyQuantConfig):
+class AWQWeightOnlyQuantConfig(WeightOnlyQuantConfig):
 
     def __init__(
         self,
@@ -85,7 +101,7 @@ class MatMulNBitsQuantizer:
         is_symmetric: bool = False,
         accuracy_level: int = 0,
         nodes_to_exclude: List[str] = None,
-        algo_config: matmul_4bits_quantizer.WeightOnlyQuantConfig = None,
+        algo_config: WeightOnlyQuantConfig = None,
         n_bits: int = 4,
         providers: List[str] = ["CPUExecutionProvider"],
         optimization_level: ort.GraphOptimizationLevel = ort.GraphOptimizationLevel.ORT_ENABLE_BASIC,

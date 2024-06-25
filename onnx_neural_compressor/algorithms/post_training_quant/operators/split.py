@@ -71,9 +71,10 @@ class SplitOperator(base_op.Operator):
         if len(node.input) > 1:  # pragma: no cover
             quantized_input_names.extend(node.input[1:])
         outputs = []
+        input_name_to_nodes = self.quantizer.model.input_name_to_nodes()
         for output in node.output:
-            if output in self.quantizer.model.input_name_to_nodes():
-                child = self.quantizer.model.input_name_to_nodes()[output][0]
+            if output in input_name_to_nodes:
+                child = input_name_to_nodes[output][0]
                 if child.op_type == "QuantizeLinear":
                     self.quantizer.remove_nodes.append(child)
                     outputs.append(child.output[0])

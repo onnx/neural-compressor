@@ -33,8 +33,8 @@ from optimum import onnxruntime as optimum_ort
 from torch.nn import functional
 from torch.utils import data
 
-from onnx_neural_compressor import config, data_reader, logger, utility
-from onnx_neural_compressor.quantization import matmul_nbits_quantizer, tuning
+from onnx_neural_compressor import data_reader, logger, utility
+from onnx_neural_compressor.quantization import config, matmul_nbits_quantizer, tuning
 
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(name)s -   %(message)s", datefmt="%m/%d/%Y %H:%M:%S", level=logging.WARN

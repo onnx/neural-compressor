@@ -24,8 +24,8 @@ import onnx
 import onnxruntime as ort
 from optimum.exporters.onnx import main_export
 
-from onnx_neural_compressor import config, data_reader, quantization
-from onnx_neural_compressor.quantization import tuning
+from onnx_neural_compressor import data_reader, quantization
+from onnx_neural_compressor.quantization import config, tuning
 
 from typing import Callable, Dict, List, Optional, Union  # isort: skip
 
@@ -418,6 +418,7 @@ class TestONNXRT3xAutoTune(unittest.TestCase):
 
     def test_static_custom_auto_tune(self):
         partial_fake_eval = functools.partial(fake_eval, eval_result_lst=[1.0, 0.8, 0.99])
+
         custom_tune_config = tuning.TuningConfig(
             config_set=config.StaticQuantConfig(
                 per_channel=[True, False],

@@ -2,8 +2,8 @@
 
 import unittest
 
-from onnx_neural_compressor import config, constants, logger
-from onnx_neural_compressor.quantization import tuning
+from onnx_neural_compressor import constants, logger
+from onnx_neural_compressor.quantization import config, tuning
 
 from typing import Any, Callable, List, Optional, Tuple, Union  # isort: skip
 
@@ -217,6 +217,94 @@ class TestBaseConfig(unittest.TestCase):
         self.assertIn(OP1_NAME, config_mapping)
         self.assertIn(OP2_NAME, config_mapping)
 
+    def test_config_expand(self) -> None:
+        cfg = config.RTNConfig(weight_bits=[4,8], weight_sym=[True, False], layer_wise_quant=[True, False], providers=[["CPU"], ["CUDA"]])
+        expand_cfgs = cfg.expand()
+        self.assertEqual(expand_cfgs[0].weight_bits, 4)
+        self.assertEqual(expand_cfgs[0].weight_sym, True)
+        self.assertEqual(expand_cfgs[0].layer_wise_quant, True)
+        self.assertEqual(expand_cfgs[0].providers, ["CPU"])
+
+        self.assertEqual(expand_cfgs[1].weight_bits, 8)
+        self.assertEqual(expand_cfgs[1].weight_sym, True)
+        self.assertEqual(expand_cfgs[1].layer_wise_quant, True)
+        self.assertEqual(expand_cfgs[1].providers, ["CPU"])
+
+        self.assertEqual(expand_cfgs[2].weight_bits, 4)
+        self.assertEqual(expand_cfgs[2].weight_sym, False)
+        self.assertEqual(expand_cfgs[2].layer_wise_quant, True)
+        self.assertEqual(expand_cfgs[2].providers, ["CPU"])
+
+        self.assertEqual(expand_cfgs[3].weight_bits, 8)
+        self.assertEqual(expand_cfgs[3].weight_sym, False)
+        self.assertEqual(expand_cfgs[3].layer_wise_quant, True)
+        self.assertEqual(expand_cfgs[3].providers, ["CPU"])
+
+        self.assertEqual(expand_cfgs[4].weight_bits, 4)
+        self.assertEqual(expand_cfgs[4].weight_sym, True)
+        self.assertEqual(expand_cfgs[4].layer_wise_quant, True)
+        self.assertEqual(expand_cfgs[4].providers, ["CUDA"])
+
+        self.assertEqual(expand_cfgs[5].weight_bits, 8)
+        self.assertEqual(expand_cfgs[5].weight_sym, True)
+        self.assertEqual(expand_cfgs[5].layer_wise_quant, True)
+        self.assertEqual(expand_cfgs[5].providers, ["CUDA"])
+
+        self.assertEqual(expand_cfgs[6].weight_bits, 4)
+        self.assertEqual(expand_cfgs[6].weight_sym, False)
+        self.assertEqual(expand_cfgs[6].layer_wise_quant, True)
+        self.assertEqual(expand_cfgs[6].providers, ["CUDA"])
+
+        self.assertEqual(expand_cfgs[7].weight_bits, 8)
+        self.assertEqual(expand_cfgs[7].weight_sym, False)
+        self.assertEqual(expand_cfgs[7].layer_wise_quant, True)
+        self.assertEqual(expand_cfgs[7].providers, ["CUDA"])
+
+        self.assertEqual(expand_cfgs[8].weight_bits, 4)
+        self.assertEqual(expand_cfgs[8].weight_sym, True)
+        self.assertEqual(expand_cfgs[8].layer_wise_quant, False)
+        self.assertEqual(expand_cfgs[8].providers, ["CPU"])
+
+        self.assertEqual(expand_cfgs[9].weight_bits, 8)
+        self.assertEqual(expand_cfgs[9].weight_sym, True)
+        self.assertEqual(expand_cfgs[9].layer_wise_quant, False)
+        self.assertEqual(expand_cfgs[9].providers, ["CPU"])
+
+        self.assertEqual(expand_cfgs[10].weight_bits, 4)
+        self.assertEqual(expand_cfgs[10].weight_sym, False)
+        self.assertEqual(expand_cfgs[10].layer_wise_quant, False)
+        self.assertEqual(expand_cfgs[10].providers, ["CPU"])
+
+        self.assertEqual(expand_cfgs[11].weight_bits, 8)
+        self.assertEqual(expand_cfgs[11].weight_sym, False)
+        self.assertEqual(expand_cfgs[11].layer_wise_quant, False)
+        self.assertEqual(expand_cfgs[11].providers, ["CPU"])
+
+        self.assertEqual(expand_cfgs[12].weight_bits, 4)
+        self.assertEqual(expand_cfgs[12].weight_sym, True)
+        self.assertEqual(expand_cfgs[12].layer_wise_quant, False)
+        self.assertEqual(expand_cfgs[12].providers, ["CUDA"])
+
+        self.assertEqual(expand_cfgs[13].weight_bits, 8)
+        self.assertEqual(expand_cfgs[13].weight_sym, True)
+        self.assertEqual(expand_cfgs[13].layer_wise_quant, False)
+        self.assertEqual(expand_cfgs[13].providers, ["CUDA"])
+
+        self.assertEqual(expand_cfgs[14].weight_bits, 4)
+        self.assertEqual(expand_cfgs[14].weight_sym, False)
+        self.assertEqual(expand_cfgs[14].layer_wise_quant, False)
+        self.assertEqual(expand_cfgs[14].providers, ["CUDA"])
+
+        self.assertEqual(expand_cfgs[15].weight_bits, 8)
+        self.assertEqual(expand_cfgs[15].weight_sym, False)
+        self.assertEqual(expand_cfgs[15].layer_wise_quant, False)
+        self.assertEqual(expand_cfgs[15].providers, ["CUDA"])
+
+
+    def test_config_expand_with_empty_options(self):
+        configs = FakeAlgoConfig(weight_dtype=["int", "float32"], weight_bits=[])
+        configs_list = configs.expand()
+        self.assertEqual(len(configs_list), 2)
 
 class TestConfigSet(unittest.TestCase):
 
@@ -257,6 +345,7 @@ class TestConfigLoader(unittest.TestCase):
         for i, _ in enumerate(config_loader):
             config_count += 1
         self.assertEqual(config_count, 2)
+
 
 
 if __name__ == "__main__":

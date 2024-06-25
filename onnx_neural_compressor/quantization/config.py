@@ -28,10 +28,10 @@ from abc import ABC, abstractmethod
 import numpy as np
 import onnx
 import pydantic
-from onnxruntime import quantization
 from typing_extensions import Self
 
-from onnx_neural_compressor import constants, data_reader, logger, utility
+from onnxruntime import quantization as ort_quant
+from onnx_neural_compressor import constants, data_reader, logger, quantization, utility
 
 from collections import OrderedDict  # isort: skip
 from typing import Any, Callable, Dict, List, NamedTuple, Optional, Tuple, Type, Union, _GenericAlias  # isort: skip
@@ -114,7 +114,7 @@ class TuningParam:
             return False
 
     def __str__(self) -> str:
-        return self.name
+        return "TuningParam(name={}, tunable_type={}, options={}).".format(self.name, str(self.tunable_type), str(self.options))
 
 
 # Config registry to store all registered configs.
@@ -421,22 +421,45 @@ class BaseConfig(ABC):
     def expand(self) -> List[BaseConfig]:
         """Expand the config.
 
-        case 1
-            {"model_params": { "reduce_range": [True, False]}} ->
-            {"model_params": { "reduce_range": True}}, {"model_params": { "reduce_range": False}}
+        Expand rule is:
+            1. Expand model_params_list first, then expand params_list
+            2. Expand model_params_list/params_list following the order of param order in model_params_list/params_list
 
-        case 2: iterate op_params first (for this case, Add op only supports per_tensor)
-            {"model_params": { "reduce_range": [True, False]}, "op_params": {"per_channel": [True, False]}} ->
-            {"model_params": { "reduce_range": True}, "op_params": {"per_channel": True}}
-            {"model_params": { "reduce_range": True}, "op_params": {"per_channel": False}}
-            {"model_params": { "reduce_range": False}, "op_params": {"per_channel": True}}
-            {"model_params": { "reduce_range": False}, "op_params": {"per_channel": False}}
+            model_params_list=[A, B]                params_list=[C,D]
+            A=[1,2], B=[3,4]                        C=[5,6], D=[7,8]
 
-            {"model_params": { "reduce_range": [True, False]}, "op_params": {"Conv": {"per_channel": [True, False], , "Add": {"per_channel": [True, False]}}}} ->
-            {"model_params": { "reduce_range": True},  "op_params": {"Conv": {"per_channel": True}, "Add": {"per_channel": False}}},
-            {"model_params": { "reduce_range": True},  "op_params": {"Conv": {"per_channel": False}, "Add": {"per_channel": False}}},
-            {"model_params": { "reduce_range": False},  "op_params": {"Conv": {"per_channel": True}, "Add": {"per_channel": False}}},
-            {"model_params": { "reduce_range": False},  "op_params": {"Conv": {"per_channel": False}, "Add": {"per_channel": False}}},
+            Expanded results:
+                                    --------    Combination 1 (C=5, D=7)
+                                   /
+                                  / --------    Combination 2 (C=6, D=7)
+               Combination 1  ----
+                (A=1, B=3)        \ --------    Combination 3 (C=5, D=8)
+                                   \
+                                    --------    Combination 4 (C=6, D=8)
+
+                                    --------    Combination 1 (C=5, D=7)
+                                   /
+                                  / --------    Combination 2 (C=6, D=7)
+               Combination 2  ----
+                (A=2, B=3)        \ --------    Combination 3 (C=5, D=8)
+                                   \
+                                    --------    Combination 4 (C=6, D=8)
+
+                                    --------    Combination 1 (C=5, D=7)
+                                   /
+                                  / --------    Combination 2 (C=6, D=7)
+               Combination 3  ----
+                (A=1, B=4)        \ --------    Combination 3 (C=5, D=8)
+                                   \
+                                    --------    Combination 4 (C=6, D=8)
+
+                                    --------    Combination 1 (C=5, D=7)
+                                   /
+                                  / --------    Combination 2 (C=6, D=7)
+               Combination 4  ----
+                (A=2, B=4)        \ --------    Combination 3 (C=5, D=8)
+                                   \
+                                    --------    Combination 4 (C=6, D=8)
         """
         config = self
         # set model level params
@@ -455,9 +478,9 @@ class BaseConfig(ABC):
             model_level_config_lst = [config]
         else:
             tuning_param_name_lst = [tuning_param.name for tuning_param in tuning_param_list]
-            for params_values in itertools.product(*[tuning_param.options for tuning_param in tuning_param_list]):
+            for params_values in itertools.product(*[tuning_param.options for tuning_param in tuning_param_list[::-1]]):
                 new_config = copy.deepcopy(self)
-                for param_name, param_value in zip(tuning_param_name_lst, params_values):
+                for param_name, param_value in zip(tuning_param_name_lst[::-1], params_values):
                     setattr(new_config, param_name, param_value)
                 logger.debug(new_config.to_dict())
                 model_level_config_lst.append(new_config)
@@ -471,7 +494,7 @@ class BaseConfig(ABC):
             tuning_param = self.build_tuning_param(config, param)
             param_val = getattr(config, tuning_param.name)
             if param_val is not None:
-                if tuning_param.is_tunable(param_val):
+                if tuning_param.is_tunable(param_val) and len(param_val) > 0:
                     tuning_param.options = param_val
                     op_tuning_param_list.append(tuning_param)
 
@@ -480,9 +503,9 @@ class BaseConfig(ABC):
         else:
             tuning_param_name_lst = [tuning_param.name for tuning_param in op_tuning_param_list]
             tuning_param_val_lst = list(
-                itertools.product(*[tuning_param.options for tuning_param in op_tuning_param_list])
+                itertools.product(*[tuning_param.options for tuning_param in op_tuning_param_list[::-1]])
             )
-            tuning_param_pair_lst = [dict(zip(tuning_param_name_lst[::-1], val[::-1])) for val in tuning_param_val_lst]
+            tuning_param_pair_lst = [dict(zip(tuning_param_name_lst[::-1], val)) for val in tuning_param_val_lst]
 
             for model_level_config in model_level_config_lst:
                 for tuning_param_pair in tuning_param_pair_lst:
@@ -514,11 +537,8 @@ class BaseConfig(ABC):
         if config_list is None:
             config_list = [self]
         for config in config_list:
-            global_config = config.global_config
             op_type_config_dict, op_name_config_dict = config._get_op_name_op_type_config()
             for op_name, op_type in model_info:
-                if self.global_config is not None:
-                    self._config_mapping[op_name] = global_config
                 if op_type in op_type_config_dict:
                     self._config_mapping[op_name] = op_name_config_dict[op_type]
                 for op_name_pattern in op_name_config_dict:
@@ -628,22 +648,17 @@ def register_supported_configs():
 
 @dataclasses.dataclass
 class OperatorConfig:
+    weight_type: quantization.QuantType
+    activation_type: quantization.QuantType
+    per_channel: bool
+    weight_sym: bool
+    activation_sym: bool
+    calibrate_method: quantization.CalibrationMethod=quantization.CalibrationMethod.MinMax
 
-    def __init__(
-        self,
-        weight_type,
-        activation_type,
-        per_channel,
-        weight_sym,
-        activation_sym,
-        calibrate_method=quantization.CalibrationMethod.MinMax,
-    ):
-        self.weight_type = getattr(weight_type, "tensor_type", weight_type)
-        self.activation_type = getattr(activation_type, "tensor_type", activation_type)
-        self.per_channel = per_channel
-        self.weight_sym = weight_sym
-        self.activation_sym = activation_sym
-        self.calibrate_method = calibrate_method
+    def __post_init__(self):
+        self.weight_type = getattr(self.weight_type, "tensor_type", self.weight_type)
+        self.activation_type = getattr(self.activation_type, "tensor_type", self.activation_type)
+        self.calibrate_method = getattr(self.calibrate_method, "value", self.calibrate_method)
 
     def __getitem__(self, key):
         return getattr(self, key)
@@ -765,6 +780,19 @@ class RTNConfig(BaseConfig):
         self.quant_last_matmul = quant_last_matmul
         self._post_init()
 
+
+    def _post_init(self):
+        if self.white_list == constants.RTN_OP_LIST:
+            global_config = self.get_init_args()
+            self._global_config = self.__class__(**global_config, white_list=None)
+        elif isinstance(self.white_list, list) and len(self.white_list) > 0:
+            for op_name_or_type in self.white_list:
+                global_config = self.get_init_args()
+                tmp_config = self.__class__(**global_config, white_list=None)
+                self.set_local(op_name_or_type, tmp_config)
+        elif self.white_list == constants.EMPTY_WHITE_LIST:
+            return
+
     def get_model_params_dict(self):
         result = dict()
         for param in self.model_params_list:
@@ -793,21 +821,23 @@ class RTNConfig(BaseConfig):
             self._config_mapping.update(config.get_model_params_dict())
 
             # update node level setting
+            last_matmul = None
             global_config = config.get_params_dict()
             op_type_config_dict, op_name_config_dict = config._get_op_name_op_type_config()
             for op_name, op_type in model_info:
-                if self.global_config is not None:
+                if op_type == "MatMul":
+                    last_matmul = op_name
+                if global_config is not None:
                     self._config_mapping[op_name] = global_config
                 if op_type in op_type_config_dict:
                     self._config_mapping[op_name] = op_type_config_dict[op_type]
                 for op_name_pattern in op_name_config_dict:
                     if re.match(op_name_pattern, op_name):
                         self._config_mapping[op_name] = op_name_config_dict[op_name_pattern]
-        if not self.quant_last_matmul:
-            self._config_mapping[model_info[-1][0]] = {
-                "weight": {"dtype": "fp32"},
-                "activation": {"dtype": "fp32", "quant_mode": "fp32"},
-            }
+                if op_name in self._config_mapping and hasattr(self._config_mapping[op_name], "to_dict"):
+                    self._config_mapping[op_name] = self._config_mapping[op_name].to_dict()
+        if not self.quant_last_matmul and last_matmul is not None and last_matmul in self._config_mapping:
+            del self._config_mapping[last_matmul]
         return self._config_mapping
 
     @staticmethod
@@ -926,6 +956,18 @@ class GPTQConfig(BaseConfig):
         self.quant_last_matmul = quant_last_matmul
         self._post_init()
 
+    def _post_init(self):
+        if self.white_list == constants.GPTQ_OP_LIST:
+            global_config = self.get_init_args()
+            self._global_config = self.__class__(**global_config, white_list=None)
+        elif isinstance(self.white_list, list) and len(self.white_list) > 0:
+            for op_name_or_type in self.white_list:
+                global_config = self.get_init_args()
+                tmp_config = self.__class__(**global_config, white_list=None)
+                self.set_local(op_name_or_type, tmp_config)
+        elif self.white_list == constants.EMPTY_WHITE_LIST:
+            return
+
     def get_model_params_dict(self):
         result = dict()
         for param in self.model_params_list:
@@ -957,21 +999,23 @@ class GPTQConfig(BaseConfig):
             self._config_mapping.update(config.get_model_params_dict())
 
             # update node level setting
+            last_matmul = None
             global_config = config.get_params_dict()
             op_type_config_dict, op_name_config_dict = config._get_op_name_op_type_config()
             for op_name, op_type in model_info:
-                if self.global_config is not None:
+                if op_type == "MatMul":
+                    last_matmul = op_name
+                if global_config is not None:
                     self._config_mapping[op_name] = global_config
                 if op_type in op_type_config_dict:
                     self._config_mapping[op_name] = op_type_config_dict[op_type]
                 for op_name_pattern in op_name_config_dict:
                     if re.match(op_name_pattern, op_name):
                         self._config_mapping[op_name] = op_name_config_dict[op_name_pattern]
-        if not self.quant_last_matmul:
-            self._config_mapping[model_info[-1][0]] = {
-                "weight": {"dtype": "fp32"},
-                "activation": {"dtype": "fp32", "quant_mode": "fp32"},
-            }
+                if op_name in self._config_mapping and hasattr(self._config_mapping[op_name], "to_dict"):
+                    self._config_mapping[op_name] = self._config_mapping[op_name].to_dict()
+        if not self.quant_last_matmul and last_matmul is not None and last_matmul in self._config_mapping:
+            del self._config_mapping[last_matmul]
         return self._config_mapping
 
     @staticmethod
@@ -1077,6 +1121,18 @@ class AWQConfig(BaseConfig):
         self.quant_last_matmul = quant_last_matmul
         self._post_init()
 
+    def _post_init(self):
+        if self.white_list == constants.GPTQ_OP_LIST:
+            global_config = self.get_init_args()
+            self._global_config = self.__class__(**global_config, white_list=None)
+        elif isinstance(self.white_list, list) and len(self.white_list) > 0:
+            for op_name_or_type in self.white_list:
+                global_config = self.get_init_args()
+                tmp_config = self.__class__(**global_config, white_list=None)
+                self.set_local(op_name_or_type, tmp_config)
+        elif self.white_list == constants.EMPTY_WHITE_LIST:
+            return
+
     def get_model_params_dict(self):
         result = dict()
         for param in self.model_params_list:
@@ -1107,21 +1163,23 @@ class AWQConfig(BaseConfig):
             self._config_mapping.update(config.get_model_params_dict())
 
             # update node level setting
+            last_matmul = None
             global_config = config.get_params_dict()
             op_type_config_dict, op_name_config_dict = config._get_op_name_op_type_config()
             for op_name, op_type in model_info:
-                if self.global_config is not None:
+                if op_type == "MatMul":
+                    last_matmul = op_name
+                if global_config is not None:
                     self._config_mapping[op_name] = global_config
                 if op_type in op_type_config_dict:
                     self._config_mapping[op_name] = op_type_config_dict[op_type]
                 for op_name_pattern in op_name_config_dict:
                     if re.match(op_name_pattern, op_name):
                         self._config_mapping[op_name] = op_name_config_dict[op_name_pattern]
-        if not self.quant_last_matmul:
-            self._config_mapping[model_info[-1][0]] = {
-                "weight": {"dtype": "fp32"},
-                "activation": {"dtype": "fp32", "quant_mode": "fp32"},
-            }
+                if op_name in self._config_mapping and hasattr(self._config_mapping[op_name], "to_dict"):
+                    self._config_mapping[op_name] = self._config_mapping[op_name].to_dict()
+        if not self.quant_last_matmul and last_matmul is not None and last_matmul in self._config_mapping:
+            del self._config_mapping[last_matmul]
         return self._config_mapping
 
     @staticmethod
@@ -1205,8 +1263,242 @@ class ExtraOptions:
         self.SmoothQuantScalesPerOp = SmoothQuantScalesPerOp
 
 
+def static_basic_check(config, optype, execution_provider, quant_format):
+    if getattr(quant_format, "value", quant_format) == 0:
+        if execution_provider not in constants.STATIC_QOPERATOR_OP_LIST_MAP:
+            raise ValueError(
+                "Unsupported execution_provider {}, only support {}.".format(
+                    execution_provider, list(constants.STATIC_QOPERATOR_OP_LIST_MAP.keys())
+                )
+            )
+        supported_optype = constants.STATIC_QOPERATOR_OP_LIST_MAP[execution_provider]
+        if optype not in supported_optype:
+            raise ValueError(
+                "Unsupported optype {} for {}, only support {}.".format(optype, execution_provider, supported_optype)
+            )
+    elif getattr(quant_format, "value", quant_format) == 1:
+        if execution_provider not in constants.STATIC_QDQ_OP_LIST_MAP:
+            raise ValueError(
+                "Unsupported execution_provider {}, only support {}.".format(
+                    execution_provider, list(constants.STATIC_QDQ_OP_LIST_MAP.keys())
+                )
+            )
+        supported_optype = constants.STATIC_QDQ_OP_LIST_MAP[execution_provider]
+        if optype not in supported_optype:
+            raise ValueError(
+                "Unsupported optype {} for {}, only support {}.".format(optype, execution_provider, supported_optype)
+            )
+    else:
+        raise ValueError(
+            "Unsupported quant_format {}, only support QuantFormat.QOperator and QuantFormat.QDQ.".format(quant_format)
+        )
+    return config
+
+
+def static_cpu_check(config, optype, execution_provider, quant_format):
+    if execution_provider != "CPUExecutionProvider":
+        return config
+
+    # only support per-tensor
+    if optype in [
+        "EmbedLayerNormalization",
+        "Relu",
+        "Clip",
+        "LeakyRelu",
+        "Sigmoid",
+        "MaxPool",
+        "GlobalAveragePool",
+        "Pad",
+        "Split",
+        "Squeeze",
+        "Reshape",
+        "Concat",
+        "AveragePool",
+        "Tile",
+        "Unsqueeze",
+        "Transpose",
+        "Resize",
+        "Abs",
+        "Shrink",
+        "Sign",
+        "Attention",
+        "Flatten",
+        "Expand",
+        "Slice",
+        "Mod",
+        "ReduceMax",
+        "ReduceMin",
+        "CenterCropPad",
+        "Add",
+        "Mul",
+        "ArgMax",
+    ]:
+        setattr(config, "per_channel", False)
+
+    if optype in ["Attention"]:
+        setattr(config, "activation_type", onnx.TensorProto.UINT8)
+    return config
+
+
+def static_cuda_check(config, optype, execution_provider, quant_format):
+    if execution_provider != "CUDAExecutionProvider":
+        return config
+
+    # only support per-tensor
+    if optype in [
+        "EmbedLayerNormalization",
+        "Relu",
+        "Clip",
+        "LeakyRelu",
+        "Sigmoid",
+        "MaxPool",
+        "GlobalAveragePool",
+        "Pad",
+        "Split",
+        "Squeeze",
+        "Reshape",
+        "Concat",
+        "AveragePool",
+        "Tile",
+        "Unsqueeze",
+        "Transpose",
+        "Resize",
+        "Abs",
+        "Shrink",
+        "Sign",
+        "Attention",
+        "Flatten",
+        "Expand",
+        "Slice",
+        "Mod",
+        "ReduceMax",
+        "ReduceMin",
+        "CenterCropPad",
+        "Add",
+        "Mul",
+        "ArgMax",
+    ]:
+        setattr(config, "per_channel", False)
+
+    if optype in ["Attention"]:
+        setattr(config, "activation_type", onnx.TensorProto.INT8)
+        setattr(config, "weight_type", onnx.TensorProto.INT8)
+    return config
+
+
+def static_dml_check(config, optype, execution_provider, quant_format):
+    if execution_provider != "DmlExecutionProvider":
+        return config
+
+    # only support per-tensor
+    if optype in ["Conv", "MatMul", "Mul", "Relu", "Clip", "MaxPool", "Add"]:
+        setattr(config, "per_channel", False)
+    return config
+
+
+def static_dnnl_check(config, optype, execution_provider, quant_format):
+    if execution_provider != "DnnlExecutionProvider":
+        return config
+
+    # current configurations are same as CPU EP
+    return static_cpu_check(config, optype, execution_provider, quant_format)
+
+
+def static_trt_check(config, optype, execution_provider, quant_format):
+    if execution_provider != "TensorrtExecutionProvider":
+        return config
+
+    # only support S8S8
+    if optype in ["Conv", "MatMul", "Gather", "Gemm"]:
+        setattr(config, "weight_type", onnx.TensorProto.INT8)
+        setattr(config, "weight_sym", True)
+        setattr(config, "activation_type", onnx.TensorProto.INT8)
+        setattr(config, "activation_sym", True)
+        setattr(config, "per_channel", [False, True])
+    else:
+        setattr(config, "weight_type", onnx.TensorProto.INT8)
+        setattr(config, "weight_sym", True)
+        setattr(config, "activation_type", onnx.TensorProto.INT8)
+        setattr(config, "activation_sym", True)
+    return config
+
+
+STATIC_CHECK_FUNC_LIST = [
+    static_basic_check,
+    static_cpu_check,
+    static_cuda_check,
+    static_dml_check,
+    static_dnnl_check,
+    static_trt_check,
+]
+
+
+def dynamic_basic_check(config, optype, execution_provider, quant_format=None):
+    if execution_provider not in constants.DYNAMIC_OP_LIST_MAP:
+        raise ValueError(
+            "Unsupported execution_provider {}, only support {}.".format(
+                execution_provider, list(constants.DYNAMIC_OP_LIST_MAP.keys())
+            )
+        )
+
+    supported_optype = constants.DYNAMIC_OP_LIST_MAP[execution_provider]
+    if optype not in supported_optype:
+        raise ValueError(
+            "Unsupported optype {} for {}, only support {}.".format(optype, execution_provider, supported_optype)
+        )
+    return config
+
+
+def dynamic_cpu_check(config, optype, execution_provider, quant_format=None):
+    if execution_provider != "CPUExecutionProvider":
+        return config
+    # TODO: add constraints for other EP
+    if optype in ["FusedConv", "Conv", "EmbedLayerNormalization", "Gather", "Attention", "LSTM"]:
+        setattr(config, "per_channel", False)
+    return config
+
+
+def dynamic_cuda_check(config, optype, execution_provider, quant_format=None):
+    if execution_provider != "CUDAExecutionProvider":
+        return config
+    # current configurations are same as CPU EP
+    return dynamic_cpu_check(config, optype, execution_provider, quant_format)
+
+
+def dynamic_dml_check(config, optype, execution_provider, quant_format=None):
+    if execution_provider != "DmlExecutionProvider":
+        return config
+
+    # don't support dynamic quantization
+    return None
+
+
+def dynamic_dnnl_check(config, optype, execution_provider, quant_format=None):
+    if execution_provider != "DnnlExecutionProvider":
+        return config
+    # current configurations are same as CPU EP
+    return dynamic_cpu_check(config, optype, execution_provider, quant_format)
+
+
+def dynamic_trt_check(config, optype, execution_provider, quant_format=None):
+    if execution_provider != "TensorrtExecutionProvider":
+        return config
+
+    # don't support dynamic quantization
+    return None
+
+
+DYNAMIC_CHECK_FUNC_LIST = [
+    dynamic_basic_check,
+    dynamic_cpu_check,
+    dynamic_cuda_check,
+    dynamic_dml_check,
+    dynamic_dnnl_check,
+    dynamic_trt_check,
+]
+
 @register_config(algo_name=constants.STATIC_QUANT, priority=constants.PRIORITY_STATIC_QUANT)
-class StaticQuantConfig(BaseConfig, quantization.StaticQuantConfig):
+class StaticQuantConfig(BaseConfig, ort_quant.StaticQuantConfig):
 
     supported_configs: List[_OperatorConfig] = []
     params_list: List[str] = [
@@ -1284,7 +1576,7 @@ class StaticQuantConfig(BaseConfig, quantization.StaticQuantConfig):
             logger.warning(
                 "VNNI is not supported and reduce_range=False, reduce_range=True is recommended to avoid potential accuracy issue."
             )
-        quantization.StaticQuantConfig.__init__(
+        ort_quant.StaticQuantConfig.__init__(
             self,
             calibration_data_reader=calibration_data_reader,
             calibrate_method=calibrate_method,
@@ -1347,7 +1639,7 @@ class StaticQuantConfig(BaseConfig, quantization.StaticQuantConfig):
             params = self.get_params_dict()
             op_config = OperatorConfig(**params)
 
-            for valid_func in utility.STATIC_CHECK_FUNC_LIST:
+            for valid_func in STATIC_CHECK_FUNC_LIST:
                 op_config = valid_func(op_config, op_name_or_type, self.execution_provider, self.quant_format)
             self.set_local(op_name_or_type, op_config)
         if isinstance(self.white_list, list) and len(self.white_list) > 0:
@@ -1368,6 +1660,8 @@ class StaticQuantConfig(BaseConfig, quantization.StaticQuantConfig):
             op_type_config_dict, op_name_config_dict = config._get_op_name_op_type_config()
             last_matmul = None
             for op_name, op_type in model_info:
+                if op_type == "MatMul":
+                    last_matmul = op_name
                 if (
                     isinstance(self.op_types_to_quantize, list)
                     and len(self.op_types_to_quantize) > 0
@@ -1388,8 +1682,6 @@ class StaticQuantConfig(BaseConfig, quantization.StaticQuantConfig):
                     continue
                 if op_type in op_type_config_dict:
                     self._config_mapping[op_name] = op_type_config_dict[op_type]
-                    if op_type == "MatMul":
-                        last_matmul = op_name
                 for op_name_pattern in op_name_config_dict:
                     if re.match(op_name_pattern, op_name):
                         self._config_mapping[op_name] = op_name_config_dict[op_name_pattern]
@@ -1468,7 +1760,7 @@ class StaticQuantConfig(BaseConfig, quantization.StaticQuantConfig):
                     activation_sym=False,
                 ),
                 operators=["GatherND", "GatherElements", "Gather"],
-                valid_func_list=utility.STATIC_CHECK_FUNC_LIST,
+                valid_func_list=STATIC_CHECK_FUNC_LIST,
             )
         )
         supported_configs.append(
@@ -1486,7 +1778,7 @@ class StaticQuantConfig(BaseConfig, quantization.StaticQuantConfig):
                     activation_sym=False,
                 ),
                 operators=["EmbedLayerNormalization"],
-                valid_func_list=utility.STATIC_CHECK_FUNC_LIST,
+                valid_func_list=STATIC_CHECK_FUNC_LIST,
             )
         )
         supported_configs.append(
@@ -1504,7 +1796,7 @@ class StaticQuantConfig(BaseConfig, quantization.StaticQuantConfig):
                     activation_sym=False,
                 ),
                 operators=["Conv", "MatMul", "Gemm", "FusedConv"],
-                valid_func_list=utility.STATIC_CHECK_FUNC_LIST,
+                valid_func_list=STATIC_CHECK_FUNC_LIST,
             )
         )
         supported_configs.append(
@@ -1553,7 +1845,7 @@ class StaticQuantConfig(BaseConfig, quantization.StaticQuantConfig):
                     "Mul",
                     "ArgMax",
                 ],
-                valid_func_list=utility.STATIC_CHECK_FUNC_LIST,
+                valid_func_list=STATIC_CHECK_FUNC_LIST,
             )
         )
         cls.supported_configs = supported_configs
@@ -1687,7 +1979,7 @@ def get_default_sq_config() -> SmoothQuantConfig:
 
 
 @register_config(algo_name=constants.DYNAMIC_QUANT, priority=constants.PRIORITY_DYNAMIC_QUANT)
-class DynamicQuantConfig(BaseConfig, quantization.DynamicQuantConfig):
+class DynamicQuantConfig(BaseConfig, ort_quant.DynamicQuantConfig):
     """This is a class for dynamic Quant Configuration.
 
     Inherit from DynamicQuantConfig:
@@ -1732,7 +2024,7 @@ class DynamicQuantConfig(BaseConfig, quantization.DynamicQuantConfig):
             logger.warning(
                 "VNNI is not supported and reduce_range=False, reduce_range=True is recommended to avoid potential accuracy issue."
             )
-        quantization.DynamicQuantConfig.__init__(
+        ort_quant.DynamicQuantConfig.__init__(
             self,
             weight_type=weight_type,
             op_types_to_quantize=op_types_to_quantize,
@@ -1776,7 +2068,7 @@ class DynamicQuantConfig(BaseConfig, quantization.DynamicQuantConfig):
         for op_name_or_type in self.op_types_to_quantize:
             params = self.get_params_dict()
             op_config = OperatorConfig(**params)
-            for valid_func in utility.DYNAMIC_CHECK_FUNC_LIST:
+            for valid_func in DYNAMIC_CHECK_FUNC_LIST:
                 op_config = valid_func(op_config, op_name_or_type, self.execution_provider)
             self.set_local(op_name_or_type, op_config)
         if isinstance(self.white_list, list) and len(self.white_list) > 0:
@@ -1793,10 +2085,11 @@ class DynamicQuantConfig(BaseConfig, quantization.DynamicQuantConfig):
             self._config_mapping.update(config.get_model_params_dict())
 
             # update node level setting
-            global_config = config.global_config
             op_type_config_dict, op_name_config_dict = config._get_op_name_op_type_config()
             last_matmul = None
             for op_name, op_type in model_info:
+                if op_type == "MatMul":
+                    last_matmul = op_name
                 if (
                     isinstance(self.op_types_to_quantize, list)
                     and len(self.op_types_to_quantize) > 0
@@ -1817,8 +2110,6 @@ class DynamicQuantConfig(BaseConfig, quantization.DynamicQuantConfig):
                     continue
                 if op_type in op_type_config_dict:
                     self._config_mapping[op_name] = op_type_config_dict[op_type]
-                    if op_type == "MatMul":
-                        last_matmul = op_name
                 for op_name_pattern in op_name_config_dict:
                     if re.match(op_name_pattern, op_name):
                         self._config_mapping[op_name] = op_name_config_dict[op_name_pattern]
@@ -1888,7 +2179,7 @@ class DynamicQuantConfig(BaseConfig, quantization.DynamicQuantConfig):
                     activation_sym=False,
                 ),
                 operators=["FusedConv", "Conv", "EmbedLayerNormalization"],
-                valid_func_list=utility.DYNAMIC_CHECK_FUNC_LIST,
+                valid_func_list=DYNAMIC_CHECK_FUNC_LIST,
             )
         )
         supported_configs.append(
@@ -1901,7 +2192,7 @@ class DynamicQuantConfig(BaseConfig, quantization.DynamicQuantConfig):
                     activation_sym=False,
                 ),
                 operators=["MatMul"],
-                valid_func_list=utility.DYNAMIC_CHECK_FUNC_LIST,
+                valid_func_list=DYNAMIC_CHECK_FUNC_LIST,
             )
         )
         supported_configs.append(
@@ -1914,7 +2205,7 @@ class DynamicQuantConfig(BaseConfig, quantization.DynamicQuantConfig):
                     activation_sym=False,
                 ),
                 operators=["Gather", "Attention", "LSTM"],
-                valid_func_list=utility.DYNAMIC_CHECK_FUNC_LIST,
+                valid_func_list=DYNAMIC_CHECK_FUNC_LIST,
             )
         )
         cls.supported_configs = supported_configs

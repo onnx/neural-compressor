@@ -18,13 +18,11 @@ from typing import Union
 
 import onnx
 import onnxruntime as ort
-from onnxruntime import quantization
-
-from onnx_neural_compressor import config, constants, data_reader, logger, utility
-from onnx_neural_compressor.algorithms import utility as quant_utils
+from onnx_neural_compressor import constants, data_reader, logger, utility
 from onnx_neural_compressor.algorithms.post_training_quant import calibrate, quantizer
 from onnx_neural_compressor.algorithms.smoother import core
 from onnx_neural_compressor.algorithms.weight_only import awq, gptq, rtn
+from onnx_neural_compressor.quantization import config
 
 
 ###################### RTN Algo Entry ##################################
@@ -40,8 +38,9 @@ def rtn_quantize_entry(
         logger.debug(config_mapping)
     else:
         config_mapping = quant_config.config_mapping
-    model = rtn.apply_rtn_on_model(model, config_mapping)
-    quant_utils.dump_woq_stats(model, config_mapping, quant_config.white_list)
+    quant_kwargs = {}
+    quant_kwargs = {key: getattr(quant_config, key) for key in config.RTNConfig.model_params_list}
+    model = rtn.apply_rtn_on_model(model, config_mapping, **quant_kwargs)
     return model
 
 
@@ -67,11 +66,12 @@ def gptq_quantize_entry(
         logger.debug(config_mapping)
     else:
         config_mapping = quant_config.config_mapping
+    quant_kwargs = {}
+    quant_kwargs = {key: getattr(quant_config, key) for key in config.GPTQConfig.model_params_list}
 
     # regenerate to ensure data exists
     calibration_data_reader.rewind()
-    model = gptq.apply_gptq_on_model(model, config_mapping, calibration_data_reader)
-    quant_utils.dump_woq_stats(model, config_mapping, quant_config.white_list)
+    model = gptq.apply_gptq_on_model(model, config_mapping, calibration_data_reader, **quant_kwargs)
     return model
 
 
@@ -97,11 +97,12 @@ def awq_quantize_entry(
         logger.debug(config_mapping)
     else:
         config_mapping = quant_config.config_mapping
+    quant_kwargs = {}
+    quant_kwargs = {key: getattr(quant_config, key) for key in config.AWQConfig.model_params_list}
 
     # regenerate to ensure data exists
     calibration_data_reader.rewind()
-    model = awq.apply_awq_on_model(model, config_mapping, calibration_data_reader)
-    quant_utils.dump_woq_stats(model, config_mapping, quant_config.white_list)
+    model = awq.apply_awq_on_model(model, config_mapping, calibration_data_reader, **quant_kwargs)
     return model
 
 
@@ -154,7 +155,6 @@ def static_quantize_entry(
     _quantizer.quantize_model()
     if model_output is not None:
         _quantizer.model.save(model_output)
-    quant_utils.dump_model_op_stats(_quantizer.model.model, config_mapping, quant_config.op_types_to_quantize)
     return _quantizer.model.model
 
 
@@ -239,5 +239,4 @@ def dynamic_quantize_entry(
     _quantizer.quantize_model()
     if model_output is not None:
         _quantizer.model.save(model_output)
-    quant_utils.dump_model_op_stats(_quantizer.model.model, config_mapping, quant_config.op_types_to_quantize)
     return _quantizer.model.model

@@ -8,9 +8,9 @@ import torch
 import transformers
 from optimum.exporters.onnx import main_export
 
-from onnx_neural_compressor import config, data_reader, logger
+from onnx_neural_compressor import data_reader, logger
 from onnx_neural_compressor.quantization import algorithm_entry as algos
-from onnx_neural_compressor.quantization import matmul_4bits_quantizer, matmul_nbits_quantizer
+from onnx_neural_compressor.quantization import config, matmul_4bits_quantizer, matmul_nbits_quantizer
 
 
 def find_onnx_file(folder_path):

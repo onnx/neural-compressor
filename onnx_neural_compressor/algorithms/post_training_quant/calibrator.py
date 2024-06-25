@@ -36,7 +36,7 @@ def calib_registry(calib_method):
         ), "The name of subclass of Calibrator should end with 'Calibrator' substring."
         if cls.__name__[: -len("Calibrator")] in CALIBRATOR:  # pragma: no cover
             raise ValueError("Cannot have two operators with the same name.")
-        CALIBRATOR[calib_method.strip()] = cls
+        CALIBRATOR[calib_method] = cls
         return cls
 
     return decorator_calib
@@ -69,7 +69,7 @@ class CalibratorBase:
         return self._calib_min, self._calib_max
 
 
-@calib_registry(calib_method="MinMax")
+@calib_registry(calib_method=0)
 class MinMaxCalibrator(CalibratorBase):
     """MinMax calibrator class."""
 
@@ -109,7 +109,7 @@ class MinMaxCalibrator(CalibratorBase):
         return "MinMax"
 
 
-@calib_registry(calib_method="Percentile")
+@calib_registry(calib_method=2)
 class PercentileCalibrator(CalibratorBase):
     """Percentile calibrator class.
 
@@ -163,7 +163,7 @@ class PercentileCalibrator(CalibratorBase):
         return "Percentile"
 
 
-@calib_registry(calib_method="Entropy")
+@calib_registry(calib_method=1)
 class EntropyCalibrator(CalibratorBase):
     """Entropy calibrator class.
 

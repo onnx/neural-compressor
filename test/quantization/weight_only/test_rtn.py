@@ -6,9 +6,9 @@ import unittest
 
 from optimum.exporters.onnx import main_export
 
-from onnx_neural_compressor import config, logger
+from onnx_neural_compressor import logger
 from onnx_neural_compressor.quantization import algorithm_entry as algos
-from onnx_neural_compressor.quantization import matmul_4bits_quantizer, matmul_nbits_quantizer
+from onnx_neural_compressor.quantization import config, matmul_4bits_quantizer, matmul_nbits_quantizer
 
 
 def find_onnx_file(folder_path):

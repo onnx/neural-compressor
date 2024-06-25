@@ -34,8 +34,7 @@ from onnxruntime.transformers import optimizer
 from onnxruntime.transformers.fusion_options import FusionOptions
 from torch.utils import data
 
-from onnx_neural_compressor import config
-from onnx_neural_compressor.quantization import tuning
+from onnx_neural_compressor.quantization import config, tuning
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(

@@ -28,17 +28,6 @@ from onnx_neural_compressor.algorithms.smoother import calibrator
 from typing import List, Union  # isort: skip
 
 
-_dtype_map = {
-    np.dtype("float32"): 1,
-    np.dtype("uint8"): 2,
-    np.dtype("int8"): 3,
-    np.dtype("int32"): 6,
-    np.dtype("int64"): 7,
-    np.dtype("float16"): 10,
-    np.dtype("double"): 11,
-}
-
-
 def _get_quant_dequant_output(model, input_data, output_data, providers):
     """Get loss between fp32 output and QDQ output.
 
@@ -48,7 +37,7 @@ def _get_quant_dequant_output(model, input_data, output_data, providers):
         output_data (numpy.ndarray): fp32 output
         providers (list): execution provider
     """
-    input_data = _quant_dequant_data(input_data, 2, "asym")
+    input_data = quant_utils.qdq_data(input_data, 2, False)
     sess = ort.InferenceSession(model.SerializeToString(), providers=providers)
     preds = sess.run(None, {model.graph.input[0].name: input_data})
     loss = np.sum(np.abs(output_data - preds) ** 2)
@@ -66,29 +55,20 @@ def _make_sub_graph(node, inits, input_data, output_data, opset, ir_version):
         opset (object): opset of the model
         ir_version (object): ir_version of the model
     """
-    input = onnx.helper.make_tensor_value_info(node.input[0], _dtype_map[input_data.dtype], input_data.shape)
-    output = onnx.helper.make_tensor_value_info(node.output[0], _dtype_map[output_data.dtype], output_data.shape)
+    input = onnx.helper.make_tensor_value_info(
+        node.input[0],
+        onnx.helper.np_dtype_to_tensor_dtype(input_data.dtype),
+        input_data.shape,
+    )
+    output = onnx.helper.make_tensor_value_info(
+        node.output[0],
+        onnx.helper.np_dtype_to_tensor_dtype(output_data.dtype),
+        output_data.shape,
+    )
     graph = onnx.helper.make_graph([node], "sub_graph", [input], [output], inits)
     model = onnx.helper.make_model(graph, opset_imports=opset)
     model.ir_version = ir_version
     return model
-
-
-def _quant_dequant_data(data, qType=3, sym=True):
-    """Quantize and then dequantize data.
-
-    Args:
-        data (numpy.ndarray): target data
-        qType (int): data type
-        sym (bool): sym or asym quantization
-    """
-    rmin, rmax, zero_point, scale, quantized_data = quant_utils.quantize_data(
-        data.flatten().tolist(),
-        quant_utils.get_qmin_qmax_for_qType(qType, False, sym),
-        qType,
-        sym,
-    )
-    return ((quantized_data - zero_point) * scale).astype(data.dtype).reshape(data.shape)
 
 
 class Smoother:
@@ -386,7 +366,7 @@ class Smoother:
             )
             base_dir = "" if not self.model.is_large_model else os.path.dirname(self.model.model_path)
             weight = onnx.numpy_helper.to_array(self.model.get_initializer(node.input[1]), base_dir)
-            weight_q = _quant_dequant_data(weight)
+            weight_q = quant_utils.qdq_data(weight, 3, True)
 
             self.model.set_initializer(node.input[1], weight_q)
             inits = [self.model.get_initializer(i) for i in node.input if self.model.get_initializer(i) is not None]

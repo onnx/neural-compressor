@@ -24,7 +24,8 @@ import onnx
 import onnxruntime as ort
 from onnx import external_data_helper
 
-from onnx_neural_compressor import config, data_reader, logger, utility
+from onnx_neural_compressor import data_reader, logger, utility
+from onnx_neural_compressor.quantization import config
 
 from typing import Any, Callable, Dict, Generator, Iterator, List, Optional, Sized, Tuple, Union  # isort: skip
 

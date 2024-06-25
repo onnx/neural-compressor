@@ -57,19 +57,27 @@ class GatherOperator(base_op.Operator):
 
     def convert(self):
         """Convert to QOperator format."""
+        # DQ-Gather-Q-DQ-op
         node = self.node
 
         parents = self.quantizer.model.get_parents(node)
         children = self.quantizer.model.get_children(node)
 
         if any([i.op_type == "DequantizeLinear" for i in parents]):
-            from onnx import numpy_helper
 
             inputs = []
             inputs.append(parents[0].input[0])
             inputs.append(node.input[1])
 
-            gather_new_output = node.output[0] + "_quantized"
+            out_scale = 1.0
+            out_zp = 0
+            gather_new_output = node.output[0] + "_quantized" # dynamic quant output name
+            for child in children:
+                if child.op_type == "QuantizeLinear":
+                    out_scale = onnx.numpy_helper.to_array(self.quantizer.model.get_initializer(children[0].input[1]))
+                    out_zp = onnx.numpy_helper.to_array(self.quantizer.model.get_initializer(children[0].input[2]))
+                    gather_new_output = children[0].output[0] # static quant output name
+                    self.quantizer.remove_nodes.append(child)
 
             kwargs = {}
             for attribute in node.attribute:  # pragma: no cover
@@ -77,7 +85,7 @@ class GatherOperator(base_op.Operator):
 
             gather_node = onnx.helper.make_node(node.op_type, inputs, [gather_new_output], node.name, **kwargs)
             self.quantizer.new_nodes.append(gather_node)
-            if any([i.op_type != "QuantizeLinear" for i in children]):  # pragma: no cover
+            if any([i.op_type != "QuantizeLinear" for i in children]):
                 dq_inputs = []
                 dq_inputs.append(gather_new_output)
                 dq_inputs.extend(parents[0].input[1:])
@@ -86,25 +94,15 @@ class GatherOperator(base_op.Operator):
                 )
                 self.quantizer.new_nodes.append(dq_node)
 
-            out_scale = 1.0
-            out_zp = 0
-            for child in children:
-                if child.op_type == "QuantizeLinear":
-                    out_scale = numpy_helper.to_array(self.quantizer.model.get_initializer(child.input[1]))
-                    out_zp = numpy_helper.to_array(self.quantizer.model.get_initializer(child.input[2]))
-                    self.quantizer.remove_nodes.append(child)
-                    for n in self.quantizer.model.get_children(child):
-                        self.quantizer.model.replace_node_input(n, child.output[0], gather_new_output)
-
             # int8 weight will be recalculated for the first time
             if (
                 any([child.op_type == "QuantizeLinear" for child in children])
                 and self.quantizer.model.get_initializer(parents[0].input[0]) is not None
                 and parents[0].input[0] not in self.quantizer.recalculate_quantized_value
             ):
-                int8_tensor = numpy_helper.to_array(self.quantizer.model.get_initializer(parents[0].input[0]))
-                in_scale = numpy_helper.to_array(self.quantizer.model.get_initializer(parents[0].input[1]))
-                in_zp = numpy_helper.to_array(self.quantizer.model.get_initializer(parents[0].input[2]))
+                int8_tensor = onnx.numpy_helper.to_array(self.quantizer.model.get_initializer(parents[0].input[0]))
+                in_scale = onnx.numpy_helper.to_array(self.quantizer.model.get_initializer(parents[0].input[1]))
+                in_zp = onnx.numpy_helper.to_array(self.quantizer.model.get_initializer(parents[0].input[2]))
                 new_int8_tensor = (((int8_tensor.astype("float32") - in_zp) * in_scale) / out_scale).round() + out_zp
                 self.quantizer.model.set_initializer(parents[0].input[0], new_int8_tensor.astype(int8_tensor.dtype))
                 self.quantizer.recalculate_quantized_value.append(parents[0].input[0])

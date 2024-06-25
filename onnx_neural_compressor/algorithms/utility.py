@@ -15,56 +15,49 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import enum
-import os
-import pathlib
+import numpy as np
+from packaging import version
 import re
 import struct
 import sys
 from importlib import util
-
-import numpy as np
-from onnxruntime.quantization import onnx_model
-from packaging import version
-
-from onnx_neural_compressor import constants, logger, utility
+from onnx_neural_compressor import constants, utility
 
 if sys.version_info < (3, 11) and util.find_spec("onnxruntime_extensions"):  # pragma: no cover
     import onnxruntime_extensions
 
-torch = utility.LazyImport("torch")
-symbolic_shape_infer = utility.LazyImport("onnxruntime.tools.symbolic_shape_infer")
 onnx = utility.LazyImport("onnx")
 ort = utility.LazyImport("onnxruntime")
 
-
-dtype_mapping = {
-    "fp32": 1,
-    "float32": 1,
-    "uint8": 2,
-    "int8": 3,
-    "uint16": 4,
-    "int16": 5,
-    "int32": 6,
-    "int64": 7,
-    "string": 8,
-    "bool": 9,
-    "fp16": 10,
-    "float16": 10,
-    "double": 11,
-    "uint32": 12,
-    "uint64": 13,
-    "complex64": 14,
-    "complex128": 15,
-    "bf16": 16,
-    "bfloat16": 16,
-}
-
-QUANT_OP_NAME_SUFFIX = "_quant"
 __producer__ = "onnx.quantize"
 __version__ = "0.1.0"
 onnx_domain = "ai.onnx"
 ms_domain = "com.microsoft"
+QUANT_OP_NAME_SUFFIX = "_quant"
+
+
+def attribute_to_kwarg(attribute):
+    """Convert attribute to kwarg format for use with onnx.helper.make_node."""
+    attribute_mapping = {
+        1: attribute.f,
+        2: attribute.i,
+        3: attribute.s,
+        4: attribute.t,
+        5: attribute.g,
+        6: attribute.floats,
+        7: attribute.ints,
+        8: attribute.strings,
+        9: attribute.tensors,
+        10: attribute.graphs,
+    }
+    if attribute.type in attribute_mapping:
+        value = attribute_mapping[attribute.type]
+    else:  # pragma: no cover
+        raise ValueError(
+            "attribute {} has no type specified " "or unsupported type {}.".format(attribute.name, attribute.type)
+        )
+    return {attribute.name: value}
+
 
 ONNX_INT_TYPE_RANGE = {
     onnx.TensorProto.UINT8: (0, 255),
@@ -80,23 +73,39 @@ ONNX_INT_TYPE_REDUCED_RANGE = {
     onnx.TensorProto.INT8: (-64, 64),
 }
 
+ONNX_STR_TYPE_RANGE = {
+    "int1": (-1, 0),
+    "int2": (-2, 1),
+    "int3": (-4, 3),
+    "int4": (-8, 7), # onnx >= 1.16.0 defines TensorProto.INT4
+    "int5": (-16, 15),
+    "int6": (-32, 31),
+    "int7": (-64, 63),
+    "int8": (-128, 127),
+    "uint1": (0, 1),
+    "uint2": (0, 3),
+    "uint3": (0, 7),
+    "uint4": (0, 15), # onnx >= 1.16.0 defines TensorProto.UINT4
+    "uint5": (0, 31),
+    "uint6": (0, 63),
+    "uint7": (0, 127),
+    "uint8": (0, 255),
+}
 
-def check_model_with_infer_shapes(model):
-    """Check if the model has been shape inferred."""
-    if isinstance(model, (pathlib.Path, str)):
-        model = onnx.load(model, load_external_data=False)
-    elif isinstance(model, onnx_model.ONNXModel):
-        model = model.model
-    if len(model.graph.value_info) > 0:
-        return True
-    return False
+def _qType_to_np_type(qType):
+    if isinstance(qType, int):
+        return onnx.helper.tensor_dtype_to_np_dtype(qType)
+    elif isinstance(qType, str) and "uint" in qType:
+        return np.dtype("uint8")
+    else:
+        return np.dtype("int8")
 
 
 def find_by_name(name, item_list):
     """Helper function to find item by name in a list."""
     items = []
     for item in item_list:
-        assert hasattr(item, "name"), "{} should have a 'name' attribute defined".format(item)  # pragma: no cover
+        assert hasattr(item, "name"), "{} should have a 'name' attribute defined".format(item)
         if item.name == name:
             items.append(item)
     if len(items) > 0:
@@ -104,19 +113,22 @@ def find_by_name(name, item_list):
     else:
         return None
 
-
-def is_quantizable_type(data_type):
-    return data_type in [onnx.TensorProto.FLOAT, onnx.TensorProto.FLOAT16, onnx.TensorProto.BFLOAT16]
-
-
 def get_qmin_qmax_for_qType(qType, reduce_range=False, sym=False):  # noqa: N802
-    """Get qmin, qmax for qType."""
+    """Get qmin, qmax for qType.
+
+    Args:
+        qType (int or str): int for onnx defined type, str for onnx not defined type
+        reduce_range (bool, optional): whether use 7 bit for 8bit quantization
+        sym (bool, optional): quantization scheme. Defaults to False.
+    """
     if qType == onnx.TensorProto.FLOAT8E4M3FN:
         raise NotImplementedError("This function is not implemented for float 8 as not needed.")
 
     qrange = None
 
-    if reduce_range:
+    if isinstance(qType, str):
+        qrange = ONNX_STR_TYPE_RANGE.get(qType)
+    elif reduce_range:
         qrange = ONNX_INT_TYPE_REDUCED_RANGE.get(qType)
     elif sym and qType in ONNX_INT_TYPE_SYMMETRIC_RANGE:
         qrange = ONNX_INT_TYPE_SYMMETRIC_RANGE[qType]
@@ -124,14 +136,137 @@ def get_qmin_qmax_for_qType(qType, reduce_range=False, sym=False):  # noqa: N802
         qrange = ONNX_INT_TYPE_RANGE.get(qType)
 
     if not qrange:
-        raise ValueError(f"Unexpected data type {qType} requested. Only INT8 and UINT8 are supported.")
+        raise ValueError(f"Unexpected data type {qType} requested.")
 
     return qrange
 
+def quantize_nparray(dtype, arr, scale, zero_point, low=None, high=None):
+    """Quantize numpy array."""
+    q_weight = np.empty_like(np.asarray(arr), dtype=scale.dtype)
+    np.divide(arr, scale, out=q_weight)
+    np.add(q_weight, zero_point, out=q_weight)
+    np.round(q_weight, out=q_weight)
+    if low is not None and high is not None:
+        np.clip(q_weight, low, high, out=q_weight)
+    return q_weight.astype(dtype)
 
-def dtype_to_name(dtype_mapping, dtype):
-    """Map data type and its string representation."""
-    return list(dtype_mapping.keys())[list(dtype_mapping.values()).index(dtype)]
+def quantize_data_per_channel(data, axis, qType, sym, reduce_range=False):
+    """Quantize tensor per-channel."""
+    quantize_range = get_qmin_qmax_for_qType(qType, reduce_range, sym)
+    rmin = None
+    rmax = None
+    for i in range(len(data.shape)):
+        if i != axis:
+            rmin = np.min(data, axis=i, keepdims=True) if rmin is None else np.min(rmin, axis=i, keepdims=True)
+            rmax = np.max(data, axis=i, keepdims=True) if rmax is None else np.max(rmax, axis=i, keepdims=True)
+    rmin = np.minimum(rmin, 0)
+    rmax = np.maximum(rmax, 0)
+    scale, zero_point = calculate_scale_zp(rmin, rmax, qType, sym, reduce_range)
+
+    dtype = _qType_to_np_type(qType)
+    quantized_data = quantize_nparray(dtype, data, scale, zero_point, low=quantize_range[0], high=quantize_range[1])
+    return rmin.reshape(-1, 1), rmax.reshape(-1, 1), zero_point.reshape(-1, 1), scale.reshape(-1, 1), quantized_data
+
+def dequantize_data_with_scale_zero(tensor_value, scale_value, zo_value):  # pragma: no cover
+    """Dequantize tensor with scale and zero point."""
+    return (tensor_value.astype(scale_value.dtype) - zo_value.astype(scale_value.dtype)) * scale_value
+
+def dequantize_data(tensor_value, scale_value, zo_value, axis=0):  # pragma: no cover
+    """Dequantize tensor."""
+    if not isinstance(scale_value, np.ndarray):
+        return dequantize_data_with_scale_zero(tensor_value, scale_value, zo_value)
+    else:
+        channel_count = tensor_value.shape[axis]  # TBD, default from axis 0
+        new_per_channel_tensor_values = []
+        for i in range(channel_count):
+            per_channel_tensor_value = tensor_value.take(i, axis)
+            per_channel_scale_value = scale_value.take(i)
+            per_channel_zero_value = zo_value.take(i)
+            new_per_channel_tensor_values.append(
+                dequantize_data_with_scale_zero(
+                    per_channel_tensor_value, per_channel_scale_value, per_channel_zero_value
+                )
+            )
+        # combine per_channel_data into one
+        reshape_dims = list(tensor_value.shape)  # deep copy
+        reshape_dims[axis] = 1  # only one per channel for reshape
+        new_tensor_value = new_per_channel_tensor_values[0].reshape(reshape_dims)
+        for i in range(1, channel_count):
+            new_per_channel_tensor_value = new_per_channel_tensor_values[i].reshape(reshape_dims)
+            new_tensor_value = np.concatenate((new_tensor_value, new_per_channel_tensor_value), axis)
+        return new_tensor_value
+
+def calculate_scale_zp(rmin, rmax, qType, sym, reduce_range=False):
+    """Calculate scale and zero point."""
+    qmin, qmax = get_qmin_qmax_for_qType(qType, reduce_range, sym)
+    dtype = _qType_to_np_type(qType)
+    if isinstance(rmax, np.ndarray):
+        if sym:
+            max_range = np.maximum(abs(rmin), abs(rmax))
+            rmin = -max_range
+            rmax = max_range
+        scale = (rmax - rmin) / (qmax - qmin)
+        scale[scale < np.finfo(rmax.dtype).tiny] = 1
+        zero_point = (
+            np.multiply(np.ones(rmax.shape), np.round((qmax + qmin) / 2.0)).astype(dtype)
+            if sym
+            else np.round(qmin - rmin / scale).astype(dtype)
+        )
+    else:
+        if sym:
+            max_range = max(abs(rmin), abs(rmax))
+            scale = (float(max_range) * 2) / (qmax - qmin) if max_range > 0 else 1
+        else:
+            scale = (float(rmax) - float(rmin)) / (qmax - qmin) if rmin != rmax else 1
+        zero_point = np.round((qmax + qmin) / 2.0).astype(dtype) if sym else np.round(qmin - rmin / scale).astype(dtype)
+    return np.float32(scale), zero_point
+
+def quantize_data(data, qType, sym, reduce_range=False, ratio=1.0, axis=None):
+    """Quantize data.
+
+    To pack weights, we compute a linear transformation
+        - when data type == uint8 mode, from [rmin, rmax] -> [0, 2^{b-1}] and
+        - when data type == int8, from [-m , m] -> [-(2^{b-1}-1), 2^{b-1}-1] where
+            m = max(abs(rmin), abs(rmax))
+    and add necessary intermediate nodes to transform quantized weight to full weight
+    using the equation r = S(q-z), where
+        r: real original value
+        q: quantized value
+        S: scale
+        z: zero point
+
+    Args:
+        data (array): data to quantize
+        qType (int): data type to quantize to. Supported types UINT8 and INT8
+        sym (bool): whether use sym quantization.
+        reduce_range (bool): whether use 7 bit or not. Defaults to False
+        ratio (float, optional): percentile of clip. Defaults to 1.0
+        axis (int, optional): process data along a specific axis. Default is None (process the whole data)
+    """
+    quantize_range = get_qmin_qmax_for_qType(qType, reduce_range, sym)
+    rmin = np.min(np.min(data), 0) if axis is None else np.min(data, axis=1, keepdims=True)
+    rmax = np.max(np.max(data), 0) if axis is None else np.max(data, axis=1, keepdims=True)
+    rmin *= ratio
+    rmax *= ratio
+
+    scale, zero_point = calculate_scale_zp(rmin, rmax, qType, sym, reduce_range)
+    dtype = _qType_to_np_type(qType)
+    quantized_data = quantize_nparray(dtype, data, scale, zero_point, low=quantize_range[0], high=quantize_range[1])
+    return rmin, rmax, zero_point, scale, quantized_data
+
+def qdq_data(data, qType, sym, reduce_range=False, ratio=1.0, axis=None):
+    _, _, zero_point, scale, quantized_data = quantize_data(data, qType, sym, reduce_range, ratio, axis)
+    return scale * (quantized_data - zero_point)
+
+def is_B_transposed(node):
+    """Whether inuput B is transposed."""
+    transB = [attr for attr in node.attribute if attr.name == "transB"]
+    if len(transB):
+        return 0 < onnx.helper.get_attribute_value(transB[0])
+    return False
+
+def is_quantizable_type(data_type):
+    return data_type in [onnx.TensorProto.FLOAT, onnx.TensorProto.FLOAT16, onnx.TensorProto.BFLOAT16]
 
 
 def _get_blob_size(group_size, has_zp):  # pragma: no cover
@@ -201,7 +336,7 @@ def make_matmul_weight_only_node(
         scale = np.reshape(scale, (-1, k_blocks))
         scale_tensor = onnx.helper.make_tensor(
             name=node.input[1] + "_scale",
-            data_type=dtype_mapping[str(scale.dtype)],
+            data_type=onnx.helper.np_dtype_to_tensor_dtype(scale.dtype),
             dims=scale.shape,
             vals=scale.tobytes(),
             raw=True,
@@ -348,147 +483,51 @@ def pad_tensor(weight, group_size, k_blocks):
     return weight
 
 
-def quant_tensor(
-    data: np.array,
-    num_bits: int = 4,
-    group_size: int = 32,
-    sym: bool = False,
-    dtype: str = "int",
-    ratio: float = 1.0,
-):
-    """Quantize tensor per group.
+def dump_woq_stats(model, quantize_config):
+    res = {}
 
-    Args:
-        data (np.array): input weight
-        num_bits (int, optional): number of bits used to represent weights. Defaults to 4.
-        group_size (int, optional): how many elements share one scale/zp. Defaults to 4.
-        sym (bool, optional): _quantization scheme. Defaults to False.
-        dtype (str, optional): data type. Defaults to "int".
-        ratio (float, optional): percentile of clip. Defaults to 1.0.
-
-    Returns:
-        output: quantized weight
-        scale: scale
-        zero_point: zero point
-    """
-    data = np.reshape(data, (-1, group_size))
-    if not sym or dtype == "uint":
-        maxq = 2**num_bits - 1
-        minq = 0
-    elif sym:
-        maxq = 2 ** (num_bits - 1) - 1 if num_bits != 1 else 0
-        minq = -(2 ** (num_bits - 1)) if num_bits != 1 else -1
-
-    rmin = np.min(data, axis=1, keepdims=True) * ratio
-    rmax = np.max(data, axis=1, keepdims=True) * ratio
-    if sym:
-        max_range = np.maximum(np.abs(rmin), np.abs(rmax))
-        scale = np.ones(rmax.shape)
-        scale[max_range > 0] = np.array(
-            [float(i) / (maxq - minq) for i in (max_range[max_range > 0] * 2.0).flatten().tolist()]
-        )
-        zero_point = (
-            np.zeros(scale.shape) if dtype == "int" else np.ones(rmax.shape, dtype="uint8") * (1 << (num_bits - 1))
-        )
-    else:
-        scale = np.ones(rmax.shape)
-        scale[rmin != rmax] = np.array(
-            [float(i) / (maxq - minq) for i in (rmax - rmin)[rmin != rmax].flatten().tolist()]
-        )
-        zero_point = (
-            ((np.zeros(scale.shape) - rmin) / scale).round()
-            if dtype == "int"
-            else np.maximum(0, np.minimum(maxq, ((np.zeros(scale.shape) - rmin) / scale).round())).astype("uint8")
-        )
-    return np.clip((data / scale + zero_point).round(), minq, maxq), scale, zero_point
-
-
-def qdq_tensor(
-    data: np.array,
-    num_bits: int = 4,
-    group_size: int = 32,
-    sym: bool = False,
-    dtype: str = "int",
-    ratio: float = 1.0,
-):
-    """Quant dequant tensor per group.
-
-    Args:
-        data (np.array): input weight
-        num_bits (int, optional): number of bits used to represent weights. Defaults to 4.
-        group_size (int, optional):  how many elements share one scale/zp. Defaults to 32.
-        sym (bool, optional): quantization scheme. Defaults to False.
-        dtype (str, optional): data type. Defaults to "int".
-        ratio (float, optional): percentile of clip. Defaults to 1.0.
-
-    Returns:
-        output: quant-dequant weight
-    """
-    org_shape = data.shape
-    weight, scale, zp = quant_tensor(data, num_bits, group_size, sym, dtype, ratio)
-    return np.reshape(scale * (weight - zp), org_shape)
-
-
-def is_B_transposed(node):
-    """Whether inuput B is transposed."""
-    transB = [attr for attr in node.attribute if attr.name == "transB"]
-    if len(transB):
-        return 0 < onnx.helper.get_attribute_value(transB[0])
-    return False
-
-
-def calculate_scale_zp(rmin, rmax, quantize_range, qType, sym):
-    """Calculate scale and zero point."""
-    qmin, qmax = quantize_range
-    dtype = onnx.helper.tensor_dtype_to_np_dtype(qType)
-    if isinstance(rmax, np.ndarray):
-        if sym:
-            max_range = np.maximum(abs(rmin), abs(rmax))
-            rmin = -max_range
-            rmax = max_range
-        scale = (rmax - rmin) / (qmax - qmin)
-        scale[scale < np.finfo(rmax.dtype).tiny] = 1
-        zero_point = (
-            np.multiply(np.ones(rmax.shape), np.round((qmax + qmin) / 2.0)).astype(dtype)
-            if sym
-            else np.round(qmin - rmin / scale).astype(dtype)
-        )
-    else:
-        if sym:
-            max_range = max(abs(rmin), abs(rmax))
-            scale = (float(max_range) * 2) / (qmax - qmin) if max_range > 0 else 1
+    dtype_set = set()
+    for node in model.graph.node:
+        if node.name.split("_Q")[0] not in quantize_config:
+            continue
+        if node.op_type in ["MatMulFpQ4", "MatMulNBits"]:
+            optype = "MatMul"
         else:
-            scale = (float(rmax) - float(rmin)) / (qmax - qmin) if rmin != rmax else 1
-        zero_point = np.round((qmax + qmin) / 2.0).astype(dtype) if sym else np.round(qmin - rmin / scale).astype(dtype)
-    return np.float32(scale), zero_point
+            optype = node.op_type
 
+        if optype not in res:
+            res[optype] = {}
+        if re.fullmatch("^.*_Q\d*G\d*", node.input[1]):
+            search_out = re.search("_Q\d*", node.input[1])
+            dtype = "A32W{}G{}".format(
+                node.input[1][search_out.start() + 2 : search_out.end()], node.input[1][search_out.end() + 1 :]
+            )
+        else:
+            dtype = "FP32"
+        dtype_set.add(dtype)
 
-def quantize_data(data, quantize_range, qType, sym):
-    """Quantize data.
+        if dtype in res[optype]:
+            res[optype][dtype] += 1
+        else:
+            res[optype][dtype] = 1
 
-    To pack weights, we compute a linear transformation
-        - when data type == uint8 mode, from [rmin, rmax] -> [0, 2^{b-1}] and
-        - when data type == int8, from [-m , m] -> [-(2^{b-1}-1), 2^{b-1}-1] where
-            m = max(abs(rmin), abs(rmax))
-    and add necessary intermediate nodes to transform quantized weight to full weight
-    using the equation r = S(q-z), where
-        r: real original value
-        q: quantized value
-        S: scale
-        z: zero point
+    dtype_list = list(dtype_set)
+    for dtype in dtype_list:
+        for optype in res.keys():
+            if dtype not in res[optype]:
+                res[optype][dtype] = 0
 
-    Args:
-        data (array): data to quantize
-        quantize_range (list): list of data to weight pack.
-        qType (int): data type to quantize to. Supported types UINT8 and INT8
-        sym (bool): whether use sym quantization.
-    """
-    rmin = np.min(np.min(data), 0)
-    rmax = np.max(np.max(data), 0)
+    # update stats format for dump.
+    field_names = ["Op Type", "Total"]
+    field_names.extend(dtype_list)
+    output_data = []
+    for op_type in res.keys():
+        field_results = [op_type, sum(res[op_type].values())]
+        field_results.extend([res[op_type][dtype] for dtype in dtype_list])
+        output_data.append(field_results)
 
-    scale, zero_point = calculate_scale_zp(rmin, rmax, quantize_range, qType, sym)
-    quantized_data = quantize_nparray(qType, data, scale, zero_point, low=quantize_range[0], high=quantize_range[1])
-    return rmin, rmax, zero_point, scale, quantized_data
+    utility.Statistics(output_data, header="Mixed Precision Statistics", field_names=field_names).print_stat()
+
 
 
 def get_node_original_name(node) -> str:
@@ -502,16 +541,10 @@ def get_node_original_name(node) -> str:
         return node_name
 
 
-class QuantType(enum.Enum):  # pragma: no cover
-    """Represent QuantType value."""
-
-    QInt8 = 0
-    QUInt8 = 1
-
-
 def split_shared_bias(model):
     """Split shared tensor."""
-    for input_name, node_list in model.input_name_to_nodes.items():
+    input_name_to_nodes = model.input_name_to_nodes()
+    for input_name, node_list in input_name_to_nodes.items():
         if len(node_list) > 1 and input_name in [i.name for i in model.model.graph.initializer]:
             for node in node_list[1:]:
                 if node.op_type not in ["Conv", "FusedConv"]:
@@ -541,68 +574,6 @@ def remove_init_from_model_input(model):
             inputs.remove(name_to_input[initializer.name])
 
 
-def quantize_data_per_channel(data, axis, quantize_range, qType, sym):
-    """Quantize tensor per-channel."""
-    rmin = None
-    rmax = None
-    for i in range(len(data.shape)):
-        if i != axis:
-            rmin = np.min(data, axis=i, keepdims=True) if rmin is None else np.min(rmin, axis=i, keepdims=True)
-            rmax = np.max(data, axis=i, keepdims=True) if rmax is None else np.max(rmax, axis=i, keepdims=True)
-    rmin = np.minimum(rmin, 0)
-    rmax = np.maximum(rmax, 0)
-    scale, zero_point = calculate_scale_zp(rmin, rmax, quantize_range, qType, sym)
-    quantized_data = quantize_nparray(qType, data, scale, zero_point, low=quantize_range[0], high=quantize_range[1])
-    return rmin.reshape(-1, 1), rmax.reshape(-1, 1), zero_point.reshape(-1, 1), scale.reshape(-1, 1), quantized_data
-
-
-def dequantize_data_with_scale_zero(tensor_value, scale_value, zo_value):  # pragma: no cover
-    """Dequantize tensor with scale and zero point."""
-    return (tensor_value.astype(scale_value.dtype) - zo_value.astype(scale_value.dtype)) * scale_value
-
-
-def dequantize_data(tensor_value, scale_value, zo_value, axis=0):  # pragma: no cover
-    """Dequantize tensor."""
-    if not isinstance(scale_value, np.ndarray):
-        return dequantize_data_with_scale_zero(tensor_value, scale_value, zo_value)
-    else:
-        channel_count = tensor_value.shape[axis]  # TBD, default from axis 0
-        new_per_channel_tensor_values = []
-        for i in range(channel_count):
-            per_channel_tensor_value = tensor_value.take(i, axis)
-            per_channel_scale_value = scale_value.take(i)
-            per_channel_zero_value = zo_value.take(i)
-            new_per_channel_tensor_values.append(
-                dequantize_data_with_scale_zero(
-                    per_channel_tensor_value, per_channel_scale_value, per_channel_zero_value
-                )
-            )
-        # combine per_channel_data into one
-        reshape_dims = list(tensor_value.shape)  # deep copy
-        reshape_dims[axis] = 1  # only one per channel for reshape
-        new_tensor_value = new_per_channel_tensor_values[0].reshape(reshape_dims)
-        for i in range(1, channel_count):
-            new_per_channel_tensor_value = new_per_channel_tensor_values[i].reshape(reshape_dims)
-            new_tensor_value = np.concatenate((new_tensor_value, new_per_channel_tensor_value), axis)
-        return new_tensor_value
-
-
-class ValueInfo:  # pragma: no cover
-    """Represents a casted tensor info."""
-
-    def __init__(self, tensor_name, dtype, new_dtype):
-        """Initialization.
-
-        Args:
-            tensor_name (string): tensor name
-            dtype (int): original data type
-            new_dtype (int): target data type
-        """
-        self.tensor_name = tensor_name
-        self.dtype = dtype
-        self.new_dtype = new_dtype
-
-
 class QuantizedValue:
     """Represents a linearly quantized value (input/output/initializer)."""
 
@@ -612,9 +583,8 @@ class QuantizedValue:
         new_quantized_name,
         scale_name,
         zero_point_name,
-        quantized_value_type,
         axis=None,
-        qType=QuantType.QUInt8,
+        qType=1,
     ):
         """Initialization.
 
@@ -623,15 +593,13 @@ class QuantizedValue:
             new_quantized_name (string): quantized tensor name
             scale_name (string): scale name
             zero_point_name (string): zero point name
-            quantized_value_type (QuantizedValueType): quantized value type
             axis (int, optional): quantized axis. Defaults to None.
-            qType (int, optional): quantized data type. Defaults to QuantType.QUInt8.
+            qType (int, optional): quantized data type. Defaults to 1 (uint8).
         """
         self.name = name
         self.q_name = new_quantized_name
         self.scale_name = scale_name
         self.zp_name = zero_point_name
-        self.value_type = quantized_value_type
         self.axis = axis
         self.qType = qType
 
@@ -650,7 +618,7 @@ class QuantizedInitializer:
         data=[],
         quantized_data=[],
         axis=None,
-        qType=QuantType.QUInt8,
+        qType=1,
     ):
         """Initialization.
 
@@ -664,7 +632,7 @@ class QuantizedInitializer:
             data (list, optional): array version of the initializer. Defaults to [].
             quantized_data (list, optional): quantized data. Defaults to [].
             axis (int, optional): quantized axis. Defaults to None.
-            qType (int, optional): quantized data type. Defaults to QuantType.QUInt8.
+            qType (int, optional): quantized data type. Defaults to 1 (uint8).
         """
         self.name = name
         self.initializer = initializer  # TensorProto initializer in ONNX graph
@@ -679,93 +647,6 @@ class QuantizedInitializer:
         self.axis = axis
         # If empty, single zero point and scales computed from a single rmin and rmax
         self.qType = qType
-
-
-class QuantizedValueType(enum.Enum):  # pragma: no cover
-    """Represent QuantizedValueType value."""
-
-    Input = 0
-    Initializer = 1
-
-
-def quantize_nparray(qtype, arr, scale, zero_point, low=None, high=None):
-    """Quantize numpy array."""
-    dtype = onnx.helper.tensor_dtype_to_np_dtype(qtype)
-    arr_fp32 = np.asarray((np.asarray(arr).astype(np.float32) / scale).round() + zero_point)
-    if low is not None and high is not None:
-        np.clip(arr_fp32, low, high, out=arr_fp32)
-    return arr_fp32.astype(dtype)
-
-
-def attribute_to_kwarg(attribute):
-    """Convert attribute to kwarg format for use with onnx.helper.make_node."""
-    attribute_mapping = {
-        1: attribute.f,
-        2: attribute.i,
-        3: attribute.s,
-        4: attribute.t,
-        5: attribute.g,
-        6: attribute.floats,
-        7: attribute.ints,
-        8: attribute.strings,
-        9: attribute.tensors,
-        10: attribute.graphs,
-    }
-    if attribute.type in attribute_mapping:
-        value = attribute_mapping[attribute.type]
-    else:  # pragma: no cover
-        raise ValueError(
-            "attribute {} has no type specified " "or unsupported type {}.".format(attribute.name, attribute.type)
-        )
-    return {attribute.name: value}
-
-
-def trt_env_setup(model):
-    """Set environment variable for Tensorrt Execution Provider."""
-    is_int8 = False
-    for node in model.graph.node:
-        if node.op_type in ["QuantizeLinear", "DequantizeLinear"]:
-            is_int8 = True
-            break
-    if is_int8:
-        os.environ["ORT_TENSORRT_INT8_ENABLE"] = "1"
-    else:
-        os.environ["ORT_TENSORRT_INT8_ENABLE"] = "0"
-
-
-def infer_shapes(in_mp, int_max=2**31 - 1, auto_merge=False, guess_output_rank=False, verbose=0, base_dir=""):
-    """Symbolic shape inference."""
-
-    class SymbolicShapeInference(symbolic_shape_infer.SymbolicShapeInference):
-        def __init__(self, int_max, auto_merge, guess_output_rank, verbose, prefix="", base_dir=""):
-            super().__init__(int_max, auto_merge, guess_output_rank, verbose, prefix)
-            self.base_dir = base_dir
-
-        def _get_value(self, node, idx):
-            name = node.input[idx]
-            assert name in self.sympy_data_ or name in self.initializers_
-            return (
-                self.sympy_data_[name]
-                if name in self.sympy_data_
-                else onnx.numpy_helper.to_array(self.initializers_[name], base_dir=self.base_dir)
-            )
-
-    onnx_opset = symbolic_shape_infer.get_opset(in_mp)
-    if (not onnx_opset) or onnx_opset < 7:
-        logger.warning("Only support models of onnx opset 7 and above.")
-        return None
-    symbolic_shape_inference = SymbolicShapeInference(
-        int_max, auto_merge, guess_output_rank, verbose, base_dir=base_dir
-    )
-    all_shapes_inferred = False
-    symbolic_shape_inference._preprocess(in_mp)
-    while symbolic_shape_inference.run_:
-        all_shapes_inferred = symbolic_shape_inference._infer_impl()
-    symbolic_shape_inference._update_output_from_vi()
-    if not all_shapes_inferred:
-        onnx.save_model(symbolic_shape_inference.out_mp_, "sym_shape_infer_temp.onnx", save_as_external_data=True)
-        raise Exception("Incomplete symbolic shape inference")
-    return symbolic_shape_inference.out_mp_
 
 
 def dump_model_op_stats(model, quantize_config, fp32_op_list):
@@ -809,49 +690,3 @@ def dump_model_op_stats(model, quantize_config, fp32_op_list):
     ]
 
     utility.Statistics(output_data, header="Quantization Statistics", field_names=field_names).print_stat()
-
-
-def dump_woq_stats(model, quantize_config, fp32_op_list):
-    res = {}
-    for optype in fp32_op_list:
-        res[optype] = {}
-
-    dtype_set = set()
-    for node in model.graph.node:
-        if node.op_type in ["MatMulFpQ4", "MatMulNBits"]:
-            optype = "MatMul"
-        else:
-            optype = node.op_type
-
-        if optype not in res:
-            continue
-        if re.fullmatch("^.*_Q\d*G\d*", node.input[1]):
-            search_out = re.search("_Q\d*", node.input[1])
-            dtype = "A32W{}G{}".format(
-                node.input[1][search_out.start() + 2 : search_out.end()], node.input[1][search_out.end() + 1 :]
-            )
-        else:
-            dtype = "FP32"
-        dtype_set.add(dtype)
-
-        if dtype in res[optype]:
-            res[optype][dtype] += 1
-        else:
-            res[optype][dtype] = 1
-
-    dtype_list = list(dtype_set)
-    for dtype in dtype_list:
-        for optype in res.keys():
-            if dtype not in res[optype]:
-                res[optype][dtype] = 0
-
-    # update stats format for dump.
-    field_names = ["Op Type", "Total"]
-    field_names.extend(dtype_list)
-    output_data = []
-    for op_type in res.keys():
-        field_results = [op_type, sum(res[op_type].values())]
-        field_results.extend([res[op_type][dtype] for dtype in dtype_list])
-        output_data.append(field_results)
-
-    utility.Statistics(output_data, header="Mixed Precision Statistics", field_names=field_names).print_stat()

@@ -13,9 +13,7 @@
 # limitations under the License.
 """Base Operator."""
 
-from onnxruntime import quantization
-
-from onnx_neural_compressor import constants
+from onnx_neural_compressor import constants, quantization
 
 OPERATORS = {
     "dynamic_quant": {},
@@ -56,7 +54,7 @@ class Operator(object):
             True if onnx_node.op_type in onnx_quantizer.op_types_to_exclude_output_quantization else False
         )
         self.per_channel = False
-        self.calibrate_method = quantization.CalibrationMethod.MinMax
+        self.calibrate_method = 0 # minmax
         self.weight_sym = True
         self.weight_dtype = None
         self.activation_dtype = None

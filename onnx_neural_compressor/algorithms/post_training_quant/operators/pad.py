@@ -76,7 +76,10 @@ class PadOperator(base_op.Operator):
                     scale_value = scale_array.item() if scale_array.ndim == 0 else scale_array[0]
                     padding_constant_array = onnx.numpy_helper.to_array(padding_constant_initializer)
                     quantized_padding_constant_array = quant_utils.quantize_nparray(
-                        self.weight_dtype, padding_constant_array, scale_value, zp_value
+                        onnx.helper.tensor_dtype_to_np_dtype(self.weight_dtype),
+                        padding_constant_array,
+                        scale_value,
+                        zp_value,
                     )
                     quantized_padding_constant_name = node.input[2] + "_quantized"
                     quantized_padding_constant_initializer = onnx.numpy_helper.from_array(

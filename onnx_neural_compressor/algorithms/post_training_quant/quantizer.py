@@ -21,7 +21,7 @@ import numpy as np
 import onnx
 import onnxruntime as ort
 
-from onnx_neural_compressor import logger, onnx_model
+from onnx_neural_compressor import logger, onnx_model, utility
 from onnx_neural_compressor.algorithms import utility as quant_utils
 from onnx_neural_compressor.algorithms.post_training_quant.operators import base_op
 
@@ -150,17 +150,24 @@ class Quantizer:
 
     def _postprocess(self):
         if "TensorrtExecutionProvider" in self.execution_provider:
-            quant_utils.trt_env_setup(self.model.model)
+            utility.trt_env_setup(self.model.model)
         self.merge_dedicated_qdq_pair()
         self.model.remove_unused_nodes()
 
         self.model.model.producer_name = quant_utils.__producer__
         self.model.model.producer_version = quant_utils.__version__
 
+    def _preprocess(self):
+        quant_utils.remove_init_from_model_input(self.model)
+        quant_utils.split_shared_bias(self.model)
+
     def quantize_model(self):
         """Quantize onnx model."""
+        self._preprocess()
+
         # step 1: insert q-dq pairs
         self.insert_qdq()
+
         self.remove_duplicate_qdq_paris()
 
         # step 2: convert q-node-dq to qoperator format if needed
@@ -168,6 +175,7 @@ class Quantizer:
             self.convert_qdq_to_operator_oriented()
 
         self._postprocess()
+        quant_utils.dump_model_op_stats(self.model.model, self.config, self.op_types_to_quantize)
         return self.model.model
 
     def merge_dedicated_qdq_pair(self):
@@ -430,25 +438,11 @@ class Quantizer:
         packed_bias_zp_initializer = onnx.numpy_helper.from_array(bias_zp_data, quantized_bias_zp_name)
         self.model.initializer().extend([packed_bias_zp_initializer])
 
-        # log entries for this quantized bias value
-        quantized_bias_entry = quant_utils.QuantizedInitializer(
-            bias_name,
-            bias_initializer,
-            [0],
-            [0],
-            [0],
-            [bias_scale],
-            bias_data,
-            quantized_data,
-            qType=onnx.TensorProto.INT32,
-        )
-
         quantized_value = quant_utils.QuantizedValue(
             bias_name,
             quantized_bias_name,
             quantized_bias_scale_name,
             quantized_bias_zp_name,
-            quant_utils.QuantizedValueType.Initializer,
             None,
             onnx.TensorProto.INT32,
         )
@@ -476,9 +470,9 @@ class Quantizer:
         rmin, rmax, zero_point, scale, quantized_weights = quant_utils.quantize_data_per_channel(
             weights,
             channel_axis,
-            quant_utils.get_qmin_qmax_for_qType(weight_qType, self.reduce_range, sym),
             weight_qType,
             sym,
+            self.reduce_range,
         )
 
         weight = quant_utils.QuantizedInitializer(
@@ -500,7 +494,6 @@ class Quantizer:
             weight.name + "_quantized",
             weight.name + "_scale",
             weight.name + "_zero_point",
-            quant_utils.QuantizedValueType.Initializer,
             None,
             weight_qType,
         )
@@ -579,7 +572,7 @@ class Quantizer:
             raise ValueError(
                 "Only float type quantization is supported. \
                 Weights {} is {}.".format(
-                    initializer.name, quant_utils.dtype_to_name(quant_utils.dtype_mapping, initializer.data_type)
+                    initializer.name, str(onnx.helper.tensor_dtype_to_np_dtype(initializer.data_type)),
                 )
             )
         return weights
@@ -636,9 +629,9 @@ class Quantizer:
         )
         rmin, rmax, zero_point, scale, quantized_weights_data = quant_utils.quantize_data(
             weights_data.flatten().tolist(),
-            quant_utils.get_qmin_qmax_for_qType(qType, self.reduce_range, sym),
             qType,
             sym,
+            self.reduce_range,
         )
         weight = quant_utils.QuantizedInitializer(
             name,
@@ -752,7 +745,7 @@ class Quantizer:
                 self.replace_input.append([child, tensor_name, dequant_node.output[0]])
             if tensor_name not in self.quantized_value_map:
                 quantized_value = quant_utils.QuantizedValue(
-                    tensor_name, dq_output, scale_name, zp_name, quant_utils.QuantizedValueType.Input
+                    tensor_name, dq_output, scale_name, zp_name
                 )
                 self.quantized_value_map[tensor_name] = quantized_value
 
@@ -807,7 +800,6 @@ class Quantizer:
                         q_weight_name,
                         scale_name,
                         zp_name,
-                        quant_utils.QuantizedValueType.Initializer,
                         None,
                         dtype,
                     )
@@ -999,7 +991,7 @@ class StaticQuantizer(Quantizer):
 
         if tensor_name not in self.quantized_value_map:
             quantized_value = quant_utils.QuantizedValue(
-                tensor_name, dq_output, scale_name, zp_name, quant_utils.QuantizedValueType.Input
+                tensor_name, dq_output, scale_name, zp_name,
             )
             self.quantized_value_map[tensor_name] = quantized_value
 
@@ -1041,7 +1033,11 @@ class DynamicQuantizer(Quantizer):
 
     def _quantize_activation(self, node, tensor_name, direct_int8=False):
         """Quantize node activation."""
-        qlinear_node = self.model.find_node_by_name(tensor_name + "_QuantizeLinear", self.new_nodes, self.model.graph())
+        qlinear_node = None
+        if quant_utils.find_by_name(tensor_name + "_QuantizeLinear", self.model.nodes()) is not None:
+            qlinear_node = quant_utils.find_by_name(tensor_name + "_QuantizeLinear", self.model.nodes())
+        elif quant_utils.find_by_name(tensor_name + "_QuantizeLinear", self.new_nodes) is not None:
+            qlinear_node = quant_utils.find_by_name(tensor_name + "_QuantizeLinear", self.new_nodes)
         if qlinear_node is None:
             if (
                 self.fuse_dynamic_quant

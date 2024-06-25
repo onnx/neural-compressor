@@ -20,7 +20,7 @@ import onnx
 import onnxruntime as ort
 from onnxruntime.quantization.quantize import QuantConfig
 
-from onnx_neural_compressor import config
+from onnx_neural_compressor.quantization import config
 from onnx_neural_compressor.quantization import algorithm_entry as algos
 
 
@@ -28,7 +28,7 @@ from onnx_neural_compressor.quantization import algorithm_entry as algos
 def quantize(
     model_input: Union[str, pathlib.Path, onnx.ModelProto],
     model_output: Union[str, pathlib.Path],
-    quant_config: QuantConfig,
+    quant_config: config.BaseConfig,
     optimization_level: ort.GraphOptimizationLevel = ort.GraphOptimizationLevel.ORT_ENABLE_BASIC,
 ):
     with tempfile.TemporaryDirectory(prefix="ort.opt.") as tmp_dir:

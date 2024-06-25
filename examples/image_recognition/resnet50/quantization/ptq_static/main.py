@@ -30,8 +30,8 @@ import onnxruntime as ort
 from PIL import Image
 from sklearn import metrics
 
-from onnx_neural_compressor import config, data_reader, quantization
-from onnx_neural_compressor.quantization import tuning
+from onnx_neural_compressor import data_reader, quantization
+from onnx_neural_compressor.quantization import config, tuning
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(

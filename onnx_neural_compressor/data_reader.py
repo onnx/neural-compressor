@@ -14,15 +14,25 @@
 
 import abc
 
-from onnxruntime import quantization
 
+class CalibrationDataReader(metaclass=abc.ABCMeta):
+    @classmethod
+    def __subclasshook__(cls, subclass):
+        return hasattr(subclass, "get_next") and callable(subclass.get_next) or NotImplemented
 
-class CalibrationDataReader(quantization.CalibrationDataReader):
-    """Get data for calibration.
+    @abc.abstractmethod
+    def get_next(self) -> dict:
+        """generate the input data dict for ONNXinferenceSession run"""
+        raise NotImplementedError
 
-    We define our CalibrationDataReader based on the class in below link:
-    https://github.com/microsoft/onnxruntime/blob/main/onnxruntime/python/tools/quantization/calibrate.py#L139
-    """
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        result = self.get_next()
+        if result is None:
+            raise StopIteration
+        return result
 
     @abc.abstractmethod
     def rewind(self):

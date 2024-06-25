@@ -28,7 +28,6 @@ from importlib import util
 import numpy as np
 import onnx
 import onnxruntime
-from onnxruntime import quantization as ort_quant
 from packaging import version
 
 from onnx_neural_compressor import logger, onnx_model
@@ -279,9 +278,9 @@ class ONNXRTAugment:
                     node_name = name_to_node[node_output_names[output_idx]]
                     if node_output_names[output_idx] not in name_to_calibrator:
                         calib_method = (
-                            q_config[node_name]["calibrate_method"].name
+                            q_config[node_name]["calibrate_method"]
                             if q_config and node_name in q_config
-                            else ort_quant.CalibrationMethod.MinMax.name
+                            else 0
                         )
                         assert calib_method in calibrator.CALIBRATOR, "Calibration method {} is not registered.".format(
                             calib_method
@@ -294,7 +293,7 @@ class ONNXRTAugment:
                     # the calibration method is minmax, otherwise the tensor data is collected.
                     # TODO: for entropy and percentile method, need to support range collection
                     # per iteration in the future.
-                    if _calibrator.method_name == ort_quant.CalibrationMethod.MinMax.name:
+                    if _calibrator.method_name == "MinMax":
                         _calibrator.collect(output)
                         activation_tensors_calib_range[node_output_names[output_idx]] = [list(_calibrator.calib_range)]
                         name_to_calibrator[node_output_names[output_idx]] = _calibrator
@@ -325,9 +324,9 @@ class ONNXRTAugment:
             if any([data.dtype in [bool] for data in datas]):  # output type of some ops is bool, skip
                 continue
             calib_method = (
-                q_config[node_name]["calibrate_method"].name
+                q_config[node_name]["calibrate_method"]
                 if q_config and node_name in q_config
-                else ort_quant.CalibrationMethod.MinMax.name
+                else 0
             )
             _calibrator = calibrator.CALIBRATOR[calib_method]()
             _calibrator.collect(datas)
@@ -396,9 +395,7 @@ class ONNXRTAugment:
                     os.path.dirname(self.model_wrapper.model_path) if self.model_wrapper.model_path is not None else ""
                 ),
             )
-            _calibrator = calibrator.CALIBRATOR[
-                ort_quant.CalibrationMethod.MinMax.name
-            ]()  # use minmax method to calibrate initializer tensors
+            _calibrator = calibrator.CALIBRATOR[0]() # use minmax method to calibrate initializer tensors
             if initializer_tensor.flatten().size > 0:
                 _calibrator.collect(initializer_tensor)
                 weight_tensors_calib_range[initializer_tensor_name] = [list(_calibrator.calib_range)]
@@ -598,13 +595,12 @@ class ONNXRTAugment:
                 node_thresholds[1],
                 sym,
                 qType,
-                quant_utils.get_qmin_qmax_for_qType(qType, self.reduce_range, sym),
             )
             quantization_params[tensor_name] = node_params
 
         return quantization_params
 
-    def calculate_scale_zeropoint(self, last_node, next_node, rmin, rmax, sym, qType, quantize_range):
+    def calculate_scale_zeropoint(self, last_node, next_node, rmin, rmax, sym, qType):
         """Given the source and destination node of tensor, return calculated zero point and scales."""
         zp_and_scale = []
         # adjust rmin and rmax such that 0 is included in the range. This is required
@@ -640,7 +636,7 @@ class ONNXRTAugment:
                         rmin = min(rmin, clip_params[0], clip_params[1])
                         rmax = max(rmax, clip_params[0], clip_params[1])
 
-        scale, zp = quant_utils.calculate_scale_zp(rmin, rmax, quantize_range, qType, sym)
+        scale, zp = quant_utils.calculate_scale_zp(rmin, rmax, qType, sym, self.reduce_range)
         zp_and_scale.append(zp)
         zp_and_scale.append(scale)
 

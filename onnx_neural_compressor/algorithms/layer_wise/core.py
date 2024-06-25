@@ -23,7 +23,6 @@ import onnx
 import onnxruntime as ort
 
 from onnx_neural_compressor import data_reader, logger, onnx_model
-from onnx_neural_compressor.algorithms import utility as quant_utils
 
 from typing import Callable, List, Union  # isort: skip
 
@@ -48,7 +47,7 @@ def layer_wise_quant(
         _type_: _description_
     """
     # check whether model shape is inferred
-    if not quant_utils.check_model_with_infer_shapes(model):
+    if not _check_model_with_infer_shapes(model):
         logger.error(
             "Before applying layer-wise quantization, please make sure to "
             "run symbolic shape inference on your model like follows:\n"
@@ -276,3 +275,13 @@ def _prepare_data_reader_for_next_split_model(
         inputs.update({name: value for name, value in zip(output_names, out)})
         data_reader_for_next_split_model.append(inputs)
     return DataReader(data_reader_for_next_split_model)
+
+def _check_model_with_infer_shapes(model):
+    """Check if the model has been shape inferred."""
+    if isinstance(model, (pathlib.Path, str)):
+        model = onnx.load(model, load_external_data=False)
+    elif isinstance(model, onnx_model.ONNXModel):
+        model = model.model
+    if len(model.graph.value_info) > 0:
+        return True
+    return False

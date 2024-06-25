@@ -22,10 +22,9 @@ import onnx
 import onnxruntime as ort
 from optimum.exporters.onnx import main_export
 
-from onnx_neural_compressor import config, data_reader
-from onnx_neural_compressor.quantization import QuantType
+from onnx_neural_compressor import data_reader
+from onnx_neural_compressor.quantization import config, quantize, QuantType
 from onnx_neural_compressor.quantization import algorithm_entry as algos
-from onnx_neural_compressor.quantization import quantize
 
 
 class DataReader(data_reader.CalibrationDataReader):
