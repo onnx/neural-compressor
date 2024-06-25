@@ -139,7 +139,8 @@ def rtn_quantize(
                     "int" + str(num_bits),
                     sym,
                     ratio=ratios.get(node.input[1], 1),
-                    axis=1)
+                    axis=1,
+                )
                 q_weight = np.reshape(q_weight, (org_w_shape[1], -1))
                 q_weight = np.transpose(q_weight)
                 q_weight = q_weight[: org_w_shape[0], :].astype(dtype)

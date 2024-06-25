@@ -324,4 +324,3 @@ def trt_env_setup(model):
         os.environ["ORT_TENSORRT_INT8_ENABLE"] = "1"
     else:
         os.environ["ORT_TENSORRT_INT8_ENABLE"] = "0"
-

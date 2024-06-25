@@ -20,7 +20,9 @@ class TestTuningParam(unittest.TestCase):
         self.assertTrue(param.is_tunable([[5, 6], [7, 8]]))
         # TODO: double check if this is the expected behavior
         self.assertTrue(param.is_tunable([[5, 6], [7, "8"]]))
-        self.assertEqual(str(param), "TuningParam(name=param_name, tunable_type=typing.List[typing.List[int]], options=None).")
+        self.assertEqual(
+            str(param), "TuningParam(name=param_name, tunable_type=typing.List[typing.List[int]], options=None)."
+        )
 
 
 if __name__ == "__main__":

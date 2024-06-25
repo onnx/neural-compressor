@@ -276,6 +276,7 @@ def _prepare_data_reader_for_next_split_model(
         data_reader_for_next_split_model.append(inputs)
     return DataReader(data_reader_for_next_split_model)
 
+
 def _check_model_with_infer_shapes(model):
     """Check if the model has been shape inferred."""
     if isinstance(model, (pathlib.Path, str)):

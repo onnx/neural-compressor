@@ -218,7 +218,9 @@ class TestBaseConfig(unittest.TestCase):
         self.assertIn(OP2_NAME, config_mapping)
 
     def test_config_expand(self) -> None:
-        cfg = config.RTNConfig(weight_bits=[4,8], weight_sym=[True, False], layer_wise_quant=[True, False], providers=[["CPU"], ["CUDA"]])
+        cfg = config.RTNConfig(
+            weight_bits=[4, 8], weight_sym=[True, False], layer_wise_quant=[True, False], providers=[["CPU"], ["CUDA"]]
+        )
         expand_cfgs = cfg.expand()
         self.assertEqual(expand_cfgs[0].weight_bits, 4)
         self.assertEqual(expand_cfgs[0].weight_sym, True)
@@ -300,11 +302,11 @@ class TestBaseConfig(unittest.TestCase):
         self.assertEqual(expand_cfgs[15].layer_wise_quant, False)
         self.assertEqual(expand_cfgs[15].providers, ["CUDA"])
 
-
     def test_config_expand_with_empty_options(self):
         configs = FakeAlgoConfig(weight_dtype=["int", "float32"], weight_bits=[])
         configs_list = configs.expand()
         self.assertEqual(len(configs_list), 2)
+
 
 class TestConfigSet(unittest.TestCase):
 
@@ -345,7 +347,6 @@ class TestConfigLoader(unittest.TestCase):
         for i, _ in enumerate(config_loader):
             config_count += 1
         self.assertEqual(config_count, 2)
-
 
 
 if __name__ == "__main__":

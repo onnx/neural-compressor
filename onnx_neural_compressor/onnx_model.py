@@ -267,7 +267,7 @@ class ONNXModel:
             self.remove_initializer(initializer)
 
     def get_initializer(self, name):
-        """"Find the initializer with specified name."""
+        """ "Find the initializer with specified name."""
         for initializer in self.model.graph.initializer:
             if initializer.name == name:
                 return initializer

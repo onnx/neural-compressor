@@ -15,12 +15,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import numpy as np
-from packaging import version
 import re
 import struct
 import sys
 from importlib import util
+
+import numpy as np
+from packaging import version
+
 from onnx_neural_compressor import constants, utility
 
 if sys.version_info < (3, 11) and util.find_spec("onnxruntime_extensions"):  # pragma: no cover
@@ -77,7 +79,7 @@ ONNX_STR_TYPE_RANGE = {
     "int1": (-1, 0),
     "int2": (-2, 1),
     "int3": (-4, 3),
-    "int4": (-8, 7), # onnx >= 1.16.0 defines TensorProto.INT4
+    "int4": (-8, 7),  # onnx >= 1.16.0 defines TensorProto.INT4
     "int5": (-16, 15),
     "int6": (-32, 31),
     "int7": (-64, 63),
@@ -85,12 +87,13 @@ ONNX_STR_TYPE_RANGE = {
     "uint1": (0, 1),
     "uint2": (0, 3),
     "uint3": (0, 7),
-    "uint4": (0, 15), # onnx >= 1.16.0 defines TensorProto.UINT4
+    "uint4": (0, 15),  # onnx >= 1.16.0 defines TensorProto.UINT4
     "uint5": (0, 31),
     "uint6": (0, 63),
     "uint7": (0, 127),
     "uint8": (0, 255),
 }
+
 
 def _qType_to_np_type(qType):
     if isinstance(qType, int):
@@ -112,6 +115,7 @@ def find_by_name(name, item_list):
         return items[0]
     else:
         return None
+
 
 def get_qmin_qmax_for_qType(qType, reduce_range=False, sym=False):  # noqa: N802
     """Get qmin, qmax for qType.
@@ -140,6 +144,7 @@ def get_qmin_qmax_for_qType(qType, reduce_range=False, sym=False):  # noqa: N802
 
     return qrange
 
+
 def quantize_nparray(dtype, arr, scale, zero_point, low=None, high=None):
     """Quantize numpy array."""
     q_weight = np.empty_like(np.asarray(arr), dtype=scale.dtype)
@@ -149,6 +154,7 @@ def quantize_nparray(dtype, arr, scale, zero_point, low=None, high=None):
     if low is not None and high is not None:
         np.clip(q_weight, low, high, out=q_weight)
     return q_weight.astype(dtype)
+
 
 def quantize_data_per_channel(data, axis, qType, sym, reduce_range=False):
     """Quantize tensor per-channel."""
@@ -167,9 +173,11 @@ def quantize_data_per_channel(data, axis, qType, sym, reduce_range=False):
     quantized_data = quantize_nparray(dtype, data, scale, zero_point, low=quantize_range[0], high=quantize_range[1])
     return rmin.reshape(-1, 1), rmax.reshape(-1, 1), zero_point.reshape(-1, 1), scale.reshape(-1, 1), quantized_data
 
+
 def dequantize_data_with_scale_zero(tensor_value, scale_value, zo_value):  # pragma: no cover
     """Dequantize tensor with scale and zero point."""
     return (tensor_value.astype(scale_value.dtype) - zo_value.astype(scale_value.dtype)) * scale_value
+
 
 def dequantize_data(tensor_value, scale_value, zo_value, axis=0):  # pragma: no cover
     """Dequantize tensor."""
@@ -196,6 +204,7 @@ def dequantize_data(tensor_value, scale_value, zo_value, axis=0):  # pragma: no 
             new_tensor_value = np.concatenate((new_tensor_value, new_per_channel_tensor_value), axis)
         return new_tensor_value
 
+
 def calculate_scale_zp(rmin, rmax, qType, sym, reduce_range=False):
     """Calculate scale and zero point."""
     qmin, qmax = get_qmin_qmax_for_qType(qType, reduce_range, sym)
@@ -220,6 +229,7 @@ def calculate_scale_zp(rmin, rmax, qType, sym, reduce_range=False):
             scale = (float(rmax) - float(rmin)) / (qmax - qmin) if rmin != rmax else 1
         zero_point = np.round((qmax + qmin) / 2.0).astype(dtype) if sym else np.round(qmin - rmin / scale).astype(dtype)
     return np.float32(scale), zero_point
+
 
 def quantize_data(data, qType, sym, reduce_range=False, ratio=1.0, axis=None):
     """Quantize data.
@@ -254,9 +264,11 @@ def quantize_data(data, qType, sym, reduce_range=False, ratio=1.0, axis=None):
     quantized_data = quantize_nparray(dtype, data, scale, zero_point, low=quantize_range[0], high=quantize_range[1])
     return rmin, rmax, zero_point, scale, quantized_data
 
+
 def qdq_data(data, qType, sym, reduce_range=False, ratio=1.0, axis=None):
     _, _, zero_point, scale, quantized_data = quantize_data(data, qType, sym, reduce_range, ratio, axis)
     return scale * (quantized_data - zero_point)
+
 
 def is_B_transposed(node):
     """Whether inuput B is transposed."""
@@ -264,6 +276,7 @@ def is_B_transposed(node):
     if len(transB):
         return 0 < onnx.helper.get_attribute_value(transB[0])
     return False
+
 
 def is_quantizable_type(data_type):
     return data_type in [onnx.TensorProto.FLOAT, onnx.TensorProto.FLOAT16, onnx.TensorProto.BFLOAT16]
@@ -527,7 +540,6 @@ def dump_woq_stats(model, quantize_config):
         output_data.append(field_results)
 
     utility.Statistics(output_data, header="Mixed Precision Statistics", field_names=field_names).print_stat()
-
 
 
 def get_node_original_name(node) -> str:

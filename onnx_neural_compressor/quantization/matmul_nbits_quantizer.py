@@ -71,6 +71,7 @@ class GPTQWeightOnlyQuantConfig(WeightOnlyQuantConfig):
         self.perchannel = perchannel
         self.layer_wise_quant = layer_wise_quant
 
+
 class AWQWeightOnlyQuantConfig(WeightOnlyQuantConfig):
 
     def __init__(

@@ -28,9 +28,9 @@ from abc import ABC, abstractmethod
 import numpy as np
 import onnx
 import pydantic
+from onnxruntime import quantization as ort_quant
 from typing_extensions import Self
 
-from onnxruntime import quantization as ort_quant
 from onnx_neural_compressor import constants, data_reader, logger, quantization, utility
 
 from collections import OrderedDict  # isort: skip
@@ -114,7 +114,9 @@ class TuningParam:
             return False
 
     def __str__(self) -> str:
-        return "TuningParam(name={}, tunable_type={}, options={}).".format(self.name, str(self.tunable_type), str(self.options))
+        return "TuningParam(name={}, tunable_type={}, options={}).".format(
+            self.name, str(self.tunable_type), str(self.options)
+        )
 
 
 # Config registry to store all registered configs.
@@ -653,7 +655,7 @@ class OperatorConfig:
     per_channel: bool
     weight_sym: bool
     activation_sym: bool
-    calibrate_method: quantization.CalibrationMethod=quantization.CalibrationMethod.MinMax
+    calibrate_method: quantization.CalibrationMethod = quantization.CalibrationMethod.MinMax
 
     def __post_init__(self):
         self.weight_type = getattr(self.weight_type, "tensor_type", self.weight_type)
@@ -779,7 +781,6 @@ class RTNConfig(BaseConfig):
         self.layer_wise_quant = layer_wise_quant
         self.quant_last_matmul = quant_last_matmul
         self._post_init()
-
 
     def _post_init(self):
         if self.white_list == constants.RTN_OP_LIST:
@@ -1496,6 +1497,7 @@ DYNAMIC_CHECK_FUNC_LIST = [
     dynamic_dnnl_check,
     dynamic_trt_check,
 ]
+
 
 @register_config(algo_name=constants.STATIC_QUANT, priority=constants.PRIORITY_STATIC_QUANT)
 class StaticQuantConfig(BaseConfig, ort_quant.StaticQuantConfig):

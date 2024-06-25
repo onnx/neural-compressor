@@ -572,7 +572,8 @@ class Quantizer:
             raise ValueError(
                 "Only float type quantization is supported. \
                 Weights {} is {}.".format(
-                    initializer.name, str(onnx.helper.tensor_dtype_to_np_dtype(initializer.data_type)),
+                    initializer.name,
+                    str(onnx.helper.tensor_dtype_to_np_dtype(initializer.data_type)),
                 )
             )
         return weights
@@ -744,9 +745,7 @@ class Quantizer:
             for child in self.model.get_children(node):
                 self.replace_input.append([child, tensor_name, dequant_node.output[0]])
             if tensor_name not in self.quantized_value_map:
-                quantized_value = quant_utils.QuantizedValue(
-                    tensor_name, dq_output, scale_name, zp_name
-                )
+                quantized_value = quant_utils.QuantizedValue(tensor_name, dq_output, scale_name, zp_name)
                 self.quantized_value_map[tensor_name] = quantized_value
 
     def quantize_inputs(self, node, indices=None, initializer_use_weight_qType=True, direct_int8=False):
@@ -991,7 +990,10 @@ class StaticQuantizer(Quantizer):
 
         if tensor_name not in self.quantized_value_map:
             quantized_value = quant_utils.QuantizedValue(
-                tensor_name, dq_output, scale_name, zp_name,
+                tensor_name,
+                dq_output,
+                scale_name,
+                zp_name,
             )
             self.quantized_value_map[tensor_name] = quantized_value
 

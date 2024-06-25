@@ -71,12 +71,12 @@ class GatherOperator(base_op.Operator):
 
             out_scale = 1.0
             out_zp = 0
-            gather_new_output = node.output[0] + "_quantized" # dynamic quant output name
+            gather_new_output = node.output[0] + "_quantized"  # dynamic quant output name
             for child in children:
                 if child.op_type == "QuantizeLinear":
                     out_scale = onnx.numpy_helper.to_array(self.quantizer.model.get_initializer(children[0].input[1]))
                     out_zp = onnx.numpy_helper.to_array(self.quantizer.model.get_initializer(children[0].input[2]))
-                    gather_new_output = children[0].output[0] # static quant output name
+                    gather_new_output = children[0].output[0]  # static quant output name
                     self.quantizer.remove_nodes.append(child)
 
             kwargs = {}

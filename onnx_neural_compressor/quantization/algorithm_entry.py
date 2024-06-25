@@ -18,6 +18,7 @@ from typing import Union
 
 import onnx
 import onnxruntime as ort
+
 from onnx_neural_compressor import constants, data_reader, logger, utility
 from onnx_neural_compressor.algorithms.post_training_quant import calibrate, quantizer
 from onnx_neural_compressor.algorithms.smoother import core

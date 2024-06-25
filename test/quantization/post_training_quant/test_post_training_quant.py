@@ -128,10 +128,8 @@ class TestStaticQuant(unittest.TestCase):
         q_model = onnx.load("quant.onnx")
         node_num_extended = len(q_model.graph.node)
 
-
         # check graph optimization work
         self.assertGreater(node_num_basic, node_num_extended)
-
 
         # check op_types_to_quantize work
         cfg = config.StaticQuantConfig(
@@ -178,7 +176,6 @@ class TestStaticQuant(unittest.TestCase):
         q_model = onnx.load("quant.onnx")
         self.assertEqual(_count_op_num(q_model, "QLinearMatMul"), qmatmul_num_disable_last - 1)
 
-
     def test_dynamic_quant(self):
         cfg = config.DynamicQuantConfig(
             weight_type=quantization.QuantType.QInt8,
@@ -197,7 +194,6 @@ class TestStaticQuant(unittest.TestCase):
             execution_provider="CPUExecutionProvider",
         )
         quantization.quantize(self.model, "quant.onnx", cfg, ort.GraphOptimizationLevel.ORT_ENABLE_EXTENDED)
-
 
 
 if __name__ == "__main__":

@@ -20,8 +20,8 @@ import onnx
 import onnxruntime as ort
 from onnxruntime.quantization.quantize import QuantConfig
 
-from onnx_neural_compressor.quantization import config
 from onnx_neural_compressor.quantization import algorithm_entry as algos
+from onnx_neural_compressor.quantization import config
 
 
 # ORT-like user-facing API

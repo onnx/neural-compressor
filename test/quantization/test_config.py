@@ -183,9 +183,7 @@ class TestQuantizationConfig(unittest.TestCase):
                 else:
                     self.assertFalse("add" in configs_mapping)
                 if idx in [0, 1]:
-                    self.assertEqual(
-                        configs_mapping["Matmul"]["calibrate_method"], 0
-                    )
+                    self.assertEqual(configs_mapping["Matmul"]["calibrate_method"], 0)
                 self.assertLess(idx, 16)
 
         for execution_provider in ["TensorrtExecutionProvider"]:
@@ -217,9 +215,7 @@ class TestQuantizationConfig(unittest.TestCase):
                 configs_mapping = quant_config.to_config_mapping(model_info=model_info)
                 if "Matmul" in configs_mapping:
                     self.assertFalse(configs_mapping["Matmul"]["per_channel"])
-                    self.assertEqual(
-                        configs_mapping["Matmul"]["calibrate_method"], 0
-                    )
+                    self.assertEqual(configs_mapping["Matmul"]["calibrate_method"], 0)
                 if "add" in configs_mapping:
                     self.assertEqual(configs_mapping["add"]["calibrate_method"], 0)
                 self.assertLess(idx, 16)

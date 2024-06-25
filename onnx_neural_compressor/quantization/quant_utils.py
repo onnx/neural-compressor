@@ -16,7 +16,9 @@
 # limitations under the License.
 
 import enum
+
 import onnx
+
 
 class QuantType(enum.Enum):  # pragma: no cover
     """Represent QuantType value."""
@@ -32,9 +34,11 @@ class QuantType(enum.Enum):  # pragma: no cover
             return onnx.TensorProto.UINT8
         raise ValueError(f"Unexpected value qtype={self!r}.")
 
+
 class QuantFormat(enum.Enum):
     QOperator = 0
     QDQ = 1
+
 
 class CalibrationMethod(enum.Enum):
     MinMax = 0

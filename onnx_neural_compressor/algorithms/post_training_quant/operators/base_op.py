@@ -54,7 +54,7 @@ class Operator(object):
             True if onnx_node.op_type in onnx_quantizer.op_types_to_exclude_output_quantization else False
         )
         self.per_channel = False
-        self.calibrate_method = 0 # minmax
+        self.calibrate_method = 0  # minmax
         self.weight_sym = True
         self.weight_dtype = None
         self.activation_dtype = None
