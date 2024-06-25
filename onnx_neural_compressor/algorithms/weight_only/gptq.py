@@ -324,7 +324,23 @@ def gptq_quantize(
             satisfy_MatMulFpQ4_condition = (
                 Version(ort.__version__) >= constants.ONNXRT116_VERSION and num_bits == 4 and group_size == 32
             )
-            if ("CUDAExecutionProvider" in providers and satisfy_MatMulNBits_condition) or (
+            if model.opset_import[0].version > 20:
+                q_weight, scale, zp = woq_utility.quant_tensor(
+                    weight.T, num_bits, group_size, scheme, "uint"
+                )
+                k_blocks = (org_shape[0] + group_size - 1) // group_size
+                dequant_node, new_inits = woq_utility.make_weight_only_dequant_node(
+                    node=node,
+                    q_weight=q_weight.astype("uint8"),
+                    k_blocks=k_blocks,
+                    scale=scale.astype(dtype),
+                    axis=1,
+                    block_size=group_size,
+                    zero_point=zp if scheme == "asym" else None,
+                )
+                model.add_initializers(new_inits)
+                model.add_node(dequant_node)
+            elif ("CUDAExecutionProvider" in providers and satisfy_MatMulNBits_condition) or (
                 "CUDAExecutionProvider" not in providers
                 and (satisfy_MatMulFpQ4_condition or satisfy_MatMulNBits_condition)
             ):

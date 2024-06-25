@@ -105,6 +105,22 @@ def rtn_quantize(
             satisfy_MatMulFpQ4_condition = (
                 version.Version(ort.__version__) >= constants.ONNXRT116_VERSION and num_bits == 4 and group_size == 32
             )
+            if model.model.opset_import[0].version > 20:
+                q_weight, scale, zp = woq_utility.quant_tensor(
+                    weight.T, num_bits, group_size, scheme, "uint", ratios.get(node.input[1], 1)
+                )
+                dequant_node, new_inits = woq_utility.make_weight_only_dequant_node(
+                    node=node,
+                    num_bits=num_bits,
+                    k_blocks=k_blocks,
+                    q_weight=q_weight.astype("uint8"),
+                    scale=scale.astype(dtype),
+                    axis=1,
+                    block_size=group_size,
+                    zero_point=zp if scheme == "asym" else None,
+                )
+                model.add_initializers(new_inits)
+                new_nodes.append(dequant_node)
             if ("CUDAExecutionProvider" in providers and satisfy_MatMulNBits_condition) or (
                 "CUDAExecutionProvider" not in providers
                 and (satisfy_MatMulFpQ4_condition or satisfy_MatMulNBits_condition)
