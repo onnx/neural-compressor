@@ -204,7 +204,8 @@ if __name__ == "__main__":
     parser.add_argument("--output_model", type=str, help="output model path")
     parser.add_argument("--mode", type=str, help="benchmark mode of performance or accuracy")
     parser.add_argument(
-        "--intra_op_num_threads", type=int, default=4, help="intra_op_num_threads for performance benchmark")
+        "--intra_op_num_threads", type=int, default=4, help="intra_op_num_threads for performance benchmark"
+    )
     parser.add_argument(
         "--quant_format", type=str, default="QOperator", choices=["QDQ", "QOperator"], help="quantization format"
     )
@@ -230,9 +231,7 @@ if __name__ == "__main__":
 
             sess_options = ort.SessionOptions()
             sess_options.intra_op_num_threads = args.intra_op_num_threads
-            session = ort.InferenceSession(
-                args.model_path, sess_options, providers=ort.get_available_providers()
-            )
+            session = ort.InferenceSession(args.model_path, sess_options, providers=ort.get_available_providers())
             ort_inputs = {}
             len_inputs = len(session.get_inputs())
             inputs_names = [session.get_inputs()[i].name for i in range(len_inputs)]
