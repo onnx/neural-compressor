@@ -99,9 +99,9 @@ class Quantizer:
         self.fixed_zero_zp_name = "fixed_zero_zp"
 
         if not self.static:
-            self.op_types_to_exclude_output_quantization = op_types_to_quantize
+            self.optypes_to_exclude_output_quant = op_types_to_quantize
         else:
-            self.op_types_to_exclude_output_quantization = optypes_to_exclude_output_quant
+            self.optypes_to_exclude_output_quant = optypes_to_exclude_output_quant
 
         self.add_qdq_pair_to_weight = add_qdq_pair_to_weight
         self.dedicated_qdq_pair = dedicated_qdq_pair
