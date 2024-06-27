@@ -24,6 +24,9 @@ function init_params {
       --mode=*)
           mode=$(echo "$var" |cut -f2 -d=)
       ;;
+      --intra_op_num_threads=*)
+          intra_op_num_threads=$(echo "$var" |cut -f2 -d=)
+      ;;
     esac
   done
 
@@ -36,8 +39,9 @@ function run_benchmark {
             --model_path "${input_model}" \
             --dataset_location "${dataset_location}" \
             --label_path "${label_path-${dataset_location}/../val.txt}" \
-            --mode="${mode}" \
+            --mode "${mode}" \
             --batch_size 1 \
+            --intra_op_num_threads "${intra_op_num_threads-4}" \
             --benchmark
             
 }

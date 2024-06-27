@@ -260,29 +260,6 @@ class Quantizer:
                     self.model.replace_node_input(node, old_input_name, new_input_name)
                 self.model.update()
 
-        if self.quant_format == "qdq":
-            #       node          node
-            #     /  |  \          |
-            #    A   q   B   ->    q
-            #        |             |
-            #        dq            dq
-            #                    /   \
-            #                   A     B
-            for node in self.model.nodes():
-                if node.op_type in ["QuantizeLinear"] and len(self.model.get_parents(node)) > 0:
-                    if "QuantizeLinear" in [sibling.op_type for sibling in self.model.get_siblings(node)]:
-                        continue
-                    for sibling in self.model.get_siblings(node):
-                        if not self.should_quantize(sibling) and sibling.op_type in base_op.OPERATORS[self.mode]:
-                            for inp_idx in range(len(sibling.input)):
-                                if sibling.input[inp_idx] == node.input[0]:
-                                    self.replace_input.append(
-                                        [sibling, sibling.input[inp_idx], self.model.get_children(node)[0].output[0]]
-                                    )
-            for node, old_input_name, new_input_name in self.replace_input:
-                self.model.replace_node_input(node, old_input_name, new_input_name)
-            self.model.update()
-
     def remove_duplicate_qdq_paris(self):
         """Remove duplicated qdq pairs."""
         self.remove_nodes = []

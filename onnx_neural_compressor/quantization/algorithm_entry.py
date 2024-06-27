@@ -151,7 +151,9 @@ def static_quantize_entry(
         quantization_params=quantize_params,
         op_types_to_quantize=quant_config.op_types_to_quantize,
         execution_provider=quant_config.execution_provider,
-        optypes_to_exclude_output_quant=quant_config.extra_options.get("optypes_to_exclude_output_quant", []),
+        optypes_to_exclude_output_quant=quant_config.optypes_to_exclude_output_quant,
+        dedicated_qdq_pair=quant_config.dedicated_qdq_pair,
+        add_qdq_pair_to_weight=quant_config.add_qdq_pair_to_weight,
     )
     _quantizer.quantize_model()
     if model_output is not None:

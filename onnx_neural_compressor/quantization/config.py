@@ -1599,9 +1599,9 @@ class StaticQuantConfig(BaseConfig, ort_quant.StaticQuantConfig):
             os.environ["ORT_TENSORRT_INT8_ENABLE"] = "0"
             self.extra_options.update(
                 {
-                    "add_qdq_pair_to_weight": True,
-                    "dedicated_qdq_pair": True,
-                    "optypes_to_exclude_output_quant": ["Conv", "Gemm", "Add", "MatMul"],
+                    "AddQDQPairToWeight": True,
+                    "DedicatedQDQPair": True,
+                    "OpTypesToExcludeOutputQuantization": ["Conv", "Gemm", "Add", "MatMul"],
                 }
             )
         else:
@@ -1614,6 +1614,9 @@ class StaticQuantConfig(BaseConfig, ort_quant.StaticQuantConfig):
         _extra_options = ExtraOptions(**self.extra_options)
         self.weight_sym = _extra_options.WeightSymmetric
         self.activation_sym = _extra_options.ActivationSymmetric
+        self.optypes_to_exclude_output_quant = _extra_options.OpTypesToExcludeOutputQuantization
+        self.dedicated_qdq_pair = _extra_options.DedicatedQDQPair
+        self.add_qdq_pair_to_weight = _extra_options.AddQDQPairToWeight
         self.white_list = white_list
         self._post_init()
 

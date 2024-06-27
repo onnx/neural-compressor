@@ -25,6 +25,9 @@ function init_params {
       --batch_size=*)
           batch_size=$(echo "$var" |cut -f2 -d=)
       ;;
+      --intra_op_num_threads=*)
+          intra_op_num_threads=$(echo "$var" |cut -f2 -d=)
+      ;;
     esac
   done
 
@@ -51,6 +54,7 @@ function run_benchmark {
            --task "${task_name}" \
            --batch_size "${batch_size}" \
            --mode "${mode}" \
+           --intra_op_num_threads "${intra_op_num_threads-4}" \
            --dynamic_length "${dynamic_length}" \
            --benchmark
             

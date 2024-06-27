@@ -68,6 +68,9 @@ parser.add_argument(
 parser.add_argument(
     "--quant_format", type=str, default="QOperator", choices=["QDQ", "QOperator"], help="quantization format"
 )
+parser.add_argument(
+    "--intra_op_num_threads", type=int, default=4, help="intra_op_num_threads for performance benchmark"
+)
 parser.add_argument("--dynamic_length", type=bool, default=False, help="dynamic length")
 parser.add_argument("--max_seq_length", type=int, default=128, help="max sequence length")
 parser.add_argument(
@@ -407,7 +410,7 @@ if __name__ == "__main__":
         for idx, batch in enumerate(dataloader):
             label = batch[-1]
             batch = tuple(t.detach().cpu().numpy() if not isinstance(t, np.ndarray) else t for t in batch[0])
-            batch_seq_length = args.max_seq_length if not args.dynamic_length else torch.max(batch[-2], 0)[0].item()
+            batch_seq_length = args.max_seq_length if not args.dynamic_length else batch[0].shape[-1]
             inputs = [
                 batch[0][:, :batch_seq_length],
                 batch[1][:, :batch_seq_length],
@@ -420,7 +423,6 @@ if __name__ == "__main__":
         return metric.result()
 
     if args.benchmark:
-        model = onnx.load(args.model_path)
         if args.mode == "performance":
             total_time = 0.0
             num_iter = 100
@@ -429,7 +431,7 @@ if __name__ == "__main__":
             sess_options = onnxruntime.SessionOptions()
             sess_options.intra_op_num_threads = args.intra_op_num_threads
             session = onnxruntime.InferenceSession(
-                model.SerializeToString(), sess_options, providers=onnxruntime.get_available_providers()
+                args.model_path, sess_options, providers=onnxruntime.get_available_providers()
             )
             ort_inputs = {}
             len_inputs = len(session.get_inputs())
@@ -438,8 +440,8 @@ if __name__ == "__main__":
             for idx, batch in enumerate(dataloader):
                 if idx + 1 > num_iter:
                     break
-                batch = tuple(t.detach().cpu().numpy() if not isinstance(t, np.ndarray) else t for t in batch)
-                batch_seq_length = args.max_seq_length if not args.dynamic_length else torch.max(batch[-2], 0)[0].item()
+                batch = tuple(t.detach().cpu().numpy() if not isinstance(t, np.ndarray) else t for t in batch[0])
+                batch_seq_length = args.max_seq_length if not args.dynamic_length else batch[0].shape[-1]
                 inputs = [
                     batch[0][:, :batch_seq_length],
                     batch[1][:, :batch_seq_length],
@@ -458,7 +460,7 @@ if __name__ == "__main__":
             throughput = (num_iter - num_warmup) / total_time
             print("Throughput: {} samples/s".format(throughput))
         elif args.mode == "accuracy":
-            acc_result = eval_func(model)
+            acc_result = eval_func(args.model_path)
             print("Batch size = %d" % args.batch_size)
             print("Accuracy: %.5f" % acc_result)
 
@@ -492,7 +494,8 @@ if __name__ == "__main__":
                         else quantization.QuantFormat.QDQ
                     ),
                     calibration_sampling_size=8,
-                    extra_options={"optypes_to_exclude_output_quant": ["MatMul", "Gemm", "Attention", "FusedGemm"]},
+                    op_types_to_quantize=["MatMul"],
+                    extra_options={"OpTypesToExcludeOutputQuantization": ["MatMul"]},
                     execution_provider=provider,
                 )
             )

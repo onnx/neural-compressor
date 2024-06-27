@@ -204,6 +204,8 @@ if __name__ == "__main__":
     parser.add_argument("--output_model", type=str, help="output model path")
     parser.add_argument("--mode", type=str, help="benchmark mode of performance or accuracy")
     parser.add_argument(
+        "--intra_op_num_threads", type=int, default=4, help="intra_op_num_threads for performance benchmark")
+    parser.add_argument(
         "--quant_format", type=str, default="QOperator", choices=["QDQ", "QOperator"], help="quantization format"
     )
     parser.add_argument(
@@ -213,7 +215,6 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    model = onnx.load(args.model_path)
     top1 = TopK()
     dataloader = DataReader(args.model_path, args.dataset_location, args.label_path, args.batch_size)
 
@@ -230,7 +231,7 @@ if __name__ == "__main__":
             sess_options = ort.SessionOptions()
             sess_options.intra_op_num_threads = args.intra_op_num_threads
             session = ort.InferenceSession(
-                model.SerializeToString(), sess_options, providers=ort.get_available_providers()
+                args.model_path, sess_options, providers=ort.get_available_providers()
             )
             ort_inputs = {}
             len_inputs = len(session.get_inputs())
@@ -250,7 +251,7 @@ if __name__ == "__main__":
             throughput = (num_iter - num_warmup) / total_time
             print("Throughput: {} samples/s".format(throughput))
         elif args.mode == "accuracy":
-            acc_result = eval_func(model, dataloader, top1)
+            acc_result = eval_func(args.model_path, dataloader, top1)
             print("Batch size = %d" % dataloader.batch_size)
             print("Accuracy: %.5f" % acc_result)
 

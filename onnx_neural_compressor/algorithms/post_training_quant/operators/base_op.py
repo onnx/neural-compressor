@@ -51,7 +51,7 @@ class Operator(object):
         if node_name in self.quantizer.config:
             self.dtype = self.quantizer.config[node_name]
         self.disable_qdq_for_node_output = (
-            True if onnx_node.op_type in onnx_quantizer.op_types_to_exclude_output_quantization else False
+            True if onnx_node.op_type in onnx_quantizer.optypes_to_exclude_output_quant else False
         )
         self.per_channel = False
         self.calibrate_method = 0  # minmax
