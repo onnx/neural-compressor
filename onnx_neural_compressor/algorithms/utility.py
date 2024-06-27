@@ -147,7 +147,7 @@ def get_qmin_qmax_for_qType(qType, reduce_range=False, sym=False):  # noqa: N802
 
 def quantize_nparray(dtype, arr, scale, zero_point, low=None, high=None):
     """Quantize numpy array."""
-    q_weight = np.empty_like(np.asarray(arr), dtype=scale.dtype)
+    q_weight = np.empty_like(np.asarray(arr), dtype=np.asarray(scale).dtype)
     np.divide(arr, scale, out=q_weight)
     np.add(q_weight, zero_point, out=q_weight)
     np.round(q_weight, out=q_weight)
@@ -340,9 +340,8 @@ def make_matmul_weight_only_node(
         op_type = "MatMulNBits"
 
         # pack quantized weight
-        for i in range(q_weight.shape[0]):
-            for k in range(0, group_size, 2):
-                packed[i][k // 2] = q_weight[i][k] | q_weight[i][k + 1] << 4
+        q_weight_pairs = q_weight[:, ::2] | q_weight[:, 1::2] << 4
+        packed[:, :] = q_weight_pairs[:, :blob_size]
         packed = np.reshape(packed, (-1, k_blocks, blob_size))
 
         # build scale tensor
@@ -363,15 +362,14 @@ def make_matmul_weight_only_node(
                 packed_zp = np.reshape(zero_point, (1, -1)).astype("uint8")
             else:
                 packed_zp = np.full((zero_point.shape[0] + 1) // 2, 136, dtype="uint8")
-                for i in range(zero_point.shape[0] // k_blocks):
-                    for j in range(k_blocks):
-                        idx = i * k_blocks + j
-                        zp = zero_point[idx]
-                        packed_zp[idx // 2] = (
-                            ((packed_zp[idx // 2] & 0x0F) | (zp << 4))
-                            if (idx & 1)
-                            else ((packed_zp[idx // 2] & 0xF0) | zp)
-                        )
+                # create an index array
+                idx = np.arange(zero_point.shape[0] // k_blocks * k_blocks).reshape(-1)
+                # separate odd and even indices
+                even_idx = idx[::2]
+                odd_idx = idx[1::2]
+                # vectorized operation for even and odd indices
+                packed_zp[even_idx // 2] = (packed_zp[even_idx // 2] & 0xF0) | zero_point[even_idx].ravel()
+                packed_zp[odd_idx // 2] = (packed_zp[odd_idx // 2] & 0x0F) | (zero_point[odd_idx].ravel() << 4)
 
             zp_tensor = onnx.helper.make_tensor(
                 name=node.input[1] + "_zp", data_type=2, dims=packed_zp.shape, vals=packed_zp.tobytes(), raw=True

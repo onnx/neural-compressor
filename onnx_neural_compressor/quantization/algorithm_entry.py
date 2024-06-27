@@ -206,6 +206,7 @@ def smooth_quant_entry(
             pathlib.Path(tmp_dir).joinpath("smooth.onnx").as_posix(),
             quant_config,
             calibration_data_reader,
+            model_output,
         )
     return q_model
 

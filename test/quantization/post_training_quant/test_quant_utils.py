@@ -15,10 +15,6 @@ class TestQuantUtility(unittest.TestCase):
         pad_data = quant_utils.pad_tensor(data, group_size, k_blocks)
         self.assertEqual(pad_data.shape, (k_blocks * group_size, 32))
 
-    def test_4bit_quant_tensor(self):
-        data = np.random.random((100, 32))
-        q_data, scale, zp = quant_utils.quant_tensor(data)
-
     def test_quant_dequant_data(self):
         data = np.random.random((100, 32))
         qrange = quant_utils.get_qmin_qmax_for_qType(
@@ -34,7 +30,6 @@ class TestQuantUtility(unittest.TestCase):
 
         _, _, zero_point, scale, quantized_data = quant_utils.quantize_data(
             data=data,
-            quantize_range=qrange,
             qType=onnx.TensorProto.UINT8,
             sym=True,
         )
@@ -48,7 +43,6 @@ class TestQuantUtility(unittest.TestCase):
 
         _, _, zero_point, scale, quantized_data = quant_utils.quantize_data_per_channel(
             data=data,
-            quantize_range=qrange,
             qType=onnx.TensorProto.UINT8,
             sym=True,
             axis=1,

@@ -278,7 +278,7 @@ class ONNXRTAugment:
                     node_name = name_to_node[node_output_names[output_idx]]
                     if node_output_names[output_idx] not in name_to_calibrator:
                         calib_method = (
-                            q_config[node_name]["calibrate_method"] if q_config and node_name in q_config else 0
+                            q_config[node_name]["calibrate_method"] if q_config and node_name in q_config else "MinMax"
                         )
                         assert calib_method in calibrator.CALIBRATOR, "Calibration method {} is not registered.".format(
                             calib_method
@@ -389,7 +389,7 @@ class ONNXRTAugment:
                     os.path.dirname(self.model_wrapper.model_path) if self.model_wrapper.model_path is not None else ""
                 ),
             )
-            _calibrator = calibrator.CALIBRATOR[0]()  # use minmax method to calibrate initializer tensors
+            _calibrator = calibrator.CALIBRATOR["MinMax"]()  # use minmax method to calibrate initializer tensors
             if initializer_tensor.flatten().size > 0:
                 _calibrator.collect(initializer_tensor)
                 weight_tensors_calib_range[initializer_tensor_name] = [list(_calibrator.calib_range)]

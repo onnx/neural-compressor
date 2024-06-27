@@ -35,14 +35,12 @@ class ONNXModel:
             model (str or ModelProto): path to onnx model or loaded ModelProto model object.
         """
         self.model = model if not isinstance(model, str) else onnx.load(model, load_external_data=False)
-
         self._model_path = None if not isinstance(model, str) else model
         self.check_is_large_model()
         if self._is_large_model and self._model_path is None and not kwargs.get("ignore_warning", False):
             logger.warning("Model size > 2GB. Please use model path instead of onnx model object to quantize")
 
         if self._is_large_model and isinstance(model, str) and kwargs.get("load_external_data", True):
-
             onnx.external_data_helper.load_external_data_for_model(self.model, os.path.dirname(self._model_path))
 
         self._config = None

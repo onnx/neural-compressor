@@ -134,6 +134,7 @@ class TestLayerWiseQuant(unittest.TestCase):
         quant = matmul_4bits_quantizer.MatMul4BitsQuantizer(
             copy.deepcopy(self.llama),
             algo_config=algo_config,
+            optimization_level=ort.GraphOptimizationLevel.ORT_DISABLE_ALL,
         )
         quant.process()
         qmodel = quant.model
@@ -145,6 +146,7 @@ class TestLayerWiseQuant(unittest.TestCase):
         quant = matmul_4bits_quantizer.MatMul4BitsQuantizer(
             copy.deepcopy(self.llama),
             algo_config=algo_config,
+            optimization_level=ort.GraphOptimizationLevel.ORT_DISABLE_ALL,
         )
         quant.process()
         qmodel_lwq = quant.model
@@ -183,6 +185,7 @@ class TestLayerWiseQuant(unittest.TestCase):
         quant = matmul_4bits_quantizer.MatMul4BitsQuantizer(
             copy.deepcopy(self.llama),
             algo_config=algo_config,
+            optimization_level=ort.GraphOptimizationLevel.ORT_DISABLE_ALL,
         )
         quant.process()
         qmodel = quant.model
@@ -196,6 +199,7 @@ class TestLayerWiseQuant(unittest.TestCase):
         quant = matmul_4bits_quantizer.MatMul4BitsQuantizer(
             copy.deepcopy(self.llama),
             algo_config=algo_config,
+            optimization_level=ort.GraphOptimizationLevel.ORT_DISABLE_ALL,
         )
         quant.process()
         qmodel_lwq = quant.model

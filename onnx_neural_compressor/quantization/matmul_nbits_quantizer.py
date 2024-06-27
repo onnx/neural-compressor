@@ -109,9 +109,7 @@ class MatMulNBitsQuantizer:
     ):
         if nodes_to_exclude is None:
             nodes_to_exclude = []
-        self.model_path = model if isinstance(model, str) else None
         self.model = model
-        self.model = onnx_model.ONNXModel(onnx.load(model)) if isinstance(model, str) else onnx_model.ONNXModel(model)
         self.block_size = block_size
         self.is_symmetric = is_symmetric
         self.accuracy_level = accuracy_level
@@ -170,7 +168,7 @@ class MatMulNBitsQuantizer:
 
     def int4_quant_algo(self):
         qconfig = self._generate_nc_config()
-        model = self.model_path or self.model
+        model = self.model
         opt_tmp_file = tempfile.TemporaryDirectory()
 
         # do graph optimization if not layer_wise_quant
@@ -181,12 +179,20 @@ class MatMulNBitsQuantizer:
             if not isinstance(model, str):
                 onnx.save(model, pathlib.Path(opt_tmp_file.name).joinpath("tmp.onnx").as_posix())
                 model = pathlib.Path(opt_tmp_file.name).joinpath("tmp.onnx").as_posix()
+            logger.info("Start graph optimization...")
             sess_options = ort.SessionOptions()
             sess_options.graph_optimization_level = self.optimization_level
             sess_options.optimized_model_filepath = pathlib.Path(opt_tmp_file.name).joinpath("opt.onnx").as_posix()
+            sess_options.add_session_config_entry(
+                "session.optimized_model_external_initializers_file_name", "opt.onnx_data"
+            )
+            sess_options.add_session_config_entry(
+                "session.optimized_model_external_initializers_min_size_in_bytes", "1024"
+            )
             session = ort.InferenceSession(model, sess_options)
             model = sess_options.optimized_model_filepath
             del session
+            logger.info("Graph optimization done.")
 
         logger.info(f"start to quantize model with {self.algorithm} algorithm...")
         if self.algorithm == "RTN":

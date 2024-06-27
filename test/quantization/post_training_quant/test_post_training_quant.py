@@ -71,7 +71,7 @@ def _count_op_num(model, optype):
     return num
 
 
-class TestStaticQuant(unittest.TestCase):
+class TestPostTrainingQuant(unittest.TestCase):
 
     @classmethod
     def setUpClass(self):
@@ -86,6 +86,7 @@ class TestStaticQuant(unittest.TestCase):
     def tearDownClass(self):
         shutil.rmtree("./model", ignore_errors=True)
         os.remove("quant.onnx")
+        os.remove("quant.onnx_data")
 
     def test_static_quant(self):
         cfg = config.StaticQuantConfig(
@@ -93,6 +94,7 @@ class TestStaticQuant(unittest.TestCase):
             weight_type=quantization.QuantType.QInt8,
             per_channel=True,
             quant_last_matmul=True,
+            calibrate_method=quantization.CalibrationMethod.Entropy,
             extra_options={"WeightSymmetric": True, "ActivationSymmetric": False},
             execution_provider="CPUExecutionProvider",
         )
@@ -103,6 +105,7 @@ class TestStaticQuant(unittest.TestCase):
         cfg = config.StaticQuantConfig(
             calibration_data_reader=self.data_reader,
             weight_type=quantization.QuantType.QInt8,
+            calibrate_method=quantization.CalibrationMethod.Percentile,
             per_channel=True,
             quant_last_matmul=False,
             extra_options={"WeightSymmetric": True, "ActivationSymmetric": False},

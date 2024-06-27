@@ -496,6 +496,10 @@ def autotune(
         sess_options = ort.SessionOptions()
         sess_options.graph_optimization_level = optimization_level
         sess_options.optimized_model_filepath = pathlib.Path(tmp_folder.name).joinpath("opt.onnx").as_posix()
+        sess_options.add_session_config_entry(
+            "session.optimized_model_external_initializers_file_name", "opt.onnx_data"
+        )
+        sess_options.add_session_config_entry("session.optimized_model_external_initializers_min_size_in_bytes", "1024")
         session = ort.InferenceSession(model_input, sess_options)
         model_input = sess_options.optimized_model_filepath
         del session

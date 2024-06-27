@@ -68,7 +68,7 @@ class TestQuantizer(unittest.TestCase):
         "per_channel": False,
         "weight_sym": True,
         "activation_sym": False,
-        "calibrate_method": quantization.CalibrationMethod.MinMax,
+        "calibrate_method": "MinMax",
     }
 
     @classmethod
@@ -622,7 +622,7 @@ class TestQuantizer(unittest.TestCase):
                 "C": [np.uint8(10.0), np.float32(0)],
                 "D": [np.uint8(10.0), np.float32(0)],
             }
-            quantizable_op_types = [op]
+            quantizable_op_types = ["Conv"]
             q_model = self.qlinear_test(model, q_config, quantize_params, quantizable_op_types)
             self.assertEqual(
                 collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 1
@@ -653,7 +653,7 @@ class TestQuantizer(unittest.TestCase):
             "B": [np.uint8(10.0), np.float32(0)],
             "C": [np.uint8(10.0), np.float32(0)],
         }
-        quantizable_op_types = ["Matmul"]
+        quantizable_op_types = ["MatMul"]
         q_model = self.qlinear_test(model, q_config, quantize_params, quantizable_op_types)
         self.assertEqual(
             collections.Counter([node.op_type for node in q_model.model.graph.node])["DequantizeLinear"], 1

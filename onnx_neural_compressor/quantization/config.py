@@ -660,7 +660,7 @@ class OperatorConfig:
     def __post_init__(self):
         self.weight_type = getattr(self.weight_type, "tensor_type", self.weight_type)
         self.activation_type = getattr(self.activation_type, "tensor_type", self.activation_type)
-        self.calibrate_method = getattr(self.calibrate_method, "value", self.calibrate_method)
+        self.calibrate_method = getattr(self.calibrate_method, "name", self.calibrate_method)
 
     def __getitem__(self, key):
         return getattr(self, key)

@@ -179,11 +179,11 @@ class TestQuantizationConfig(unittest.TestCase):
                 elif idx in [1, 5]:
                     self.assertFalse(configs_mapping["Matmul"]["per_channel"])
                 if idx < 4:
-                    self.assertEqual(configs_mapping["add"]["calibrate_method"], 0)
+                    self.assertEqual(configs_mapping["add"]["calibrate_method"], "MinMax")
                 else:
                     self.assertFalse("add" in configs_mapping)
                 if idx in [0, 1]:
-                    self.assertEqual(configs_mapping["Matmul"]["calibrate_method"], 0)
+                    self.assertEqual(configs_mapping["Matmul"]["calibrate_method"], "MinMax")
                 self.assertLess(idx, 16)
 
         for execution_provider in ["TensorrtExecutionProvider"]:
@@ -215,9 +215,9 @@ class TestQuantizationConfig(unittest.TestCase):
                 configs_mapping = quant_config.to_config_mapping(model_info=model_info)
                 if "Matmul" in configs_mapping:
                     self.assertFalse(configs_mapping["Matmul"]["per_channel"])
-                    self.assertEqual(configs_mapping["Matmul"]["calibrate_method"], 0)
+                    self.assertEqual(configs_mapping["Matmul"]["calibrate_method"], "MinMax")
                 if "add" in configs_mapping:
-                    self.assertEqual(configs_mapping["add"]["calibrate_method"], 0)
+                    self.assertEqual(configs_mapping["add"]["calibrate_method"], "MinMax")
                 self.assertLess(idx, 16)
 
         for execution_provider in ["TensorrtExecutionProvider"]:
@@ -236,8 +236,8 @@ class TestQuantizationConfig(unittest.TestCase):
                 elif idx in [1, 5]:
                     self.assertFalse(configs_mapping["Matmul"]["per_channel"])
                 if "add" in configs_mapping:
-                    self.assertEqual(configs_mapping["add"]["calibrate_method"], 0)
-                    self.assertEqual(configs_mapping["add"]["calibrate_method"], 0)
+                    self.assertEqual(configs_mapping["add"]["calibrate_method"], "MinMax")
+                    self.assertEqual(configs_mapping["add"]["calibrate_method"], "MinMax")
                     self.assertTrue(configs_mapping["add"]["weight_sym"])
                     self.assertTrue(configs_mapping["add"]["activation_sym"])
                 if "Matmul" in configs_mapping:
@@ -261,7 +261,7 @@ class TestQuantizationConfig(unittest.TestCase):
                     self.assertTrue(configs_mapping["Matmul"]["per_channel"])
                 elif idx == 1:
                     self.assertFalse(configs_mapping["Matmul"]["per_channel"])
-                self.assertEqual(configs_mapping["add"]["calibrate_method"], 0)
+                self.assertEqual(configs_mapping["add"]["calibrate_method"], "MinMax")
 
                 self.assertLess(idx, 2)
 
@@ -295,7 +295,7 @@ class TestQuantizationConfig(unittest.TestCase):
                 model_info = quant_config.get_model_info(model=self.simple_onnx_model)
                 configs_mapping = quant_config.to_config_mapping(model_info=model_info)
                 self.assertFalse(configs_mapping["Matmul"]["per_channel"])
-                self.assertEqual(configs_mapping["add"]["calibrate_method"], 0)
+                self.assertEqual(configs_mapping["add"]["calibrate_method"], "MinMax")
                 self.assertLess(idx, 4)
 
         for execution_provider in ["TensorrtExecutionProvider"]:
@@ -314,7 +314,7 @@ class TestQuantizationConfig(unittest.TestCase):
                     self.assertTrue(configs_mapping["Matmul"]["per_channel"])
                 elif idx == 1:
                     self.assertFalse(configs_mapping["Matmul"]["per_channel"])
-                self.assertEqual(configs_mapping["add"]["calibrate_method"], 0)
+                self.assertEqual(configs_mapping["add"]["calibrate_method"], "MinMax")
                 self.assertTrue(configs_mapping["add"]["weight_sym"])
                 self.assertTrue(configs_mapping["add"]["activation_sym"])
                 self.assertTrue(configs_mapping["Matmul"]["weight_sym"])

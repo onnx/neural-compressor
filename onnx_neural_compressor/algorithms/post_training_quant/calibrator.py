@@ -69,7 +69,7 @@ class CalibratorBase:
         return self._calib_min, self._calib_max
 
 
-@calib_registry(calib_method=0)
+@calib_registry(calib_method="MinMax")
 class MinMaxCalibrator(CalibratorBase):
     """MinMax calibrator class."""
 
@@ -109,7 +109,7 @@ class MinMaxCalibrator(CalibratorBase):
         return "MinMax"
 
 
-@calib_registry(calib_method=2)
+@calib_registry(calib_method="Percentile")
 class PercentileCalibrator(CalibratorBase):
     """Percentile calibrator class.
 
@@ -163,7 +163,7 @@ class PercentileCalibrator(CalibratorBase):
         return "Percentile"
 
 
-@calib_registry(calib_method=1)
+@calib_registry(calib_method="Entropy")
 class EntropyCalibrator(CalibratorBase):
     """Entropy calibrator class.
 
