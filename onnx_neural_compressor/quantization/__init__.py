@@ -12,7 +12,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
-from onnxruntime.quantization.quant_utils import QuantFormat
-from onnxruntime.quantization.quant_utils import QuantType
+from onnx_neural_compressor.quantization.quant_utils import CalibrationMethod, QuantFormat, QuantType
 from onnx_neural_compressor.quantization.quantize import quantize

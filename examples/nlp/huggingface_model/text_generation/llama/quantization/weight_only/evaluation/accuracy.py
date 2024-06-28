@@ -13,19 +13,18 @@
 # limitations under the License.
 
 
+import glob
 import json
 import logging
 import os
 import re
 import sys
-import glob
 from pathlib import Path
-import numpy as np
 
 import lm_eval.logging_utils
 import lm_eval.tasks
 import lm_eval.utils
-
+import numpy as np
 from evaluation import evaluator
 
 DEFAULT_RESULTS_FILE = "results.json"
@@ -52,9 +51,7 @@ def cli_evaluate(args) -> None:
     if args.predict_only:
         args.log_samples = True
     if (args.log_samples or args.predict_only) and not args.output_path:
-        raise ValueError(
-            "Specify --output_path if providing --log_samples or --predict_only"
-        )
+        raise ValueError("Specify --output_path if providing --log_samples or --predict_only")
 
     if args.include_path is not None:
         eval_logger.info(f"Including path: {args.include_path}")
@@ -62,17 +59,14 @@ def cli_evaluate(args) -> None:
 
     if args.limit:
         eval_logger.warning(
-            " --limit SHOULD ONLY BE USED FOR TESTING."
-            "REAL METRICS SHOULD NOT BE COMPUTED USING LIMIT."
+            " --limit SHOULD ONLY BE USED FOR TESTING." "REAL METRICS SHOULD NOT BE COMPUTED USING LIMIT."
         )
 
     if args.tasks is None:
         eval_logger.error("Need to specify task to evaluate.")
         sys.exit()
     elif args.tasks == "list":
-        eval_logger.info(
-            "Available Tasks:\n - {}".format("\n - ".join(task_manager.all_tasks))
-        )
+        eval_logger.info("Available Tasks:\n - {}".format("\n - ".join(task_manager.all_tasks)))
         sys.exit()
     else:
         if os.path.isdir(args.tasks):
@@ -99,8 +93,8 @@ def cli_evaluate(args) -> None:
                     f"{lm_eval.utils.SPACING}Try `lm-eval --tasks list` for list of available tasks",
                 )
                 raise ValueError(
-                    f"Tasks not found: {missing}. Try `lm-eval --tasks list` for list of available tasks," + \
-                    " or '--verbosity DEBUG' to troubleshoot task registration issues."
+                    f"Tasks not found: {missing}. Try `lm-eval --tasks list` for list of available tasks,"
+                    + " or '--verbosity DEBUG' to troubleshoot task registration issues."
                 )
 
     if args.output_path:
@@ -110,9 +104,7 @@ def cli_evaluate(args) -> None:
             raise FileExistsError(f"File already exists at {path}")
         output_path_file = path.joinpath(DEFAULT_RESULTS_FILE)
         if output_path_file.is_file():
-            eval_logger.warning(
-                f"File {output_path_file} already exists. Results will be overwritten."
-            )
+            eval_logger.warning(f"File {output_path_file} already exists. Results will be overwritten.")
         # if path json then get parent dir
         elif path.suffix in (".json", ".jsonl"):
             output_path_file = path
@@ -124,17 +116,12 @@ def cli_evaluate(args) -> None:
     # Respect user's value passed in via CLI, otherwise default to True and add to comma-separated model args
     if args.trust_remote_code:
         os.environ["HF_DATASETS_TRUST_REMOTE_CODE"] = str(args.trust_remote_code)
-        args.model_args = (
-            args.model_args
-            + f",trust_remote_code={os.environ['HF_DATASETS_TRUST_REMOTE_CODE']}"
-        )
+        args.model_args = args.model_args + f",trust_remote_code={os.environ['HF_DATASETS_TRUST_REMOTE_CODE']}"
 
     eval_logger.info(f"Selected Tasks: {task_names}")
     eval_logger.info("Loading selected tasks...")
 
-    request_caching_args = evaluator.request_caching_arg_to_dict(
-        cache_requests=args.cache_requests
-    )
+    request_caching_args = evaluator.request_caching_arg_to_dict(cache_requests=args.cache_requests)
 
     results = evaluator.simple_evaluate(
         model=args.model,
@@ -156,17 +143,15 @@ def cli_evaluate(args) -> None:
         random_seed=args.seed[0],
         numpy_random_seed=args.seed[1],
         torch_random_seed=args.seed[2],
-        user_model=args.user_model, # to validate the model in memory,
-        tokenizer=args.tokenizer, # to use tokenizer in mem,
+        user_model=args.user_model,  # to validate the model in memory,
+        tokenizer=args.tokenizer,  # to use tokenizer in mem,
         **request_caching_args,
     )
 
     if results is not None:
         if args.log_samples:
             samples = results.pop("samples")
-        dumped = json.dumps(
-            results, indent=2, default=_handle_non_serializable, ensure_ascii=False
-        )
+        dumped = json.dumps(results, indent=2, default=_handle_non_serializable, ensure_ascii=False)
         if args.show_config:
             print(dumped)
 
@@ -187,9 +172,7 @@ def cli_evaluate(args) -> None:
 
             if args.log_samples:
                 for task_name, config in results["configs"].items():
-                    output_name = "{}_{}".format(
-                        re.sub("/|=", "__", args.model_args), task_name
-                    )
+                    output_name = "{}_{}".format(re.sub("/|=", "__", args.model_args), task_name)
                     filename = path.joinpath(f"{output_name}.jsonl")
                     samples_dumped = json.dumps(
                         samples[task_name],

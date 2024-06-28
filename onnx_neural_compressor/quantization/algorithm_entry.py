@@ -17,16 +17,148 @@ import tempfile
 from typing import Union
 
 import onnx
-from onnx_neural_compressor import config
-from onnx_neural_compressor import constants
-from onnx_neural_compressor import data_reader
-from onnx_neural_compressor import logger
-from onnx_neural_compressor import utility
+import onnxruntime as ort
+
+from onnx_neural_compressor import constants, data_reader, logger, utility
+from onnx_neural_compressor.algorithms.post_training_quant import calibrate, quantizer
 from onnx_neural_compressor.algorithms.smoother import core
-from onnx_neural_compressor.algorithms.weight_only import awq
-from onnx_neural_compressor.algorithms.weight_only import gptq
-from onnx_neural_compressor.algorithms.weight_only import rtn
-from onnxruntime import quantization
+from onnx_neural_compressor.algorithms.weight_only import awq, gptq, rtn
+from onnx_neural_compressor.quantization import config
+
+
+###################### RTN Algo Entry ##################################
+@utility.register_algo(name=constants.RTN)
+def rtn_quantize_entry(
+    model: Union[pathlib.Path, str], quant_config: config.RTNConfig, *args, **kwargs
+) -> onnx.ModelProto:
+    """The main entry to apply rtn quantization."""
+    if len(quant_config.config_mapping) == 0:
+        # map config to each op
+        model_info = config.RTNConfig.get_model_info(model=model)
+        config_mapping = quant_config.to_config_mapping(model_info=model_info)
+        logger.debug(config_mapping)
+    else:
+        config_mapping = quant_config.config_mapping
+    quant_kwargs = {}
+    quant_kwargs = {key: getattr(quant_config, key) for key in config.RTNConfig.model_params_list}
+    model = rtn.apply_rtn_on_model(model, config_mapping, **quant_kwargs)
+    return model
+
+
+###################### GPTQ Algo Entry ##################################
+@utility.register_algo(name=constants.GPTQ)
+def gptq_quantize_entry(
+    model: Union[pathlib.Path, str],
+    quant_config: config.GPTQConfig,
+    calibration_data_reader: data_reader.CalibrationDataReader,
+    *args,
+    **kwargs,
+) -> onnx.ModelProto:
+    """The main entry to apply gptq quantization."""
+    assert calibration_data_reader is not None, "Please provide calibration_data_reader"
+    assert isinstance(
+        calibration_data_reader, data_reader.CalibrationDataReader
+    ), "Please follow onnx_neural_compressor/data_reader.py to implement calibration_data_reader"
+
+    if len(quant_config.config_mapping) == 0:
+        # map config to each op
+        model_info = config.GPTQConfig.get_model_info(model=model)
+        config_mapping = quant_config.to_config_mapping(model_info=model_info)
+        logger.debug(config_mapping)
+    else:
+        config_mapping = quant_config.config_mapping
+    quant_kwargs = {}
+    quant_kwargs = {key: getattr(quant_config, key) for key in config.GPTQConfig.model_params_list}
+
+    # regenerate to ensure data exists
+    calibration_data_reader.rewind()
+    model = gptq.apply_gptq_on_model(model, config_mapping, calibration_data_reader, **quant_kwargs)
+    return model
+
+
+###################### AWQ Algo Entry ##################################
+@utility.register_algo(name=constants.AWQ)
+def awq_quantize_entry(
+    model: Union[pathlib.Path, str],
+    quant_config: config.AWQConfig,
+    calibration_data_reader: data_reader.CalibrationDataReader,
+    *args,
+    **kwargs,
+) -> onnx.ModelProto:
+    """The main entry to apply awq quantization."""
+    assert calibration_data_reader is not None, "Please provide calibration_data_reader"
+    assert isinstance(
+        calibration_data_reader, data_reader.CalibrationDataReader
+    ), "Please follow onnx_neural_compressor/data_reader.py to implement calibration_data_reader"
+
+    if len(quant_config.config_mapping) == 0:
+        # map config to each op
+        model_info = config.AWQConfig.get_model_info(model=model)
+        config_mapping = quant_config.to_config_mapping(model_info=model_info)
+        logger.debug(config_mapping)
+    else:
+        config_mapping = quant_config.config_mapping
+    quant_kwargs = {}
+    quant_kwargs = {key: getattr(quant_config, key) for key in config.AWQConfig.model_params_list}
+
+    # regenerate to ensure data exists
+    calibration_data_reader.rewind()
+    model = awq.apply_awq_on_model(model, config_mapping, calibration_data_reader, **quant_kwargs)
+    return model
+
+
+###################### Static quant Entry ##################################
+@utility.register_algo(name=constants.STATIC_QUANT)
+def static_quantize_entry(
+    model: Union[pathlib.Path, str],
+    quant_config: config.StaticQuantConfig,
+    calibration_data_reader: data_reader.CalibrationDataReader,
+    model_output: Union[pathlib.Path, str] = None,
+    *args,
+    **kwargs,
+) -> onnx.ModelProto:
+    """The main entry to apply dynamic quantization."""
+    if len(quant_config.op_types_to_quantize) == 0:
+        logger.warning("No candidate op type to do quantization, exit.")
+        exit(0)
+    assert calibration_data_reader is not None, "Please provide calibration_data_reader"
+    assert isinstance(
+        calibration_data_reader, data_reader.CalibrationDataReader
+    ), "Please follow onnx_neural_compressor/quantization/calibrate.py to implement calibration_data_reader"
+
+    if len(quant_config.config_mapping) == 0:
+        # map config to each op
+        model_info = config.StaticQuantConfig.get_model_info(model=model)
+        config_mapping = quant_config.to_config_mapping(model_info=model_info)
+        logger.debug(config_mapping)
+    else:
+        config_mapping = quant_config.config_mapping
+
+    calibration_data_reader.rewind()
+    augment = calibrate.ONNXRTAugment(
+        model,
+        calibration_data_reader,
+        dump_op_types=quant_config.op_types_to_quantize,
+        execution_provider=quant_config.execution_provider,
+        iterations=list(range(0, quant_config.calibration_sampling_size)),
+    )
+    min_max = augment.dump_minmax(config_mapping)
+    quantize_params = augment.dump_calibration(config_mapping, min_max=min_max)
+    _quantizer = quantizer.StaticQuantizer(
+        model,
+        config_mapping,
+        quant_format=quant_config.quant_format.name.lower(),
+        quantization_params=quantize_params,
+        op_types_to_quantize=quant_config.op_types_to_quantize,
+        execution_provider=quant_config.execution_provider,
+        optypes_to_exclude_output_quant=quant_config.optypes_to_exclude_output_quant,
+        dedicated_qdq_pair=quant_config.dedicated_qdq_pair,
+        add_qdq_pair_to_weight=quant_config.add_qdq_pair_to_weight,
+    )
+    _quantizer.quantize_model()
+    if model_output is not None:
+        _quantizer.model.save(model_output)
+    return _quantizer.model.model
 
 
 ###################### SmoothQuant Entry ##################################
@@ -37,7 +169,7 @@ def smooth_quant_entry(
     calibration_data_reader: data_reader.CalibrationDataReader,
     model_output: Union[pathlib.Path, str] = None,
     *args,
-    **kwargs
+    **kwargs,
 ) -> Union[pathlib.Path, str, onnx.ModelProto]:
     """Apply smooth quant."""
     assert calibration_data_reader is not None, "Please provide calibration_data_reader"
@@ -50,7 +182,7 @@ def smooth_quant_entry(
     smoother = core.Smoother(
         model,
         calibration_data_reader,
-        providers=quant_config.providers,
+        execution_provider=getattr(quant_config, "execution_provider", "CPUExecutionProvider"),
     )
     smoothed_model = smoother.transform(**quant_config.to_dict())
     with tempfile.TemporaryDirectory(prefix="ort.quant.") as tmp_dir:
@@ -70,80 +202,45 @@ def smooth_quant_entry(
 
         # exclude Mul operations which are inserted during smooth operation
         excluded_nodes = [i.name for i in smoothed_model.graph.node if i.name.endswith("_smooth_mul")]
-        quant_config.calibration_data_reader = calibration_data_reader
         quant_config.nodes_to_exclude.extend(excluded_nodes)
-        quant_config.convert_to_ort_config()
-        quantization.quantize(
+
+        q_model = static_quantize_entry(
             pathlib.Path(tmp_dir).joinpath("smooth.onnx").as_posix(),
-            model_output or pathlib.Path(tmp_dir).joinpath("quant_model.onnx").as_posix(),
             quant_config,
+            calibration_data_reader,
+            model_output,
         )
-        model = model_output or onnx.load(pathlib.Path(tmp_dir).joinpath("quant_model.onnx").as_posix())
-
-    return model
+    return q_model
 
 
-###################### RTN Algo Entry ##################################
-@utility.register_algo(name=constants.RTN)
-def rtn_quantize_entry(
-    model: Union[pathlib.Path, str], quant_config: config.RTNConfig, *args, **kwargs
-) -> onnx.ModelProto:
-    """The main entry to apply rtn quantization."""
-    # map config to each op
-    model_info = quant_config.get_model_info(model=model)
-    configs_mapping = quant_config.to_config_mapping(model_info=model_info)
-    logger.debug(configs_mapping)
-    model = rtn.apply_rtn_on_model(model, configs_mapping)
-    return model
-
-
-###################### GPTQ Algo Entry ##################################
-@utility.register_algo(name=constants.GPTQ)
-def gptq_quantize_entry(
+###################### Dynamic quant Entry ##################################
+@utility.register_algo(name=constants.DYNAMIC_QUANT)
+def dynamic_quantize_entry(
     model: Union[pathlib.Path, str],
-    quant_config: config.GPTQConfig,
-    calibration_data_reader: data_reader.CalibrationDataReader,
+    quant_config: config.DynamicQuantConfig,
+    model_output: Union[pathlib.Path, str] = None,
     *args,
-    **kwargs
+    **kwargs,
 ) -> onnx.ModelProto:
-    """The main entry to apply gptq quantization."""
-    assert calibration_data_reader is not None, "Please provide calibration_data_reader"
-    assert isinstance(
-        calibration_data_reader, data_reader.CalibrationDataReader
-    ), "Please follow onnx_neural_compressor/data_reader.py to implement calibration_data_reader"
+    """The main entry to apply dynamic quantization."""
+    if len(quant_config.op_types_to_quantize) == 0:
+        logger.warning("No candidate op type to do quantization, exit.")
+        exit(0)
 
-    # map config to each op
-    model_info = quant_config.get_model_info(model=model)
-    configs_mapping = quant_config.to_config_mapping(model_info=model_info)
-    logger.debug(configs_mapping)
+    if len(quant_config.config_mapping) == 0:
+        # map config to each op
+        model_info = config.DynamicQuantConfig.get_model_info(model=model)
+        config_mapping = quant_config.to_config_mapping(model_info=model_info)
+        logger.debug(config_mapping)
+    else:
+        config_mapping = quant_config.config_mapping
 
-    # regenerate to ensure data exists
-    calibration_data_reader.rewind()
-    model = gptq.apply_gptq_on_model(model, configs_mapping, calibration_data_reader)
-    return model
-
-
-###################### AWQ Algo Entry ##################################
-@utility.register_algo(name=constants.AWQ)
-def awq_quantize_entry(
-    model: Union[pathlib.Path, str],
-    quant_config: config.AWQConfig,
-    calibration_data_reader: data_reader.CalibrationDataReader,
-    *args,
-    **kwargs
-) -> onnx.ModelProto:
-    """The main entry to apply awq quantization."""
-    assert calibration_data_reader is not None, "Please provide calibration_data_reader"
-    assert isinstance(
-        calibration_data_reader, data_reader.CalibrationDataReader
-    ), "Please follow onnx_neural_compressor/data_reader.py to implement calibration_data_reader"
-
-    # map config to each op
-    model_info = quant_config.get_model_info(model=model)
-    configs_mapping = quant_config.to_config_mapping(model_info=model_info)
-    logger.debug(configs_mapping)
-
-    # regenerate to ensure data exists
-    calibration_data_reader.rewind()
-    model = awq.apply_awq_on_model(model, configs_mapping, calibration_data_reader)
-    return model
+    _quantizer = quantizer.DynamicQuantizer(
+        model,
+        config_mapping,
+        op_types_to_quantize=quant_config.op_types_to_quantize,
+    )
+    _quantizer.quantize_model()
+    if model_output is not None:
+        _quantizer.model.save(model_output)
+    return _quantizer.model.model
