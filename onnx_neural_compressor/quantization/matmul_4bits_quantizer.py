@@ -15,7 +15,7 @@
 from typing import List, Union  # isort: skip
 
 import onnx
-from onnxruntime.quantization import matmul_4bits_quantizer
+import onnxruntime as ort
 
 from onnx_neural_compressor.quantization import matmul_nbits_quantizer
 
@@ -33,8 +33,9 @@ class MatMul4BitsQuantizer(matmul_nbits_quantizer.MatMulNBitsQuantizer):
         is_symmetric: bool = False,
         accuracy_level: int = 0,
         nodes_to_exclude=None,
-        algo_config: matmul_4bits_quantizer.WeightOnlyQuantConfig = None,
+        algo_config: matmul_nbits_quantizer.WeightOnlyQuantConfig = None,
         providers: List[str] = ["CPUExecutionProvider"],
+        optimization_level: ort.GraphOptimizationLevel = ort.GraphOptimizationLevel.ORT_ENABLE_BASIC,
     ):
         super().__init__(
             model=model,
@@ -45,4 +46,5 @@ class MatMul4BitsQuantizer(matmul_nbits_quantizer.MatMulNBitsQuantizer):
             algo_config=algo_config,
             n_bits=4,
             providers=providers,
+            optimization_level=optimization_level,
         )

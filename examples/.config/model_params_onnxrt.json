@@ -55,6 +55,34 @@
         "input_model": "/tf_dataset2/models/onnx/Llama-2-7b-hf-with-past",
         "main_script": "main.py",
         "batch_size": 1
-      }
+      },
+      "bert_base_MRPC": {
+         "model_src_dir": "nlp/bert/quantization/ptq_static",
+         "dataset_location": "/tf_dataset/pytorch/glue_data/MRPC",
+         "input_model": "/tf_dataset2/models/onnx/bert_base_MRPC/bert.onnx",
+         "main_script": "main.py",
+         "batch_size": 8
+      },
+      "bert_base_MRPC_dynamic": {
+         "model_src_dir": "nlp/bert/quantization/ptq_dynamic",
+         "dataset_location": "/tf_dataset/pytorch/glue_data/MRPC",
+         "input_model": "/tf_dataset2/models/onnx/bert_base_MRPC/bert.onnx",
+         "main_script": "main.py",
+         "batch_size": 8
+      },
+      "resnet50-v1-12_qdq": {
+         "model_src_dir": "image_recognition/resnet50/quantization/ptq_static",
+         "dataset_location": "/tf_dataset2/datasets/imagenet/ImagenetRaw/ILSVRC2012_img_val",
+         "input_model": "/tf_dataset2/models/onnx/resnet50-v1-12/resnet50-v1-13.onnx",
+         "main_script": "main.py",
+         "batch_size": 1
+      },
+      "resnet50-v1-12": {
+         "model_src_dir": "image_recognition/resnet50/quantization/ptq_static",
+         "dataset_location": "/tf_dataset2/datasets/imagenet/ImagenetRaw/ILSVRC2012_img_val",
+         "input_model": "/tf_dataset2/models/onnx/resnet50-v1-12/resnet50-v1-12.onnx",
+         "main_script": "main.py",
+         "batch_size": 1
+      },
     }
   }
