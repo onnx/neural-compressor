@@ -18,7 +18,7 @@ for i in "$@"; do
     esac
 done
 
-CONFIG_PATH=/neural-compressor/examples/.config/model_params_onnxrt.json
+CONFIG_PATH="/neural-compressor/examples/.config/model_params_onnxrt.json"
 model_src_dir=$(jq ".\"onnxrt\".\"$model\".\"model_src_dir\"" "$CONFIG_PATH")
 dataset_location=$(jq ".\"onnxrt\".\"$model\".\"dataset_location\"" "$CONFIG_PATH")
 input_model=$(jq ".\"onnxrt\".\"$model\".\"input_model\"" "$CONFIG_PATH")
@@ -46,7 +46,7 @@ function run_accuracy() {
 }
 
 function main() {
-    cd "$model_src_dir"
+    cd "/neural-compressor/examples/$model_src_dir"
     if [ "$stage" == "prepare_model" ]; then
         run_prepare_model
     elif [ "$stage" == "quantize" ]; then
