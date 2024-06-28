@@ -19,9 +19,9 @@ for i in "$@"; do
 done
 
 CONFIG_PATH=/neural-compressor/examples/.config/model_params_onnxrt.json
-model_src_dir=$(jq '."onnxrt"."$model"."model_src_dir"' "$CONFIG_PATH")
-dataset_location=$(jq '."onnxrt"."$model"."dataset_location"' "$CONFIG_PATH")
-input_model=$(jq '."onnxrt"."$model"."input_model"' "$CONFIG_PATH")
+model_src_dir=$(jq ".\"onnxrt\".\"$model\".\"model_src_dir\"" "$CONFIG_PATH")
+dataset_location=$(jq ".\"onnxrt\".\"$model\".\"dataset_location\"" "$CONFIG_PATH")
+input_model=$(jq ".\"onnxrt\".\"$model\".\"input_model\"" "$CONFIG_PATH")
 
 function run_prepare_model() {
     if [ -f "$input_model" ]; then
