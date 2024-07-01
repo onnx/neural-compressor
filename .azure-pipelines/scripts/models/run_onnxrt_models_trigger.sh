@@ -18,6 +18,7 @@ for i in "$@"; do
     esac
 done
 
+log_dir="/neural-compressor/.azure-pipelines/scripts/models/$model"
 CONFIG_PATH="/neural-compressor/examples/.config/model_params_onnxrt.json"
 model_src_dir=$(jq -r ".\"onnxrt\".\"$model\".\"model_src_dir\"" "$CONFIG_PATH")
 if [[ "$model" == *"resnet"* ]]; then
@@ -43,30 +44,30 @@ function run_quantize() {
             --dataset_location="$dataset_location" \
             --label_path="$model" \
             --output_model="./model_tune" \
-            --quant_format="QDQ"
+            --quant_format="QDQ" | tee -a ${log_dir}/tuning.log
     else
         bash run_quant.sh --input_model="$input_model" \
             --dataset_location="$dataset_location" \
             --label_path="$model" \
-            --output_model="./model_tune"
+            --output_model="./model_tune" | tee -a ${log_dir}/tuning.log
     fi
 }
 
 function run_accuracy() {
     bash run_benchmark.sh --input_model="./model_tune" \
         --dataset_location="$dataset_location" \
-        --label_path="$model" \
+        --label_path="$label_path" \
         --mode="accuracy" \
-        --batch_size="16" | tee -a accuracy.log
+        --batch_size="16" | tee -a ${log_dir}/accuracy.log
 }
 
 function run_performance() {
     bash run_benchmark.sh --input_model="./model_tune" \
         --dataset_location="$dataset_location" \
-        --label_path="$model" \
+        --label_path="$label_path" \
         --mode="performance" \
         --intra_op_num_threads="8" \
-        --batch_size="1" | tee -a accuracy.log
+        --batch_size="1" | tee -a ${log_dir}/performance.log
 }
 
 function main() {

@@ -56,7 +56,7 @@ steps:
   - ${{ if eq(parameters.algorithm, 'Quantize') }}:
       - script: |
           docker exec ${{ parameters.modelContainerName }} bash -c "cd /neural-compressor/.azure-pipelines/scripts/models \
-          && bash ${{ parameters.script_path }} --model=${{ parameters.modelName }} --stage='accuracy'"
+          && bash ${{ parameters.script_path }} --model=${{ parameters.modelName }} --stage='performance'"
         displayName: Run Performance Test
 
   # - task: Bash@3
@@ -69,7 +69,7 @@ steps:
 
   - task: PublishPipelineArtifact@1
     inputs:
-      targetPath: $(Build.SourcesDirectory)/.azure-pipelines/scripts/models/accuracy.log/
+      targetPath: $(Build.SourcesDirectory)/.azure-pipelines/scripts/models/$${{ parameters.modelName }}/
       artifact: ${{ parameters.algorithm }}_${{ parameters.modelName }}
       publishLocation: "pipeline"
 
