@@ -13,8 +13,8 @@ def get_data(json_path):
     """
     {
         model: {
-            "performance": {"reg": r"Throughput = ([\d.]+)", "value": "n/a"|number, "log_path": "n/a"|string},
-            "accuracy": {"reg": r"Accuracy: ([\d.]+)", "value": "n/a"|number, "log_path": "n/a"|string},
+            "performance": {"value": "n/a"|number, "log_path": "n/a"|string},
+            "accuracy": {"value": "n/a"|number, "log_path": "n/a"|string},
         }
     }
     """
