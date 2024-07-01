@@ -21,7 +21,7 @@ steps:
 
   - script: |
       docker exec ${{ parameters.modelContainerName }} bash -c \
-        "cd /neural-compressor/.azure-pipelines/scripts/models && bash env_setup.sh"
+        "cd /neural-compressor/.azure-pipelines/scripts/models && bash env_setup.sh --model=${{ parameters.modelName }}"
     displayName: Env setup
 
   - task: DownloadPipelineArtifact@2

@@ -1,7 +1,21 @@
 #!/bin/bash
 set -eo pipefail
-cd /neural-compressor
-source .azure-pipelines/scripts/change_color.sh
+PATTERN='[-a-zA-Z0-9_]*='
+
+for i in "$@"; do
+    case $i in
+    --model=*)
+        model=${i//${PATTERN}/}
+        ;;
+    *)
+        echo "Parameter $i not recognized."
+        exit 1
+        ;;
+    esac
+done
+
+CONFIG_PATH="/neural-compressor/examples/.config/model_params_onnxrt.json"
+model_src_dir=$(jq -r ".\"onnxrt\".\"$model\".\"model_src_dir\"" "$CONFIG_PATH")
 
 # log_dir="/neural-compressor/.azure-pipelines/scripts/models"
 
@@ -14,7 +28,11 @@ source .azure-pipelines/scripts/change_color.sh
 #     mkdir ${model}
 # fi
 
-$BOLD_YELLOW && echo "====== install requirements ======" && $RESET
+$BOLD_YELLOW && echo "====== install ONC ======" && $RESET
+cd /neural-compressor
+source .azure-pipelines/scripts/change_color.sh
 /bin/bash .azure-pipelines/scripts/install_nc.sh
-cd "/neural-compressor/examples/nlp/huggingface_model/text_generation/llama/quantization/weight_only"
+
+$BOLD_YELLOW && echo "====== install requirements ======" && $RESET
+cd "/neural-compressor/examples/$model_src_dir"
 pip install -r requirements.txt
