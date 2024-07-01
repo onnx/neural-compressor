@@ -3,6 +3,7 @@ transformers
 onnx
 onnxruntime
 onnxruntime-extensions
+opencv-python
 datasets
 optimum
 lm-eval==0.4.2

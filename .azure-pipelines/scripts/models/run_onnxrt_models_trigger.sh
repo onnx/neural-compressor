@@ -42,7 +42,17 @@ function run_accuracy() {
     bash run_benchmark.sh --input_model="./model_tune" \
         --dataset_location="$dataset_location" \
         --label_path="$model" \
-        --mode="$1" | tee -a accuracy.log
+        --mode="accuracy" \
+        --batch_size="16" | tee -a accuracy.log
+}
+
+function run_performance() {
+    bash run_benchmark.sh --input_model="./model_tune" \
+        --dataset_location="$dataset_location" \
+        --label_path="$model" \
+        --mode="performance" \
+        --intra_op_num_threads="8" \
+        --batch_size="1" | tee -a accuracy.log
 }
 
 function main() {
@@ -52,11 +62,11 @@ function main() {
     elif [ "$stage" == "quantize" ]; then
         run_quantize
     elif [ "$stage" == "accuracy" ]; then
-        run_accuracy "accuracy"
+        run_accuracy
     elif [ "$stage" == "performance" ]; then
-        run_accuracy "performance"
+        run_performance
     else
-        exit 1
+        echo "invalid stage: $stage" && exit 1
     fi
 }
 
