@@ -20,7 +20,7 @@ done
 
 CONFIG_PATH="/neural-compressor/examples/.config/model_params_onnxrt.json"
 model_src_dir=$(jq -r ".\"onnxrt\".\"$model\".\"model_src_dir\"" "$CONFIG_PATH")
-if [ $model == *"resnet"* ]; then
+if [[ "$model" == *"resnet"* ]]; then
     dataset_location="/tf_dataset2/datasets/imagenet/ImagenetRaw/ImagenetRaw_small_5000/ILSVRC2012_img_val"
     label_path="/tf_dataset2/datasets/imagenet/ImagenetRaw/ImagenetRaw_small_5000/val.txt"
 else
