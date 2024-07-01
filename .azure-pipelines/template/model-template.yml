@@ -59,13 +59,13 @@ steps:
           && bash ${{ parameters.script_path }} --model=${{ parameters.modelName }} --stage='performance'"
         displayName: Run Performance Test
 
-  # - task: Bash@3
-  #   inputs:
-  #     targetType: "inline"
-  #     script: |
-  #       docker exec ${{ parameters.modelContainerName }} bash -c "cd /neural-compressor/.azure-pipelines/scripts/models \
-  #       && bash run_onnxrt_models_trigger --model=${{ parameters.modelName }} --mode='collect_log' --BUILD_BUILDID=$(Build.BuildId)"
-  #   displayName: Collect log
+  - task: Bash@3
+    inputs:
+      targetType: "inline"
+      script: |
+        docker exec ${{ parameters.modelContainerName }} bash -c "cd /neural-compressor/.azure-pipelines/scripts/models \
+        && python collect_results.py --model=${{ parameters.modelName }} --build_id=$(Build.BuildId)"
+    displayName: Collect log
 
   - task: PublishPipelineArtifact@1
     inputs:

@@ -42,13 +42,13 @@ function run_quantize() {
     if [ "$model" == "bert-base-uncased" ]; then
         bash run_quant.sh --input_model="$input_model" \
             --dataset_location="$dataset_location" \
-            --label_path="$model" \
+            --label_path="$label_path" \
             --output_model="./model_tune" \
             --quant_format="QDQ" | tee -a ${log_dir}/tuning.log
     else
         bash run_quant.sh --input_model="$input_model" \
             --dataset_location="$dataset_location" \
-            --label_path="$model" \
+            --label_path="$label_path" \
             --output_model="./model_tune" | tee -a ${log_dir}/tuning.log
     fi
 }
