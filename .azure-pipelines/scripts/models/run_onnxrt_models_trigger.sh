@@ -39,7 +39,7 @@ function run_prepare_model() {
 }
 
 function run_quantize() {
-    if [ "$model" == "bert-base-uncased" ]; then
+    if [[ "$model" == "bert_base_MRPC" ]]; then
         bash run_quant.sh --input_model="$input_model" \
             --dataset_location="$dataset_location" \
             --label_path="$label_path" \

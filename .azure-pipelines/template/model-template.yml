@@ -69,7 +69,7 @@ steps:
 
   - task: PublishPipelineArtifact@1
     inputs:
-      targetPath: $(Build.SourcesDirectory)/.azure-pipelines/scripts/models/$${{ parameters.modelName }}/
+      targetPath: $(Build.SourcesDirectory)/.azure-pipelines/scripts/models/${{ parameters.modelName }}/
       artifact: ${{ parameters.algorithm }}_${{ parameters.modelName }}
       publishLocation: "pipeline"
 
