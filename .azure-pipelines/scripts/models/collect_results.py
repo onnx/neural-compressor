@@ -10,7 +10,7 @@ args = parser.parse_args()
 
 result_dict = {
     args.model: {
-        "performance": {"reg": r"Batch size = (\d+)", "value": "n/a", "log_path": "n/a"},
+        "performance": {"reg": r"Throughput = ([\d.]+)", "value": "n/a", "log_path": "n/a"},
         "accuracy": {"reg": r"Accuracy: ([\d.]+)", "value": "n/a", "log_path": "n/a"},
     }
 }
