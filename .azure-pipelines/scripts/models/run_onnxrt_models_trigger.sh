@@ -20,7 +20,13 @@ done
 
 CONFIG_PATH="/neural-compressor/examples/.config/model_params_onnxrt.json"
 model_src_dir=$(jq -r ".\"onnxrt\".\"$model\".\"model_src_dir\"" "$CONFIG_PATH")
-dataset_location=$(jq -r ".\"onnxrt\".\"$model\".\"dataset_location\"" "$CONFIG_PATH")
+if [ $model == *"resnet"* ]; then
+    dataset_location="/tf_dataset2/datasets/imagenet/ImagenetRaw/ImagenetRaw_small_5000/ILSVRC2012_img_val"
+    label_path="/tf_dataset2/datasets/imagenet/ImagenetRaw/ImagenetRaw_small_5000/val.txt"
+else
+    dataset_location=$(jq -r ".\"onnxrt\".\"$model\".\"dataset_location\"" "$CONFIG_PATH")
+fi
+
 input_model=$(jq -r ".\"onnxrt\".\"$model\".\"input_model\"" "$CONFIG_PATH")
 
 function run_prepare_model() {
@@ -32,10 +38,18 @@ function run_prepare_model() {
 }
 
 function run_quantize() {
-    bash run_quant.sh --input_model="$input_model" \
-        --dataset_location="$dataset_location" \
-        --label_path="$model" \
-        --output_model="./model_tune"
+    if [ "$model" == "bert-base-uncased" ]; then
+        bash run_quant.sh --input_model="$input_model" \
+            --dataset_location="$dataset_location" \
+            --label_path="$model" \
+            --output_model="./model_tune" \
+            --quant_format="QDQ"
+    else
+        bash run_quant.sh --input_model="$input_model" \
+            --dataset_location="$dataset_location" \
+            --label_path="$model" \
+            --output_model="./model_tune"
+    fi
 }
 
 function run_accuracy() {
