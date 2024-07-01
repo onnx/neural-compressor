@@ -36,19 +36,19 @@ parameters:
       - resnet50-v1-12
 
 stages:
-  - stage: ONNX_LLM_Models
-    displayName: Run ONNX LLM Model
-    pool: ICX-16C
-    dependsOn: []
-    jobs:
-      - ${{ each algorithm in parameters.algorithms }}:
-          - job:
-            steps:
-              - template: template/model-template.yml
-                parameters:
-                  modelName: "facebook/opt-125m"
-                  algorithm: "${{ algorithm }}"
-                  script_path: "run_onnxrt_llm_models_trigger.sh"
+  # - stage: ONNX_LLM_Models
+  #   displayName: Run ONNX LLM Model
+  #   pool: ICX-16C
+  #   dependsOn: []
+  #   jobs:
+  #     - ${{ each algorithm in parameters.algorithms }}:
+  #         - job:
+  #           steps:
+  #             - template: template/model-template.yml
+  #               parameters:
+  #                 modelName: "facebook/opt-125m"
+  #                 algorithm: "${{ algorithm }}"
+  #                 script_path: "run_onnxrt_llm_models_trigger.sh"
 
   - stage: ONNX_Models
     displayName: Run ONNX Model
