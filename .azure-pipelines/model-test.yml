@@ -68,7 +68,7 @@ stages:
     displayName: Generate Report
     pool:
       vmImage: "ubuntu-latest"
-    dependsOn: [ONNXModels]
+    dependsOn: [ONNX_Models]
     jobs:
       - job: GenerateReport
         steps:
