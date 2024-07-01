@@ -46,7 +46,7 @@ steps:
   - script: |
       docker exec ${{ parameters.modelContainerName }} bash -c "cd /neural-compressor/.azure-pipelines/scripts/models \
       && bash ${{ parameters.script_path }} --model=${{ parameters.modelName }} --stage='quantize'"
-    displayName: Qunatize
+    displayName: Quantize
 
   - script: |
       docker exec ${{ parameters.modelContainerName }} bash -c "cd /neural-compressor/.azure-pipelines/scripts/models \

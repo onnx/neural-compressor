@@ -36,3 +36,4 @@ source .azure-pipelines/scripts/change_color.sh
 $BOLD_YELLOW && echo "====== install requirements ======" && $RESET
 cd "/neural-compressor/examples/$model_src_dir"
 pip install -r requirements.txt
+pip list
