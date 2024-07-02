@@ -10,9 +10,10 @@ import torch
 import transformers
 from optimum.exporters.onnx import main_export
 
-from onnx_neural_compressor import data_reader, logger
+from onnx_neural_compressor import data_reader, logger, onnx_model
 from onnx_neural_compressor.quantization import algorithm_entry as algos
 from onnx_neural_compressor.quantization import config, matmul_4bits_quantizer
+
 
 
 def find_onnx_file(folder_path):
@@ -64,6 +65,7 @@ class TestLayerWiseQuant(unittest.TestCase):
         llama_id = "yujiepan/llama-2-tiny-3layers-random"
         main_export(llama_id, output="llama-2-tiny-3layers-random", task="text-generation")
         model_path = find_onnx_file("llama-2-tiny-3layers-random")
+        self.llama = model_path
 
         model = onnx.load(model_path)
         model = symbolic_shape_infer.SymbolicShapeInference.infer_shapes(model, auto_merge=True)
@@ -75,7 +77,7 @@ class TestLayerWiseQuant(unittest.TestCase):
         sess_options.optimized_model_filepath = "llama-2-tiny-3layers-random/optimized_model.onnx"
         ort.InferenceSession(infer_shape_model_path, sess_options)
 
-        self.llama = "llama-2-tiny-3layers-random/optimized_model.onnx"
+        self.llama_optimized = "llama-2-tiny-3layers-random/optimized_model.onnx"
         self.calibration_data_reader = DummyNLPDataloader(llama_id)
 
     @classmethod
@@ -105,7 +107,7 @@ class TestLayerWiseQuant(unittest.TestCase):
         return weight_init
 
     def _apply_quantize(self, quant_config, quant_func, data_reader=None):
-        fp32_model = copy.deepcopy(self.llama)
+        fp32_model = copy.deepcopy(self.llama_optimized)
         if data_reader is None:
             qmodel = quant_func(fp32_model, quant_config)
         else:
@@ -132,7 +134,7 @@ class TestLayerWiseQuant(unittest.TestCase):
         # get qmodel without layer_wise_quant
         algo_config = matmul_4bits_quantizer.RTNWeightOnlyQuantConfig(layer_wise_quant=False)
         quant = matmul_4bits_quantizer.MatMul4BitsQuantizer(
-            copy.deepcopy(self.llama),
+            copy.deepcopy(self.llama_optimized),
             algo_config=algo_config,
             optimization_level=ort.GraphOptimizationLevel.ORT_DISABLE_ALL,
         )
@@ -144,7 +146,7 @@ class TestLayerWiseQuant(unittest.TestCase):
         # get qmodel with layer_wise_quant
         algo_config = matmul_4bits_quantizer.RTNWeightOnlyQuantConfig(layer_wise_quant=True)
         quant = matmul_4bits_quantizer.MatMul4BitsQuantizer(
-            copy.deepcopy(self.llama),
+            copy.deepcopy(self.llama_optimized),
             algo_config=algo_config,
             optimization_level=ort.GraphOptimizationLevel.ORT_DISABLE_ALL,
         )
@@ -183,7 +185,7 @@ class TestLayerWiseQuant(unittest.TestCase):
             layer_wise_quant=False, calibration_data_reader=self.calibration_data_reader
         )
         quant = matmul_4bits_quantizer.MatMul4BitsQuantizer(
-            copy.deepcopy(self.llama),
+            copy.deepcopy(self.llama_optimized),
             algo_config=algo_config,
             optimization_level=ort.GraphOptimizationLevel.ORT_DISABLE_ALL,
         )
@@ -197,7 +199,7 @@ class TestLayerWiseQuant(unittest.TestCase):
             layer_wise_quant=True, calibration_data_reader=self.calibration_data_reader
         )
         quant = matmul_4bits_quantizer.MatMul4BitsQuantizer(
-            copy.deepcopy(self.llama),
+            copy.deepcopy(self.llama_optimized),
             algo_config=algo_config,
             optimization_level=ort.GraphOptimizationLevel.ORT_DISABLE_ALL,
         )
@@ -212,6 +214,16 @@ class TestLayerWiseQuant(unittest.TestCase):
         quantized_weight = self._get_quantized_matmul_weight(qmodel, "/lm_head/MatMul_Q4")
         self.assertIsNotNone(quantized_weight)
         self.assertTrue((lwq_quantized_weight == quantized_weight).all())
+
+    def test__check_model_with_infer_shapes(self):
+        from onnx_neural_compressor.algorithms.layer_wise import core as lwq_core
+        self.assertFalse(lwq_core._check_model_with_infer_shapes(self.llama))
+        self.assertTrue(lwq_core._check_model_with_infer_shapes(self.llama_optimized))
+        self.assertTrue(
+            lwq_core._check_model_with_infer_shapes(
+                onnx_model.ONNXModel(onnx.load(self.llama_optimized, load_external_data=False))
+            )
+        )
 
 
 if __name__ == "__main__":
