@@ -154,7 +154,9 @@ def _apply_awq_scale(model, weight_config, absorb_pairs, output_dicts):
 
         if parent.op_type in ["LayerNormalization", "BatchNormalization", "InstanceNormalization"] and len(
             input_name_to_nodes[nodes[0].input[0]]
-        ) == len(nodes): # pragma: no cover
+        ) == len(
+            nodes
+        ):  # pragma: no cover
             for idx in [1, 2]:
                 tensor = onnx.numpy_helper.to_array(model.get_initializer(parent.input[idx]), base_dir)
                 dtype = tensor.dtype
