@@ -11,7 +11,8 @@ import transformers
 from onnxruntime.transformers import fusion_options, optimizer
 from optimum.exporters.onnx import main_export
 
-from onnx_neural_compressor import config, logger, onnx_model
+from onnx_neural_compressor import logger, onnx_model
+from onnx_neural_compressor.quantization import config
 
 
 def find_onnx_file(folder_path):
