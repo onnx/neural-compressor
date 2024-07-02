@@ -31,6 +31,8 @@ def get_ratio(cur, last):
         ratio = "N/A"
     else:
         ratio = (float(cur) - float(last)) / float(last) * 100
+        ratio = round(float(ratio), 2)
+        ratio = f"{ratio}%"
     return ratio
 
 
