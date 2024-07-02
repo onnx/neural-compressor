@@ -83,6 +83,6 @@
          "input_model": "/tf_dataset2/models/onnx/resnet50-v1-12/resnet50-v1-12.onnx",
          "main_script": "main.py",
          "batch_size": 1
-      },
+      }
     }
   }
