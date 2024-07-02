@@ -75,6 +75,7 @@ def generate(rendered_template):
 
 def main():
     path = "{}/templates/".format(os.path.dirname(__file__))
+    BUILD_BUILDID = os.getenv("BUILD_BUILDID")
 
     loader = FileSystemLoader(path)
     env = Environment(loader=loader)
@@ -84,10 +85,10 @@ def main():
     last_data = get_data(args.last_json_path)
     data = add_accuracy_ratio(data, last_data)
     info = {
-        "url": f"https://dev.azure.com/lpot-inc/onnx-neural-compressor/_build/results?buildId={os.getenv("BUILD_BUILDID")}",
+        "url": f"https://dev.azure.com/lpot-inc/onnx-neural-compressor/_build/results?buildId={BUILD_BUILDID}",
         "branch": os.getenv("SYSTEM_PULLREQUEST_SOURCEBRANCH"),
         "commit": os.getenv("BUILD_SOURCEVERSION"),
-        "build_number": os.getenv("BUILD_BUILDID"),
+        "build_number": BUILD_BUILDID,
     }
 
     rendered_template = template.render(data=data, info=info)
