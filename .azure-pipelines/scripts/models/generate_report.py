@@ -27,14 +27,14 @@ def get_data(json_path):
 
 
 def get_ratio(cur, last):
-    if isinstance(cur, str) or isinstance(last, str):
+    if cur == "N/A" or last == "N/A":
         ratio = "N/A"
     else:
         ratio = (float(cur) - float(last)) / float(last) * 100
     return ratio
 
 
-def add_accuracy_ratio(current_json, last_accuracy_dict):
+def get_accuracy_ratio(current_json, last_accuracy_dict):
     compare_result_dict = []
     for model, item in current_json.items():
         current_accuracy = item.get("accuracy", {}).get("value", "N/A")
@@ -59,14 +59,14 @@ def add_accuracy_ratio(current_json, last_accuracy_dict):
                 "model": model,
                 "current_accuracy": current_accuracy,
                 "last_accuracy": last_accuracy,
-                "accuracy_ratio": f"{accuracy_ratio:.2f}",
+                "accuracy_ratio": accuracy_ratio,
                 "current_performance": current_performance,
                 "last_performance": last_performance,
-                "performance_ratio": f"{performance_ratio:.2f}",
+                "performance_ratio": performance_ratio,
                 "status": status,
             }
         )
-    return current_json
+    return compare_result_dict
 
 
 def generate(rendered_template):
@@ -84,7 +84,8 @@ def main():
 
     data = get_data(args.json_path)
     last_data = get_data(args.last_json_path)
-    data = add_accuracy_ratio(data, last_data)
+    data = get_accuracy_ratio(data, last_data)
+    print(data)
     info = {
         "url": f"https://dev.azure.com/lpot-inc/onnx-neural-compressor/_build/results?buildId={BUILD_BUILDID}",
         "branch": os.getenv("SYSTEM_PULLREQUEST_SOURCEBRANCH"),

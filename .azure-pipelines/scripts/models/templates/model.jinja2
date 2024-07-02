@@ -82,8 +82,8 @@
         <h2>Model Test</h2>
         <table class="model-test-table" style="width: 60%;margin: 0 auto 0 0;">
             <tr>
-                {% for title in ["Platform", "Model", "Accuracy(new|last)",
-                "Performence(new|last)", "Ratio(Accuracy)", "Ratio(Performence)", "Status"] %}
+                {% for title in ["Platform", "Model", "Accuracy(new|last)", "Ratio(Accuracy)",
+                "Performence(new|last)", "Ratio(Performence)", "Status"] %}
                 <th style="width: 5%">{{ title }}</th>
                 {% endfor %}
             </tr>
@@ -93,8 +93,8 @@
                     <td>ICX</td>
                     <td><a href={{ item.url }}>{{ item.model }}</a></td>
                     <td>{{ item.current_accuracy }} | {{ item.last_accuracy }}</td>
-                    <td>{{ item.current_performance }} | {{ item.last_performance }}</td>
                     <td>{{ item.accuracy_ratio }}</td>
+                    <td>{{ item.current_performance }} | {{ item.last_performance }}</td>
                     <td>{{ item.performance_ratio }}</td>
                     {% if item.status == 'SUCCESS' %}
                     <td style="color:green">{{ item.status }}</td>
