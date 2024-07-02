@@ -15,7 +15,7 @@ result_dict = {
     }
 }
 
-reg = {
+pattern = {
     "performance": r"Throughput = ([\d.]+)",
     "accuracy": r"Accuracy: ([\d.]+)",
 }
@@ -29,7 +29,7 @@ for mode, info in result_dict[args.model].items():
     with open(log_file, "r") as file:
         log_content = file.read()
 
-    match = re.search(reg["mode"], log_content)
+    match = re.search(pattern[mode], log_content)
 
     if match:
         result_dict[args.model][mode]["value"] = match.group(1)
