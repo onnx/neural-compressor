@@ -1,16 +1,17 @@
 """Tests for algorithm utility components."""
 
 import os
-import onnx
 import shutil
 import unittest
-import numpy as np
-import onnxruntime
-import optimum.exporters.onnx
-import onnxruntime.tools.symbolic_shape_infer as symbolic_shape_infer
 
-from onnx_neural_compressor.algorithms import utility as quant_utils
+import numpy as np
+import onnx
+import onnxruntime
+import onnxruntime.tools.symbolic_shape_infer as symbolic_shape_infer
+import optimum.exporters.onnx
+
 from onnx_neural_compressor import onnx_model
+from onnx_neural_compressor.algorithms import utility as quant_utils
 
 
 def find_onnx_file(folder_path):
@@ -20,6 +21,7 @@ def find_onnx_file(folder_path):
             if file.endswith(".onnx"):
                 return os.path.join(root, file)
     return None
+
 
 class TestUtilityFunctions(unittest.TestCase):
     @classmethod
@@ -77,7 +79,9 @@ class TestUtilityFunctions(unittest.TestCase):
         scale, zero_point = quant_utils._calculate_scale_zp(np.array([0]), np.array([5]), quantize_range, qType, scheme)
         self.assertEqual(zero_point.dtype, np.int8)
 
-        scale, zero_point = quant_utils._calculate_scale_zp(np.array([0]), np.array([127]), quantize_range, qType, scheme)
+        scale, zero_point = quant_utils._calculate_scale_zp(
+            np.array([0]), np.array([127]), quantize_range, qType, scheme
+        )
         self.assertEqual(zero_point.dtype, np.int8)
 
         # asym uint8
@@ -91,7 +95,9 @@ class TestUtilityFunctions(unittest.TestCase):
         scale, zero_point = quant_utils._calculate_scale_zp(np.array([0]), np.array([5]), quantize_range, qType, scheme)
         self.assertEqual(zero_point.dtype, np.uint8)
 
-        scale, zero_point = quant_utils._calculate_scale_zp(np.array([0]), np.array([255]), quantize_range, qType, scheme)
+        scale, zero_point = quant_utils._calculate_scale_zp(
+            np.array([0]), np.array([255]), quantize_range, qType, scheme
+        )
         self.assertEqual(zero_point.dtype, np.uint8)
 
         # unexpected combination
