@@ -103,7 +103,7 @@ array([[0.68475647, 0.4742902 , 0.74404275],
 7.384850698449426e-07
 ```
 
-The difference between $W$ and $W_{dq}$ shows that quantization affects precision and appropriate values of scale and zero point will reduce the loss of precision. 
+The difference between $W$ and $W_{dq}$ shows that quantization affects precision and appropriate values of scale and zero point will reduce the loss of precision.
 
 #### Per-channel example
 
@@ -233,7 +233,7 @@ The image on the left presents a normal MatMul forward  with 1x2 input $x$ and 2
 
 ### SmoothQuant
 
-In the previous subsection, we have explained why per-channel quantization could not be applied for activation, even though it could lead to lower quantization loss. However, the quantization error loss of activation plays an important role in the accuracy loss of model quantization[^2][^3][^4]. 
+In the previous subsection, we have explained why per-channel quantization could not be applied for activation, even though it could lead to lower quantization loss. However, the quantization error loss of activation plays an important role in the accuracy loss of model quantization[^2][^3][^4].
 
 
 
@@ -274,7 +274,7 @@ j is the index of the input channels.
 For most of the models such as OPT and BLOOM, $\alpha = 0.5$ is a well-balanced value to split the difficulty of weight and activation quantization. A larger $\alpha$ value could be used on models with more significant activation outliers to migrate more quantization difficulty to weights.
 
 
-### Our enhancement: 
+### Our enhancement:
 
 #### Algorithm: Auto-tuning of $\alpha$.
 
@@ -297,7 +297,7 @@ Multiple criteria (e.g min, max and mean) are supported to determine the $\alpha
 
 In our experiments, an $\alpha$ range of [0.0, 1.0] with a step_size of 0.1 is found to be well-balanced one for the majority of models.
 
-#### Engineering 
+#### Engineering
 
 *fully automated*: users only need to pass a model and dataloader.
 
@@ -322,7 +322,7 @@ There are two ways to apply smooth quantization: 1) using a fixed `alpha` for th
 To set a fixed alpha for the entire model, users can follow this example:
 
 ```python
-from onnx_neural_compressor import config
+from onnx_neural_compressor.quantization import config
 
 qconfig = config.StaticQuantConfig(
     data_reader, extra_options={"SmoothQuant": True, "SmoothQuantAlpha": 0.5, "SmoothQuantFolding": True}
@@ -344,8 +344,7 @@ The tuning process looks for the optimal `alpha` value from a list of `alpha` va
 Here is an example:
 
 ```python
-from onnx_neural_compressor import config
-from onnx_neural_compressor.quantization import tuning
+from onnx_neural_compressor.quantization import tuning, config
 
 qconfig = tuning.TuningConfig(config_set=[config.SmoothQuantConfig(alpha=np.arange(0.1, 0.5, 0.05).tolist())])
 best_model = tuning.autotune(
@@ -360,8 +359,7 @@ In this case, the tuning process searches the optimal `alpha` of each operator b
 Here is an example:
 
 ```python
-from onnx_neural_compressor import config
-from onnx_neural_compressor.quantization import quantize
+from onnx_neural_compressor.quantization import quantize, config
 
 qconfig = config.StaticQuantConfig(
     data_reader,

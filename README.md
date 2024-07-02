@@ -64,8 +64,7 @@ best_model = quant.model
 ### Static Quantization
 
 ```python
-from onnx_neural_compressor import config
-from onnx_neural_compressor.quantization import quantize
+from onnx_neural_compressor.quantization import quantize, config
 from onnx_neural_compressor import data_reader
 
 

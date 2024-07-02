@@ -123,8 +123,7 @@ User could execute:
 This means user could leverage ONNX Neural Compressor to directly generate a fully quantized model without accuracy aware tuning. It's user responsibility to ensure the accuracy of the quantized model meets expectation. ONNX Neural Compressor supports `Post Training Static Quantization` and `Post Training Dynamic Quantization`.
 
 ``` python
-from onnx_neural_compressor import config
-from onnx_neural_compressor.quantization import quantize
+from onnx_neural_compressor.quantization import quantize, config
 from onnx_neural_compressor import data_reader
 
 
@@ -145,8 +144,7 @@ This means user could leverage the advance feature of ONNX Neural Compressor to 
 
 ``` python
 from onnx_neural_compressor import data_reader
-from onnx_neural_compressor.quantization import tuning
-from onnx_neural_compressor import config
+from onnx_neural_compressor.quantization import tuning, config
 
 class DataReader(data_reader.CalibrationDataReader):
     def get_next(self): ...
