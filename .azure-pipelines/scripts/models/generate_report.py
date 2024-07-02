@@ -29,7 +29,7 @@ def get_ratio(cur, last):
     if cur == "N/A" or last == "N/A":
         ratio = "N/A"
     else:
-        ratio = float(cur) - float(last) / float(last) * 100
+        ratio = (float(cur) - float(last)) / float(last) * 100
     return ratio
 
 
