@@ -63,6 +63,7 @@ steps:
     inputs:
       targetType: "inline"
       script: |
+        pip install requests
         docker exec ${{ parameters.modelContainerName }} bash -c "cd /neural-compressor/.azure-pipelines/scripts/models \
         && python collect_results.py --model=${{ parameters.modelName }} --build_id=$(Build.BuildId)"
     displayName: Collect log

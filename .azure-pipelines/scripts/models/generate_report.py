@@ -1,5 +1,5 @@
 from jinja2 import Environment, FileSystemLoader
-import os.path
+import os
 import json
 import argparse
 
@@ -83,7 +83,12 @@ def main():
     data = get_data(args.json_path)
     last_data = get_data(args.last_json_path)
     data = add_accuracy_ratio(data, last_data)
-    info = {"url": "", "branch": "", "commit": "", "build_number": ""}
+    info = {
+        "url": f"https://dev.azure.com/lpot-inc/onnx-neural-compressor/_build/results?buildId={os.getenv("BUILD_BUILDID")}",
+        "branch": os.getenv("SYSTEM_PULLREQUEST_SOURCEBRANCH"),
+        "commit": os.getenv("BUILD_SOURCEVERSION"),
+        "build_number": os.getenv("BUILD_BUILDID"),
+    }
 
     rendered_template = template.render(data=data, info=info)
     generate(rendered_template)
