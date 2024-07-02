@@ -94,23 +94,23 @@ stages:
               mkdir generated last_generated
               python -u summarize_results.py --logs_dir $(OUT_SCRIPT_PATH) --output_dir generated
             displayName: "Summarize all results"
-          # - task: DownloadPipelineArtifact@2
-          #   continueOnError: true
-          #   inputs:
-          #     source: "specific"
-          #     artifact: "FinalReport"
-          #     patterns: "**.log"
-          #     path: $(OUT_SCRIPT_PATH)/last_generated
-          #     project: $(System.TeamProject)
-          #     pipeline: "Model-Test"
-          #     runVersion: "specific"
-          #     runId: $(refer_buildId)
-          #   displayName: "Download last logs"
-          # - script: |
-          #     echo "------ Generating final report.html ------"
-          #     cd ${OUT_SCRIPT_PATH}
-          #     /usr/bin/bash generate_report.sh --WORKSPACE generated --json_path generated/summary.json --last_json_path last_generated/summary.json
-          #   displayName: "Generate report"
+          - task: DownloadPipelineArtifact@2
+            continueOnError: true
+            inputs:
+              source: "specific"
+              artifact: "FinalReport"
+              patterns: "**.json"
+              path: $(OUT_SCRIPT_PATH)/last_generated
+              project: $(System.TeamProject)
+              pipeline: "onc model test"
+              runVersion: "specific"
+              runId: $(refer_buildId)
+            displayName: "Download last logs"
+          - script: |
+              echo "------ Generating final report.html ------"
+              cd ${OUT_SCRIPT_PATH}
+              /usr/bin/bash generate_report.sh --WORKSPACE generated --json_path generated/summary.json --last_json_path last_generated/summary.json
+            displayName: "Generate report"
           - task: PublishPipelineArtifact@1
             inputs:
               targetPath: $(OUT_SCRIPT_PATH)/generated

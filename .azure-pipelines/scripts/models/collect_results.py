@@ -15,16 +15,23 @@ URL = (
 )
 
 
+def str_to_float(value):
+    try:
+        return round(float(value), 4)
+    except ValueError:
+        return value
+
+
 def main():
     result_dict = {
         args.model: {
-            "performance": {"value": "n/a", "log_path": URL},
-            "accuracy": {"value": "n/a", "log_path": URL},
+            "performance": {"value": "N/A", "log_path": URL},
+            "accuracy": {"value": "N/A", "log_path": URL},
         }
     }
 
     pattern = {
-        "performance": r"Throughput = ([\d.]+)",
+        "performance": r"Throughput: ([\d.]+)",
         "accuracy": r"Accuracy: ([\d.]+)",
     }
 
@@ -40,7 +47,7 @@ def main():
         match = re.search(pattern[mode], log_content)
 
         if match:
-            result_dict[args.model][mode]["value"] = match.group(1)
+            result_dict[args.model][mode]["value"] = str_to_float(match.group(1))
 
     with open(f"/neural-compressor/.azure-pipelines/scripts/models/{args.model}/result.json", "w") as json_file:
         json.dump(result_dict, json_file, indent=4)
