@@ -32,7 +32,7 @@ def merge_json_files(root_dir, output_file):
                     print(f"Error decoding JSON from file: {file_path}")
 
     print(merged_data)
-    write_json_file(merged_data, output_file)
+    write_json_file(merged_data, f"{output_file}/summary.json")
 
 
 def main():
