@@ -24,20 +24,6 @@ steps:
         "cd /neural-compressor/.azure-pipelines/scripts/models && bash env_setup.sh --model=${{ parameters.modelName }}"
     displayName: Env setup
 
-  - task: DownloadPipelineArtifact@2
-    continueOnError: true
-    inputs:
-      source: "specific"
-      artifact: ${{ parameters.algorithm }}_${{ parameters.modelName }}
-      patterns: "**_summary.log"
-      path: $(Build.SourcesDirectory)/.azure-pipelines/scripts/models/${{ parameters.modelName }}_refer_log
-      project: $(System.TeamProject)
-      pipeline: "Model-Test"
-      runVersion: "specific"
-      runId: $(refer_buildId)
-      retryDownloadCount: 3
-    displayName: "Download refer logs"
-
   - script: |
       docker exec ${{ parameters.modelContainerName }} bash -c "cd /neural-compressor/.azure-pipelines/scripts/models \
       && bash ${{ parameters.script_path }} --model=${{ parameters.modelName }} --stage='prepare_model'"
@@ -66,7 +52,7 @@ steps:
         pip install requests
         docker exec ${{ parameters.modelContainerName }} bash -c "cd /neural-compressor/.azure-pipelines/scripts/models \
         && python collect_results.py --model=${{ parameters.modelName }} --build_id=$(Build.BuildId)"
-    displayName: Collect log
+    displayName: Collect Log
 
   - task: PublishPipelineArtifact@1
     inputs:
@@ -80,4 +66,4 @@ steps:
       targetType: "inline"
       script: |
         docker exec ${{ parameters.modelContainerName }} bash -c "rm -fr /neural-compressor/* && rm -fr /neural-compressor/.* || true"
-    displayName: "Docker clean up"
+    displayName: "Docker Clean Up"

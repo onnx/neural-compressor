@@ -2,7 +2,6 @@ import re
 import argparse
 import os
 import json
-import requests
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--model", required=True, type=str)

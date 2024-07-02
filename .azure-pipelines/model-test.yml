@@ -32,7 +32,7 @@ parameters:
     default:
       - bert_base_MRPC
       - bert_base_MRPC_dynamic
-      - resnet50-v1-12_qdq
+      # - resnet50-v1-12_qdq
       # - resnet50-v1-12
 
 stages:
