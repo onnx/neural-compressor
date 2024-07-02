@@ -13,8 +13,8 @@ def get_data(json_path):
     """
     {
         model: {
-            "performance": {"value": "n/a"|number, "log_path": "n/a"|string},
-            "accuracy": {"value": "n/a"|number, "log_path": "n/a"|string},
+            "performance": {"value": "N/A"|number, "log_path": string},
+            "accuracy": {"value": "N/A"|number, "log_path": string},
         }
     }
     """
@@ -69,7 +69,7 @@ def add_accuracy_ratio(current_json, last_accuracy_dict):
 
 
 def generate(rendered_template):
-    with open("report.html", "w") as html_file:
+    with open("generated/report.html", "w") as html_file:
         html_file.write(rendered_template)
 
 

@@ -109,7 +109,7 @@ stages:
           - script: |
               echo "------ Generating final report.html ------"
               cd ${OUT_SCRIPT_PATH}
-              /usr/bin/bash generate_report.sh --WORKSPACE generated --json_path generated/summary.json --last_json_path last_generated/summary.json
+              python generate_report.py --json_path generated/summary.json --last_json_path last_generated/summary.json
             displayName: "Generate report"
           - task: PublishPipelineArtifact@1
             inputs:
