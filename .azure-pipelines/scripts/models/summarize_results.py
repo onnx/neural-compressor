@@ -1,6 +1,6 @@
 import argparse
-import os
 import json
+import os
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--logs_dir", required=True, type=str)

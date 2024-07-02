@@ -1,7 +1,8 @@
-from jinja2 import Environment, FileSystemLoader
-import os
-import json
 import argparse
+import json
+import os
+
+from jinja2 import Environment, FileSystemLoader
 
 parser = argparse.ArgumentParser(allow_abbrev=False)
 parser.add_argument("--json_path", type=str, required=True)
@@ -26,7 +27,7 @@ def get_data(json_path):
 
 
 def get_ratio(cur, last):
-    if cur == "N/A" or last == "N/A":
+    if isinstance(cur, str) or isinstance(last, str):
         ratio = "N/A"
     else:
         ratio = (float(cur) - float(last)) / float(last) * 100
