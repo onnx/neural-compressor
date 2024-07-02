@@ -34,26 +34,6 @@ class TestOptions(unittest.TestCase):
         with self.assertRaises(AssertionError):
             utility.set_random_seed(seed)
 
-    def test_set_workspace(self):
-        workspace = "/path/to/workspace"
-        utility.set_workspace(workspace)
-        self.assertEqual(utility.options.workspace, workspace)
-
-        # non String type
-        workspace = 12345
-        with self.assertRaises(AssertionError):
-            utility.set_workspace(workspace)
-
-    def test_set_resume_from(self):
-        resume_from = "/path/to/resume"
-        utility.set_resume_from(resume_from)
-        self.assertEqual(utility.options.resume_from, resume_from)
-
-        # non String type
-        resume_from = 12345
-        with self.assertRaises(AssertionError):
-            utility.set_resume_from(resume_from)
-
 
 class TestCPUInfo(unittest.TestCase):
 

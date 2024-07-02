@@ -22,8 +22,9 @@ import time
 import cpuinfo
 import numpy as np
 import onnx
+import onnxruntime as ort
+import prettytable as pt
 import psutil
-from onnxruntime.quantization import onnx_model
 
 from onnx_neural_compressor import constants, logger
 
@@ -75,35 +76,20 @@ class Options:
     This class is used for configuring global variables. The global variable options is created with this class.
     If you want to change global variables, you should use functions from onnx_neural_compressor.utility.py:
         set_random_seed(seed: int)
-        set_workspace(workspace: str)
-        set_resume_from(resume_from: str)
 
     Args:
         random_seed(int): Random seed used in neural compressor.
                           Default value is 1978.
-        workspace(str): The directory where intermediate files and tuning history file are stored.
-                        Default value is:
-                            "./nc_workspace/{}/".format(datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")).
-        resume_from(str): The directory you want to resume tuning history file from.
-                          The tuning history was automatically saved in the workspace directory
-                               during the last tune process.
-                          Default value is None.
 
     Example::
 
         from onnx_neural_compressor import set_random_seed
-        from onnx_neural_compressor import set_workspace
-        from onnx_neural_compressor import set_resume_from
         set_random_seed(2022)
-        set_workspace("workspace_path")
-        set_resume_from("workspace_path")
     """
 
-    def __init__(self, random_seed=1978, workspace=constants.DEFAULT_WORKSPACE, resume_from=None):
+    def __init__(self, random_seed=1978):
         """Init an Option object."""
         self.random_seed = random_seed
-        self.workspace = workspace
-        self.resume_from = resume_from
 
     @property
     def random_seed(self):
@@ -116,69 +102,8 @@ class Options:
         if check_value("random_seed", random_seed, int):
             self._random_seed = random_seed
 
-    @property
-    def workspace(self):
-        """Get workspace."""
-        return self._workspace
-
-    @workspace.setter
-    def workspace(self, workspace):
-        """Set workspace."""
-        if check_value("workspace", workspace, str):
-            self._workspace = workspace
-
-    @property
-    def resume_from(self):
-        """Get resume_from."""
-        return self._resume_from
-
-    @resume_from.setter
-    def resume_from(self, resume_from):
-        """Set resume_from."""
-        if resume_from is None or check_value("resume_from", resume_from, str):
-            self._resume_from = resume_from
-
 
 options = Options()
-
-
-class TuningLogger:
-    """A unified logger for the tuning/quantization process.
-
-    It assists validation teams in retrieving logs.
-    """
-
-    @classmethod
-    def tuning_start(cls) -> None:
-        logger.info("Tuning started.")
-
-    @classmethod
-    def trial_start(cls, trial_index: int = None) -> None:
-        logger.info("%d-trail started.", trial_index)
-
-    @classmethod
-    def quantization_start(cls, stacklevel=2) -> None:
-        logger.info("Quantization started.", stacklevel=stacklevel)
-
-    @classmethod
-    def quantization_end(cls, stacklevel=2) -> None:
-        logger.info("Quantization end.", stacklevel=stacklevel)
-
-    @classmethod
-    def evaluation_start(cls) -> None:
-        logger.info("Evaluation started.")
-
-    @classmethod
-    def evaluation_end(cls) -> None:
-        logger.info("Evaluation end.")
-
-    @classmethod
-    def trial_end(cls, trial_index: int = None) -> None:
-        logger.info("%d-trail end.", trial_index)
-
-    @classmethod
-    def tuning_end(cls) -> None:
-        logger.info("Tuning completed.")
 
 
 def singleton(cls):
@@ -193,6 +118,48 @@ def singleton(cls):
         return instances[cls]
 
     return _singleton
+
+
+class Statistics:
+    """The statistics printer."""
+
+    def __init__(self, data, header, field_names, output_handle=logger.info):
+        """Init a Statistics object.
+
+        Args:
+            data: The statistics data
+            header: The table header
+            field_names: The field names
+            output_handle: The output logging method
+        """
+        self.field_names = field_names
+        self.header = header
+        self.data = data
+        self.output_handle = output_handle
+        self.tb = pt.PrettyTable(min_table_width=40)
+
+    def print_stat(self):
+        """Print the statistics."""
+        valid_field_names = []
+        for index, value in enumerate(self.field_names):
+            if index < 2:
+                valid_field_names.append(value)
+                continue
+
+            if any(i[index] for i in self.data):
+                valid_field_names.append(value)
+        self.tb.field_names = valid_field_names
+        for i in self.data:
+            tmp_data = []
+            for index, value in enumerate(i):
+                if self.field_names[index] in valid_field_names:
+                    tmp_data.append(value)
+            if any(tmp_data[1:]):
+                self.tb.add_row(tmp_data)
+        lines = self.tb.get_string().split("\n")
+        self.output_handle("|" + self.header.center(len(lines[0]) - 2, "*") + "|")
+        for i in lines:
+            self.output_handle(i)
 
 
 class LazyImport(object):
@@ -301,54 +268,6 @@ def set_random_seed(seed: int):
     options.random_seed = seed
 
 
-def set_workspace(workspace: str):
-    """Set the workspace in config."""
-    options.workspace = workspace
-
-
-def set_resume_from(resume_from: str):
-    """Set the resume_from in config."""
-    options.resume_from = resume_from
-
-
-def log_quant_execution(func):
-    default_tuning_logger = TuningLogger()
-
-    def wrapper(*args, **kwargs):
-        default_tuning_logger.quantization_start(stacklevel=4)
-
-        # Call the original function
-        result = func(*args, **kwargs)
-
-        default_tuning_logger.quantization_end(stacklevel=4)
-        return result
-
-    return wrapper
-
-
-dtype_mapping = {
-    "fp32": 1,
-    "float32": 1,
-    "uint8": 2,
-    "int8": 3,
-    "uint16": 4,
-    "int16": 5,
-    "int32": 6,
-    "int64": 7,
-    "string": 8,
-    "bool": 9,
-    "fp16": 10,
-    "float16": 10,
-    "double": 11,
-    "uint32": 12,
-    "uint64": 13,
-    "complex64": 14,
-    "complex128": 15,
-    "bf16": 16,
-    "bfloat16": 16,
-}
-
-
 def simple_progress_bar(total, i):
     """Progress bar for cases where tqdm can't be used."""
     progress = i / total
@@ -382,157 +301,26 @@ def register_algo(name):
     return decorator
 
 
-def get_model_info(
-    model: Union[onnx.ModelProto, pathlib.Path, str], white_op_type_list: List[Callable]
-) -> List[Tuple[str, Callable]]:
-    if not isinstance(model, onnx.ModelProto):
-        model = onnx.load(model)
-    filter_result = []
-    filter_result_set = set()
+def auto_detect_ep():
+    eps = ort.get_available_providers()
+    if "DnnlExecutionProvider" in eps:
+        return "DnnlExecutionProvider"
+    elif "DmlExecutionProvider" in eps:
+        return "DnnlExecutionProvider"
+    elif "CUDAExecutionProvider" in eps:
+        return "CUDAExecutionProvider"
+    else:
+        return "CPUExecutionProvider"
+
+
+def trt_env_setup(model):
+    """Set environment variable for Tensorrt Execution Provider."""
+    is_int8 = False
     for node in model.graph.node:
-        if node.op_type in white_op_type_list:
-            pair = (node.name, node.op_type)
-            if pair not in filter_result_set:
-                filter_result_set.add(pair)
-                filter_result.append(pair)
-    logger.debug(f"Get model info: {filter_result}")
-    return filter_result
-
-
-def is_B_transposed(node):
-    """Whether inuput B is transposed."""
-    transB = [attr for attr in node.attribute if attr.name == "transB"]
-    if len(transB):
-        return 0 < onnx.helper.get_attribute_value(transB[0])
-    return False
-
-
-def get_qrange_for_qType(qType, reduce_range=False):
-    """Helper function to get the quantization range for a type.
-
-    Args:
-        qType (int): data type
-        reduce_range (bool, optional): use 7 bit or not. Defaults to False.
-    """
-    if qType == onnx.onnx_pb.TensorProto.UINT8:
-        return 127 if reduce_range else 255
-    elif qType == onnx.onnx_pb.TensorProto.INT8:
-        # [-64, 64] for reduce_range, and [-127, 127] full_range.
-        return 128 if reduce_range else 254
+        if node.op_type in ["QuantizeLinear", "DequantizeLinear"]:
+            is_int8 = True
+            break
+    if is_int8:
+        os.environ["ORT_TENSORRT_INT8_ENABLE"] = "1"
     else:
-        raise ValueError("unsupported quantization data type")
-
-
-def _quantize_data_with_scale_zero(data, qType, scheme, scale, zero_point):
-    """Quantize data with scale and zero point.
-
-    To pack weights, we compute a linear transformation
-        - when data type == uint8 mode, from [rmin, rmax] -> [0, 2^{b-1}] and
-        - when data type == int8, from [-m , m] -> [-(2^{b-1}-1), 2^{b-1}-1] where
-            m = max(abs(rmin), abs(rmax))
-
-    Args:
-        data (np.array): data to quantize
-        qType (int): data type to quantize to. Supported types UINT8 and INT8
-        scheme (string): sym or asym quantization.
-        scale (float): computed scale of quantized data
-        zero_point (uint8 or int8): computed zero point of quantized data
-    """
-    data = np.asarray(data)
-    if qType == onnx.onnx_pb.TensorProto.INT8 and scheme == "sym":
-        # signed byte type
-        quantized_data = (data.astype(np.float32) / scale).round().astype("b")
-    elif qType == onnx.onnx_pb.TensorProto.UINT8 and scheme == "asym":
-        quantized_data = ((data.astype(np.float32) / scale).round() + zero_point).astype("B")
-    else:
-        raise ValueError("Unexpected combination of data type {} and scheme {}.".format(qType, scheme))
-    return quantized_data
-
-
-def _calculate_scale_zp(rmin, rmax, quantize_range, qType, scheme):
-    """Calculate scale and zero point."""
-    if isinstance(rmax, np.ndarray):
-        if scheme == "sym":
-            max_range = np.maximum(abs(rmin), abs(rmax))
-            scale = np.ones(rmax.shape, dtype="float32")
-            scale[max_range > 0] = np.array(
-                [float(i) / quantize_range for i in (max_range[max_range > 0] * 2.0).flatten().tolist()],
-                dtype="float32",
-            )
-        else:
-            scale = np.ones(rmax.shape, dtype="float32")
-            scale[rmin != rmax] = np.array(
-                [float(i) / quantize_range for i in (rmax - rmin)[rmin != rmax].flatten().tolist()], dtype="float32"
-            )
-
-        if scheme == "sym" and qType == onnx.onnx_pb.TensorProto.INT8:
-            zero_point = np.zeros(scale.shape, dtype="int8") if isinstance(scale, np.ndarray) else 0
-        elif isinstance(scale, np.ndarray) and (scale == 1).all():
-            zero_point = (
-                np.zeros(scale.shape, dtype="int8")
-                if qType == onnx.onnx_pb.TensorProto.INT8
-                else np.zeros(scale.shape, dtype="uint8")
-            )
-        elif qType == onnx.onnx_pb.TensorProto.UINT8:
-            zero_point = np.maximum(0, np.minimum(255, ((0 - float(rmin)) / scale).round()).round()).astype("uint8")
-        else:  # pragma: no cover
-            zero_point = (
-                (-64 - rmin) / float(scale) if quantize_range == 128 else (-127 - rmin) / float(scale)
-            ).round()
-
-    else:
-        if scheme == "sym":
-            max_range = max(abs(rmin), abs(rmax))
-            scale = (float(max_range) * 2) / quantize_range if max_range > 0 else 1
-        else:
-            scale = (float(rmax) - float(rmin)) / quantize_range if rmin != rmax else 1
-
-        if scale == 1 or (scheme == "sym" and qType == onnx.onnx_pb.TensorProto.INT8):
-            zero_point = 0
-        elif qType == onnx.onnx_pb.TensorProto.UINT8:
-            zero_point = round((0 - float(rmin)) / scale)
-            zero_point = np.uint8(round(max(0, min(255, zero_point))))
-        else:  # pragma: no cover
-            zero_point = (
-                round((-64 - float(rmin)) / scale) if quantize_range == 128 else round((-127 - float(rmin)) / scale)
-            )
-    return scale, zero_point
-
-
-def quantize_data(data, quantize_range, qType, scheme):
-    """Quantize data.
-
-    To pack weights, we compute a linear transformation
-        - when data type == uint8 mode, from [rmin, rmax] -> [0, 2^{b-1}] and
-        - when data type == int8, from [-m , m] -> [-(2^{b-1}-1), 2^{b-1}-1] where
-            m = max(abs(rmin), abs(rmax))
-    and add necessary intermediate nodes to transform quantized weight to full weight
-    using the equation r = S(q-z), where
-        r: real original value
-        q: quantized value
-        S: scale
-        z: zero point
-
-    Args:
-        data (array): data to quantize
-        quantize_range (list): list of data to weight pack.
-        qType (int): data type to quantize to. Supported types UINT8 and INT8
-        scheme (string): sym or asym quantization.
-    """
-    rmin = min(min(data), 0)
-    rmax = max(max(data), 0)
-
-    scale, zero_point = _calculate_scale_zp(rmin, rmax, quantize_range, qType, scheme)
-    quantized_data = _quantize_data_with_scale_zero(data, qType, scheme, scale, zero_point)
-    return rmin, rmax, zero_point, scale, quantized_data
-
-
-def check_model_with_infer_shapes(model):
-    """Check if the model has been shape inferred."""
-    if isinstance(model, (pathlib.Path, str)):
-        model = onnx.load(model, load_external_data=False)
-    elif isinstance(model, onnx_model.ONNXModel):
-        model = model.model
-    if len(model.graph.value_info) > 0:
-        return True
-    return False
+        os.environ["ORT_TENSORRT_INT8_ENABLE"] = "0"

@@ -14,21 +14,41 @@
 
 from typing import List, Union  # isort: skip
 
+import pathlib
+import tempfile
+
 import onnx
-from onnxruntime.quantization import matmul_4bits_quantizer
+import onnxruntime as ort
 
-from onnx_neural_compressor import config, data_reader, logger, onnx_model, utility
+from onnx_neural_compressor import data_reader, logger, onnx_model, utility
 from onnx_neural_compressor.quantization import algorithm_entry as algos
+from onnx_neural_compressor.quantization import config
 
 
-class RTNWeightOnlyQuantConfig(matmul_4bits_quantizer.RTNWeightOnlyQuantConfig):
+class WeightOnlyQuantConfig:
+    def __init__(self, algorithm):
+        """This is the Base class for Weight Only Quant Configuration.
+
+        Args:
+            algorithm:
+                weight only quantize algorithm name.
+        """
+        self.algorithm = algorithm
+
+
+class RTNWeightOnlyQuantConfig(WeightOnlyQuantConfig):
 
     def __init__(self, ratios=None, layer_wise_quant=False):
-        super().__init__(ratios=ratios)
+        super().__init__(
+            algorithm="RTN",
+        )
+        if ratios is None:
+            ratios = {}
+        self.ratios = ratios
         self.layer_wise_quant = layer_wise_quant
 
 
-class GPTQWeightOnlyQuantConfig(matmul_4bits_quantizer.GPTQWeightOnlyQuantConfig):
+class GPTQWeightOnlyQuantConfig(WeightOnlyQuantConfig):
 
     def __init__(
         self,
@@ -41,17 +61,18 @@ class GPTQWeightOnlyQuantConfig(matmul_4bits_quantizer.GPTQWeightOnlyQuantConfig
         layer_wise_quant=False,
     ):
         super().__init__(
-            calibration_data_reader=calibration_data_reader,
-            percdamp=percdamp,
-            block_size=block_size,
-            actorder=actorder,
-            mse=mse,
-            perchannel=perchannel,
+            algorithm="GPTQ",
         )
+        self.calibration_data_reader = calibration_data_reader
+        self.percdamp = percdamp
+        self.block_size = block_size
+        self.actorder = actorder
+        self.mse = mse
+        self.perchannel = perchannel
         self.layer_wise_quant = layer_wise_quant
 
 
-class AWQWeightOnlyQuantConfig(matmul_4bits_quantizer.WeightOnlyQuantConfig):
+class AWQWeightOnlyQuantConfig(WeightOnlyQuantConfig):
 
     def __init__(
         self,
@@ -81,15 +102,14 @@ class MatMulNBitsQuantizer:
         is_symmetric: bool = False,
         accuracy_level: int = 0,
         nodes_to_exclude: List[str] = None,
-        algo_config: matmul_4bits_quantizer.WeightOnlyQuantConfig = None,
+        algo_config: WeightOnlyQuantConfig = None,
         n_bits: int = 4,
         providers: List[str] = ["CPUExecutionProvider"],
+        optimization_level: ort.GraphOptimizationLevel = ort.GraphOptimizationLevel.ORT_ENABLE_BASIC,
     ):
         if nodes_to_exclude is None:
             nodes_to_exclude = []
-        self.model_path = model if isinstance(model, str) else None
         self.model = model
-        self.model = onnx_model.ONNXModel(onnx.load(model)) if isinstance(model, str) else onnx_model.ONNXModel(model)
         self.block_size = block_size
         self.is_symmetric = is_symmetric
         self.accuracy_level = accuracy_level
@@ -98,6 +118,7 @@ class MatMulNBitsQuantizer:
         self.n_bits = n_bits
         self.providers = providers
         self.algorithm = self.algo_config.algorithm
+        self.optimization_level = optimization_level
         assert self.algorithm in [
             "RTN",
             "AWQ",
@@ -106,7 +127,6 @@ class MatMulNBitsQuantizer:
 
     def _generate_nc_config(self):
         config_class = config.config_registry.get_cls_configs()[self.algorithm.lower()]
-
         quant_kwargs = {
             "weight_bits": self.n_bits,
             "weight_group_size": self.block_size,
@@ -124,7 +144,7 @@ class MatMulNBitsQuantizer:
             quant_kwargs.update(
                 {
                     "percdamp": self.algo_config.percdamp,
-                    "blocksize": self.algo_config.block_size,
+                    "block_size": self.algo_config.block_size,
                     "actorder": self.algo_config.actorder,
                     "mse": self.algo_config.mse,
                     "perchannel": self.algo_config.perchannel,
@@ -148,9 +168,33 @@ class MatMulNBitsQuantizer:
 
     def int4_quant_algo(self):
         qconfig = self._generate_nc_config()
+        model = self.model
+        opt_tmp_file = tempfile.TemporaryDirectory()
+
+        # do graph optimization if not layer_wise_quant
+        if (
+            not getattr(self.algo_config, "layer_wise_quant", False)
+            and self.optimization_level != ort.GraphOptimizationLevel.ORT_DISABLE_ALL
+        ):
+            if not isinstance(model, str):
+                onnx.save(model, pathlib.Path(opt_tmp_file.name).joinpath("tmp.onnx").as_posix())
+                model = pathlib.Path(opt_tmp_file.name).joinpath("tmp.onnx").as_posix()
+            logger.info("Start graph optimization...")
+            sess_options = ort.SessionOptions()
+            sess_options.graph_optimization_level = self.optimization_level
+            sess_options.optimized_model_filepath = pathlib.Path(opt_tmp_file.name).joinpath("opt.onnx").as_posix()
+            sess_options.add_session_config_entry(
+                "session.optimized_model_external_initializers_file_name", "opt.onnx_data"
+            )
+            sess_options.add_session_config_entry(
+                "session.optimized_model_external_initializers_min_size_in_bytes", "1024"
+            )
+            session = ort.InferenceSession(model, sess_options)
+            model = sess_options.optimized_model_filepath
+            del session
+            logger.info("Graph optimization done.")
 
         logger.info(f"start to quantize model with {self.algorithm} algorithm...")
-        model = self.model_path or self.model
         if self.algorithm == "RTN":
             self.model = algos.rtn_quantize_entry(model, qconfig)
         elif self.algorithm == "GPTQ":
@@ -158,6 +202,7 @@ class MatMulNBitsQuantizer:
         elif self.algorithm == "AWQ":
             self.model = algos.awq_quantize_entry(model, qconfig, self.algo_config.calibration_data_reader)
         logger.info(f"complete quantization of model with {self.algorithm} algorithm.")
+        opt_tmp_file.cleanup()
 
     def process(self):
         self.int4_quant_algo()

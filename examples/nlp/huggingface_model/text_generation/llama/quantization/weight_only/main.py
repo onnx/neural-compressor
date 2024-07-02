@@ -33,8 +33,8 @@ from optimum import onnxruntime as optimum_ort
 from torch.nn import functional
 from torch.utils import data
 
-from onnx_neural_compressor import config, data_reader, logger, utility
-from onnx_neural_compressor.quantization import matmul_nbits_quantizer, tuning
+from onnx_neural_compressor import data_reader
+from onnx_neural_compressor.quantization import config, matmul_nbits_quantizer, tuning
 
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(name)s -   %(message)s", datefmt="%m/%d/%Y %H:%M:%S", level=logging.WARN
@@ -315,10 +315,6 @@ class GPTQDataloader(data_reader.CalibrationDataReader):
 
 
 if __name__ == "__main__":
-    utility.set_workspace(args.workspace)
-    if not os.path.exists(args.workspace):
-        os.mkdir(args.workspace)
-
     if args.benchmark:
         if args.mode == "performance":
             benchmark(args.model_path)
@@ -331,23 +327,11 @@ if __name__ == "__main__":
         model_name = "model.onnx"  # require optimum >= 1.14.0
         model_path = os.path.join(args.model_path, model_name)
 
-        # do graph optimization
-        logger.info("Start graph optimization...")
-        sess_options = ort.SessionOptions()
-        sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_EXTENDED
-        sess_options.optimized_model_filepath = os.path.join(args.workspace, "Optimized_model.onnx")
-        sess_options.add_session_config_entry(
-            "session.optimized_model_external_initializers_file_name", "Optimized_model.onnx_data"
-        )
-        sess_options.add_session_config_entry("session.optimized_model_external_initializers_min_size_in_bytes", "1024")
-        sess = ort.InferenceSession(model_path, sess_options, providers=["CPUExecutionProvider"])
-        logger.info("Graph optimization done.")
-
         best_model = None
         if args.algorithm.upper() == "RTN":
             algo_config = matmul_nbits_quantizer.RTNWeightOnlyQuantConfig()
             quant = matmul_nbits_quantizer.MatMulNBitsQuantizer(
-                sess_options.optimized_model_filepath,
+                model_path,
                 n_bits=4,
                 block_size=32,
                 is_symmetric=True,
@@ -362,7 +346,7 @@ if __name__ == "__main__":
                 calibration_data_reader=calibration_data_reader, enable_mse_search=False
             )
             quant = matmul_nbits_quantizer.MatMulNBitsQuantizer(
-                sess_options.optimized_model_filepath,
+                model_path,
                 n_bits=4,
                 block_size=32,
                 is_symmetric=True,
@@ -377,7 +361,7 @@ if __name__ == "__main__":
                 calibration_data_reader=calibration_data_reader,
             )
             quant = matmul_nbits_quantizer.MatMulNBitsQuantizer(
-                sess_options.optimized_model_filepath,
+                model_path,
                 n_bits=4,
                 block_size=32,
                 is_symmetric=False,

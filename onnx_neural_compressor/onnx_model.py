@@ -21,12 +21,11 @@ import sys
 
 import onnx
 import transformers
-from onnxruntime.quantization import onnx_model
 
 from onnx_neural_compressor import constants, logger, utility
 
 
-class ONNXModel(onnx_model.ONNXModel):
+class ONNXModel:
     """Build ONNX model."""
 
     def __init__(self, model, **kwargs):
@@ -36,26 +35,68 @@ class ONNXModel(onnx_model.ONNXModel):
             model (str or ModelProto): path to onnx model or loaded ModelProto model object.
         """
         self.model = model if not isinstance(model, str) else onnx.load(model, load_external_data=False)
-        super().__init__(self.model)
-
         self._model_path = None if not isinstance(model, str) else model
         self.check_is_large_model()
         if self._is_large_model and self._model_path is None and not kwargs.get("ignore_warning", False):
             logger.warning("Model size > 2GB. Please use model path instead of onnx model object to quantize")
 
         if self._is_large_model and isinstance(model, str) and kwargs.get("load_external_data", True):
-
             onnx.external_data_helper.load_external_data_for_model(self.model, os.path.dirname(self._model_path))
 
         self._config = None
         if isinstance(model, str) and os.path.exists(pathlib.Path(model).parent.joinpath("config.json").as_posix()):
             self._config = transformers.PretrainedConfig.from_pretrained(pathlib.Path(model).parent.as_posix())
         self.node_name_counter = {}
-        self._output_name_to_node = self.output_name_to_node()
-        self._input_name_to_nodes = self.input_name_to_nodes()
+        self._output_name_to_node = {}
+        self._input_name_to_nodes = {}
+        self._get_output_name_to_node(self.model.graph.node)
+        self._get_input_name_to_nodes(self.model.graph.node)
         self._graph_info = {}
         self._get_graph_info()
         self._q_config = None
+
+    def output_name_to_node(self):
+        self._output_name_to_node = {}
+        self._get_output_name_to_node(self.model.graph.node)
+        return self._output_name_to_node
+
+    def input_name_to_nodes(self):
+        self._input_name_to_nodes = {}
+        self._get_input_name_to_nodes(self.model.graph.node)
+        return self._input_name_to_nodes
+
+    def _get_input_name_to_nodes(self, nodes):
+        """Get input names of nodes."""
+        for node in nodes:
+            attrs = [
+                attr
+                for attr in node.attribute
+                if attr.type == onnx.AttributeProto.GRAPH or attr.type == onnx.AttributeProto.GRAPHS
+            ]
+            if len(attrs) > 0:
+                for attr in attrs:
+                    self._get_input_name_to_nodes(attr.g.node)
+            for input_name in node.input:
+                if len(input_name.strip()) != 0:
+                    if input_name not in self._input_name_to_nodes:
+                        self._input_name_to_nodes[input_name] = [node]
+                    else:
+                        self._input_name_to_nodes[input_name].append(node)
+
+    def _get_output_name_to_node(self, nodes):
+        """Get output names of nodes."""
+        for node in nodes:
+            attrs = [
+                attr
+                for attr in node.attribute
+                if attr.type == onnx.AttributeProto.GRAPH or attr.type == onnx.AttributeProto.GRAPHS
+            ]
+            if len(attrs) > 0:
+                for attr in attrs:
+                    self._get_output_name_to_node(attr.g.node)
+            for output_name in node.output:
+                if len(output_name.strip()) != 0:
+                    self._output_name_to_node[output_name] = node
 
     @property
     def model_path(self):
@@ -99,6 +140,11 @@ class ONNXModel(onnx_model.ONNXModel):
         """Return framework."""
         return "onnxruntime"
 
+    def add_initializer(self, tensor):
+        """Add a initializer to model."""
+        if tensor.name not in [i.name for i in self._model.graph.initializer]:
+            self._model.graph.initializer.append(tensor)
+
     def add_initializers(self, tensors):
         """Add initializers to model."""
         for tensor in tensors:
@@ -127,6 +173,42 @@ class ONNXModel(onnx_model.ONNXModel):
         """Return output of model."""
         return [i.name for i in self.model.graph.output]
 
+    @property
+    def model(self):
+        """Return model itself."""
+        return self._model
+
+    @model.setter
+    def model(self, model):
+        """Set model itself."""
+        self._model = model
+        self._graph_info = {}
+        self._get_graph_info()
+        self._output_name_to_node = {}
+        self._input_name_to_nodes = {}
+        self._get_input_name_to_nodes(self._model.graph.node)
+        self._get_output_name_to_node(self._model.graph.node)
+
+    def nodes(self):
+        """Return model nodes."""
+        return self._model.graph.node
+
+    def initializer(self):
+        """Return model initializer."""
+        return self._model.graph.initializer
+
+    def graph(self):
+        """Return model graph."""
+        return self._model.graph
+
+    def ir_version(self):
+        """Return model ir_version."""
+        return self._model.ir_version
+
+    def opset_import(self):
+        """Return model opset_import."""
+        return self._model.opset_import
+
     def update(self):
         """Update model info."""
         self._graph_info = {}
@@ -143,6 +225,10 @@ class ONNXModel(onnx_model.ONNXModel):
         """Update graph info."""
         for node in self.model.graph.node:
             self.graph_info.update({node.name: node.op_type})
+
+    def is_graph_output(self, name):
+        """Check whether the tensor is the graph output."""
+        return name in self.output()
 
     def save(self, root):
         """Save ONNX model."""
@@ -168,6 +254,53 @@ class ONNXModel(onnx_model.ONNXModel):
             output_config_file = pathlib.Path(root).parent.joinpath("config.json").as_posix()
             self._config.to_json_file(output_config_file, use_diff=False)
 
+    def remove_initializer(self, tensor):
+        """Remove an initializer from model."""
+        if tensor in self._model.graph.initializer:
+            self._model.graph.initializer.remove(tensor)
+
+    def remove_initializers(self, init_to_remove):
+        """Remove initializers from model."""
+        for initializer in init_to_remove:
+            self.remove_initializer(initializer)
+
+    def get_initializer(self, name):
+        """ "Find the initializer with specified name."""
+        for initializer in self.model.graph.initializer:
+            if initializer.name == name:
+                return initializer
+        return None
+
+    def remove_node(self, node):
+        """Remove a node from model."""
+        if node in self._model.graph.node:
+            self._model.graph.node.remove(node)
+
+    def remove_nodes(self, nodes_to_remove):
+        """Remove nodes from model."""
+        for node in nodes_to_remove:
+            self.remove_node(node)
+
+    def add_node(self, node):
+        """Add a node to model."""
+        self._model.graph.node.extend([node])
+
+    def add_nodes(self, nodes_to_add):
+        """Add nodes to model."""
+        self._model.graph.node.extend(nodes_to_add)
+
+    def get_children(self, node, input_name_to_nodes=None):
+        """Get children nodes."""
+        if input_name_to_nodes is None:
+            input_name_to_nodes = self._input_name_to_nodes
+
+        children = []
+        for output in node.output:
+            if output in input_name_to_nodes:
+                for child in input_name_to_nodes[output]:
+                    children.append(child)
+        return children
+
     def get_initializer_share_num(self, name):
         """Get the number of shares of initializer."""
         num = 0
@@ -185,6 +318,25 @@ class ONNXModel(onnx_model.ONNXModel):
             if node.name == name:
                 return node
         return None
+
+    def get_parent(self, node, idx, output_name_to_node=None):
+        if output_name_to_node is None:
+            output_name_to_node = self._output_name_to_node
+        if len(node.input) <= idx:
+            return None
+
+        input = node.input[idx]
+        return output_name_to_node.get(input, None)
+
+    def get_parents(self, node, output_name_to_node=None):
+        if output_name_to_node is None:
+            output_name_to_node = self._output_name_to_node
+
+        parents = []
+        for input in node.input:
+            if input in output_name_to_node:
+                parents.append(output_name_to_node[input])
+        return parents
 
     def get_node_by_weight(self, weight_name):
         """Get a node by its weight name."""
@@ -277,6 +429,22 @@ class ONNXModel(onnx_model.ONNXModel):
             assert zo_tensor, "missing zero point for tensor {}".format(tensor)
             return scale_tensor, zo_tensor
 
+    @staticmethod
+    def replace_node_input(node, old_input_name, new_input_name):
+        """Replace input of a node."""
+        assert isinstance(old_input_name, str) and isinstance(new_input_name, str)
+        for j in range(len(node.input)):
+            if node.input[j] == old_input_name:
+                node.input[j] = new_input_name
+
+    @staticmethod
+    def replace_node_output(node, old_output_name, new_output_name):
+        """Replace output of a node."""
+        assert isinstance(old_output_name, str) and isinstance(new_output_name, str)
+        for j in range(len(node.output)):
+            if node.output[j] == old_output_name:
+                node.output[j] = new_output_name
+
     def replace_input_of_all_nodes(self, old_input_name, new_input_name, white_optype=[], black_optype=[]):
         """Replace inputs of all nodes."""
         if len(white_optype) > 0:
@@ -299,10 +467,21 @@ class ONNXModel(onnx_model.ONNXModel):
                 if node.op_type not in black_optype:
                     ONNXModel.replace_node_output(node, old_output_name, new_output_name)
 
+    def remove_duplicate_nodes(self):
+        """remove duplicate nodes"""
+        new_nodes = []
+        for node in self.nodes():
+            if node not in new_nodes:
+                new_nodes.append(node)
+        self.model.graph.ClearField("node")
+        self.model.graph.node.extend(new_nodes)
+        self.update()
+
     def remove_unused_nodes(self):
         """Remove unused nodes."""
         unused_nodes = []
         nodes = self.nodes()
+
         if len(self._input_name_to_nodes) == 0:
             self._input_name_to_nodes = self.input_name_to_nodes()
         if len(self._output_name_to_node) == 0:
@@ -314,35 +493,26 @@ class ONNXModel(onnx_model.ONNXModel):
                 and node.output[0] not in self._input_name_to_nodes
             ):
                 unused_nodes.append(node)
-            elif (
-                node.op_type == "QuantizeLinear"
-                and len(self.get_children(node)) == 1
-                and self.get_children(node)[0].op_type == "DequantizeLinear"
-                and node.input[0] not in self._output_name_to_node
-                and self.get_children(node)[0].output[0] not in self._input_name_to_nodes
-            ):
-                unused_nodes.append(node)
-                unused_nodes.extend(self.get_children(node))
-            else:
-                # remove the node if it does not serve as the input or output of any other nodes
-                unused = True
-                for output in node.output:
-                    if output in self._input_name_to_nodes or output in self.output():
-                        unused = False
-                        break
-                for input in node.input:
-                    if self.get_initializer(input) is not None:
-                        continue
-                    elif input in self._output_name_to_node or input in self.input():
-                        unused = False
-                        break
-                if unused:
-                    unused_nodes.append(node)
+
         self.remove_nodes(unused_nodes)
+
+        unvalid_nodes = [
+            i
+            for i in self.model.graph.node
+            if all(out not in self._input_name_to_nodes and out not in self.output() for out in i.output)
+        ]
+        while len(unvalid_nodes) > 0:
+            self.remove_nodes(unvalid_nodes)
+            self._input_name_to_nodes = self.input_name_to_nodes()
+            unvalid_nodes = [
+                i
+                for i in self.model.graph.node
+                if all([out not in self._input_name_to_nodes and out not in self.output() for out in i.output])
+            ]
 
         ununsed_weights = []
         for w in self.model.graph.initializer:
-            if w.name not in self._input_name_to_nodes and w.name not in self.model.graph.output:
+            if w.name not in self._input_name_to_nodes and w.name not in self.output():
                 ununsed_weights.append(w)
                 # Remove from graph.input
                 for graph_input in self.graph().input:
@@ -351,6 +521,7 @@ class ONNXModel(onnx_model.ONNXModel):
 
         self.remove_initializers(ununsed_weights)
         self.update()
+        self.topological_sort()
 
     def topological_sort(self, enable_subgraph=False):
         """Topological sort the model."""
@@ -653,22 +824,7 @@ class ONNXModel(onnx_model.ONNXModel):
         # origin model : ... -> node_1 -> split_node -> node_2 -> ...
         # split model 1: ... -> node_1 -> split_node
         # split model 2: node_2 -> ...
-
-        # remove nodes which are not followed by other nodes
-        unvalid_nodes = [
-            i
-            for i in self.model.graph.node
-            if all(out not in self._input_name_to_nodes and not self.is_graph_output(out) for out in i.output)
-        ]
-        while len(unvalid_nodes) > 0:
-            self.remove_nodes(unvalid_nodes)
-            self._input_name_to_nodes = self.input_name_to_nodes()
-            unvalid_nodes = [
-                i
-                for i in self.model.graph.node
-                if all([out not in self._input_name_to_nodes and not self.is_graph_output(out) for out in i.output])
-            ]
-        self.topological_sort()
+        self.remove_unused_nodes()
 
         split_model_part_1 = onnx.ModelProto()
         split_model_part_1.CopyFrom(self.model)
