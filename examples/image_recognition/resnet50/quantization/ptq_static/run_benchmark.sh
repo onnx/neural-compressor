@@ -24,6 +24,9 @@ function init_params {
       --mode=*)
           mode=$(echo "$var" |cut -f2 -d=)
       ;;
+      --batch_size=*)
+          batch_size=$(echo "$var" |cut -f2 -d=)
+      ;;
       --intra_op_num_threads=*)
           intra_op_num_threads=$(echo "$var" |cut -f2 -d=)
       ;;
@@ -40,7 +43,7 @@ function run_benchmark {
             --dataset_location "${dataset_location}" \
             --label_path "${label_path-${dataset_location}/../val.txt}" \
             --mode "${mode}" \
-            --batch_size 1 \
+            --batch_size "${batch_size}" \
             --intra_op_num_threads "${intra_op_num_threads-4}" \
             --benchmark
             
