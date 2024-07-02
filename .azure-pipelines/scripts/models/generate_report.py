@@ -85,7 +85,6 @@ def main():
     data = get_data(args.json_path)
     last_data = get_data(args.last_json_path)
     data = get_accuracy_ratio(data, last_data)
-    print(data)
     info = {
         "url": f"https://dev.azure.com/lpot-inc/onnx-neural-compressor/_build/results?buildId={BUILD_BUILDID}",
         "branch": os.getenv("SYSTEM_PULLREQUEST_SOURCEBRANCH"),
