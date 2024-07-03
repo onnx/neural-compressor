@@ -124,8 +124,7 @@ To find the best algorithm, users can leverage the `autotune` feature to explore
 ### **User code example**
 
 ```python
-from onnx_neural_compressor import config
-from onnx_neural_compressor.quantization import tuning
+from onnx_neural_compressor.quantization import tuning, config
 
 tune_config = tuning.TuningConfig(config_set=config.get_woq_tuning_config())
 best_model = tuning.autotune(

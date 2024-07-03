@@ -51,21 +51,21 @@ def check_value(name, src, supported_type, supported_value=[]):
                 self._datatype = datatype
     """
     if isinstance(src, list) and any([not isinstance(i, supported_type) for i in src]):
-        assert False, "Type of {} items should be {} but not {}".format(
+        assert False, "Type of '{}' items should be {} but not {}".format(
             name, str(supported_type), [type(i) for i in src]
         )
     elif not isinstance(src, list) and not isinstance(src, supported_type):
-        assert False, "Type of {} should be {} but not {}".format(name, str(supported_type), type(src))
+        assert False, "Type of '{}' should be {} but not {}".format(name, str(supported_type), type(src))
 
     if len(supported_value) > 0:
         if isinstance(src, str) and src not in supported_value:
-            assert False, "{} is not in supported {}: {}. Skip setting it.".format(src, name, str(supported_value))
+            assert False, "'{}' is not in supported '{}': {}. Skip setting it.".format(src, name, str(supported_value))
         elif (
             isinstance(src, list)
             and all([isinstance(i, str) for i in src])
             and any([i not in supported_value for i in src])
         ):
-            assert False, "{} is not in supported {}: {}. Skip setting it.".format(src, name, str(supported_value))
+            assert False, "{} is not in supported '{}': {}. Skip setting it.".format(src, name, str(supported_value))
 
     return True
 

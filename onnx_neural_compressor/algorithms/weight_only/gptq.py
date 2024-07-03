@@ -272,13 +272,13 @@ def gptq_quantize(
                 weight = onnx.numpy_helper.to_array(
                     model.get_initializer(model.get_node(node.name).input[1]), base_dir
                 ).copy()
-                if len(weight.shape) != 2:
+                if len(weight.shape) != 2:  # pragma: no cover
                     continue
 
                 weights.append(weight)
                 node_list.append(model.get_node(node.name))
 
-        if len(weights) == 0:
+        if len(weights) == 0:  # pragma: no cover
             continue
 
         Hs = [np.zeros((i.shape[0], i.shape[0])) for i in weights]
@@ -327,7 +327,7 @@ def gptq_quantize(
             if ("CUDAExecutionProvider" in providers and satisfy_MatMulNBits_condition) or (
                 "CUDAExecutionProvider" not in providers
                 and (satisfy_MatMulFpQ4_condition or satisfy_MatMulNBits_condition)
-            ):  # pragma: no cover
+            ):
                 # MatMulFpQ4 support 4 bits and 32 group_size with ort 1.16.0 and 1.16.1 versions, supported by CPU EP
                 # MatMulNBits supports 4 bits and 2^n group_size with ort > 1.16.1, supported by CPU EP AND CUDA EP
                 org_shape = weight.shape

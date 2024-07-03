@@ -574,193 +574,6 @@ class ONNXModel:
         self.model.graph.ClearField("node")
         self.model.graph.node.extend(nodes)
 
-    def find_split_node_for_layer_wise_quantization(self):
-        """Find split node for layer wise quantization."""
-        # find split nodes of decoder blocks
-        # embed -> decoder.0 -(split_node)-> ... -(split_node)-> decoder.n -(split_node)-> norm -> head
-        # after split: embed -> decoder.0,
-        #              decoder.1,
-        #              decoder.2,
-        #              ...,
-        #              decoder.n,
-        #              norm -> head
-        start_nodes = []
-        for node in self.model.graph.node:
-            start_node, qkv_nodes_list = None, None
-            if node.op_type == "SkipLayerNormalization":
-                start_node = node
-                qkv_nodes_list = [
-                    self.match_parent_path(
-                        start_node,
-                        ["MatMul", "Reshape", "Transpose", "Reshape", "MatMul"],
-                        [None, 0, 0, 0, 0],
-                    ),
-                    self.match_parent_path(
-                        start_node,
-                        ["Add", "MatMul", "Reshape", "Transpose", "MatMul"],
-                        [1, 1, 0, 0, 0],
-                    ),
-                ]
-            if node.op_type == "Add":
-                start_node = node
-                qkv_nodes_list = [
-                    # match base attention structure
-                    self.match_parent_path(
-                        start_node,
-                        ["Add", "MatMul", "Reshape", "Transpose", "MatMul"],
-                        [0, None, 0, 0, 0],
-                    ),
-                    self.match_parent_path(
-                        start_node, ["Add", "MatMul", "Reshape", "Transpose", "MatMul"], [1, None, 0, 0, 0]
-                    ),
-                    # match gpt attention no past structure
-                    self.match_parent_path(
-                        start_node,
-                        ["Reshape", "Gemm", "Reshape", "Reshape", "Transpose", "MatMul"],
-                        [None, 0, 0, 0, 0, 0],
-                        output_name_to_node_dict=self._output_name_to_node,
-                        return_indice=[],
-                    ),
-                    # match bart attention structure
-                    self.match_parent_path(
-                        start_node,
-                        ["Add", "MatMul", "Reshape", "Transpose", "Reshape", "MatMul"],
-                        [0, None, 0, 0, 0, 0],
-                    ),
-                    self.match_parent_path(
-                        start_node,
-                        ["Add", "MatMul", "Reshape", "Transpose", "Reshape", "MatMul"],
-                        [1, None, 0, 0, 0, 0],
-                    ),
-                    self.match_parent_path(
-                        start_node,
-                        ["MatMul", "Mul", "MatMul", "Mul", "Div", "Add"],
-                        [None, 0, None, 0, None, 0],
-                    ),
-                    self.match_parent_path(
-                        start_node,
-                        ["MatMul", "Mul", "MatMul", "SimplifiedLayerNormalization", "Add"],
-                        [None, 0, None, 0, 0],
-                    ),
-                ]
-            if not start_node:
-                continue
-            if not any(qkv_nodes_list):
-                continue
-            start_nodes.append(start_node)
-        return start_nodes
-
-    def find_qkv_in_attention(self, find_all=False):
-        """Find qkv MatMul in Attention.
-
-        Args:
-            find_all (bool, optional): find all qkv MatMul. Defaults to False
-
-        Returns:
-            qkv (list): qkv MatMul list
-        """
-        qkv = []
-        if len(self._input_name_to_nodes) == 0:
-            self._input_name_to_nodes = self.input_name_to_nodes()
-        for node in self.model.graph.node:
-            if node.op_type == "Attention":
-                qkv.append([node.name])
-                continue
-            start_node, qkv_nodes_list = None, None
-            if node.op_type == "SkipLayerNormalization":
-                start_node = node
-                qkv_nodes_list = [
-                    self.match_parent_path(
-                        start_node,
-                        ["MatMul", "Reshape", "Transpose", "Reshape", "MatMul"],
-                        [None, 0, 0, 0, 0],
-                    ),
-                    self.match_parent_path(
-                        start_node,
-                        ["Add", "MatMul", "Reshape", "Transpose", "MatMul"],
-                        [1, 1, 0, 0, 0],
-                    ),
-                ]
-            if node.op_type == "Add":
-                start_node = node
-                qkv_nodes_list = [
-                    # match base attention structure
-                    self.match_parent_path(
-                        start_node,
-                        ["Add", "MatMul", "Reshape", "Transpose", "MatMul"],
-                        [0, None, 0, 0, 0],
-                    ),
-                    self.match_parent_path(
-                        start_node, ["Add", "MatMul", "Reshape", "Transpose", "MatMul"], [1, None, 0, 0, 0]
-                    ),
-                    # match gpt attention no past structure
-                    self.match_parent_path(
-                        start_node,
-                        ["Reshape", "Gemm", "Reshape", "Reshape", "Transpose", "MatMul"],
-                        [None, 0, 0, 0, 0, 0],
-                        output_name_to_node_dict=self._output_name_to_node,
-                        return_indice=[],
-                    ),
-                    # match bart attention structure
-                    self.match_parent_path(
-                        start_node,
-                        ["Add", "MatMul", "Reshape", "Transpose", "Reshape", "MatMul"],
-                        [0, None, 0, 0, 0, 0],
-                    ),
-                    self.match_parent_path(
-                        start_node,
-                        ["Add", "MatMul", "Reshape", "Transpose", "Reshape", "MatMul"],
-                        [1, None, 0, 0, 0, 0],
-                    ),
-                ]
-            if not start_node:
-                continue
-            if not any(qkv_nodes_list):
-                continue
-            qkv_nodes = [qkv for qkv in qkv_nodes_list if qkv is not None][-1]
-            other_inputs = []
-            for input in start_node.input:
-                if input not in self._output_name_to_node:
-                    continue
-                if input == qkv_nodes[0].output[0]:
-                    continue
-                other_inputs.append(input)
-            if len(other_inputs) != 1:
-                continue
-            root_input = other_inputs[0]
-            children = self._input_name_to_nodes[root_input]
-            children_types = [child.op_type for child in children]
-            if children_types.count("MatMul") == 3:
-                qkv.append([child.name for child in children if child.op_type == "MatMul"])
-                if not find_all:
-                    break
-        return qkv
-
-    def find_ffn_matmul(self, attention_index, attention_matmul_list, block_len):
-        """Find MatMul in FFN.
-
-        Args:
-            attention_index (list): index of Attention
-            attention_matmul_list (list): list of Attention and MatMul nodes
-            block_len (int): block length
-
-        Returns:
-            list: list of MatMul in FFN
-        """
-        ffn_matmul = []
-        for idx in range(len(attention_index)):
-            if idx != len(attention_index) - 1:
-                index = attention_index[idx + 1]
-                if index - 2 >= 0:
-                    ffn_matmul.append([attention_matmul_list[index - 2], attention_matmul_list[index - 1]])
-            else:
-                index = attention_index[idx]
-                if index + block_len - 1 < len(attention_matmul_list):
-                    ffn_matmul.append(
-                        [attention_matmul_list[index + block_len - 2], attention_matmul_list[index + block_len - 1]]
-                    )
-        return ffn_matmul
-
     def add_tensors_to_outputs(self, tensor_names):
         """Add the tensors to the model outputs to gets their values.
 
@@ -911,6 +724,83 @@ class ONNXModel:
             if "_smooth_scale" in init.name:
                 return True
         return False
+
+    # below functions are used for layer-wise
+    def find_split_node_for_layer_wise_quantization(self):
+        """Find split node for layer wise quantization."""
+        # find split nodes of decoder blocks
+        # embed -> decoder.0 -(split_node)-> ... -(split_node)-> decoder.n -(split_node)-> norm -> head
+        # after split: embed -> decoder.0,
+        #              decoder.1,
+        #              decoder.2,
+        #              ...,
+        #              decoder.n,
+        #              norm -> head
+        start_nodes = []
+        for node in self.model.graph.node:
+            start_node, qkv_nodes_list = None, None
+            if node.op_type == "SkipLayerNormalization":
+                start_node = node
+                qkv_nodes_list = [
+                    self.match_parent_path(
+                        start_node,
+                        ["MatMul", "Reshape", "Transpose", "Reshape", "MatMul"],
+                        [None, 0, 0, 0, 0],
+                    ),
+                    self.match_parent_path(
+                        start_node,
+                        ["Add", "MatMul", "Reshape", "Transpose", "MatMul"],
+                        [1, 1, 0, 0, 0],
+                    ),
+                ]
+            if node.op_type == "Add":
+                start_node = node
+                qkv_nodes_list = [
+                    # match base attention structure
+                    self.match_parent_path(
+                        start_node,
+                        ["Add", "MatMul", "Reshape", "Transpose", "MatMul"],
+                        [0, None, 0, 0, 0],
+                    ),
+                    self.match_parent_path(
+                        start_node, ["Add", "MatMul", "Reshape", "Transpose", "MatMul"], [1, None, 0, 0, 0]
+                    ),
+                    # match gpt attention no past structure
+                    self.match_parent_path(
+                        start_node,
+                        ["Reshape", "Gemm", "Reshape", "Reshape", "Transpose", "MatMul"],
+                        [None, 0, 0, 0, 0, 0],
+                        output_name_to_node_dict=self._output_name_to_node,
+                        return_indice=[],
+                    ),
+                    # match bart attention structure
+                    self.match_parent_path(
+                        start_node,
+                        ["Add", "MatMul", "Reshape", "Transpose", "Reshape", "MatMul"],
+                        [0, None, 0, 0, 0, 0],
+                    ),
+                    self.match_parent_path(
+                        start_node,
+                        ["Add", "MatMul", "Reshape", "Transpose", "Reshape", "MatMul"],
+                        [1, None, 0, 0, 0, 0],
+                    ),
+                    self.match_parent_path(
+                        start_node,
+                        ["MatMul", "Mul", "MatMul", "Mul", "Div", "Add"],
+                        [None, 0, None, 0, None, 0],
+                    ),
+                    self.match_parent_path(
+                        start_node,
+                        ["MatMul", "Mul", "MatMul", "SimplifiedLayerNormalization", "Add"],
+                        [None, 0, None, 0, 0],
+                    ),
+                ]
+            if not start_node:
+                continue
+            if not any(qkv_nodes_list):
+                continue
+            start_nodes.append(start_node)
+        return start_nodes
 
     def find_split_nodes(self):
         """Find split nodes for layer-wise quantization."""

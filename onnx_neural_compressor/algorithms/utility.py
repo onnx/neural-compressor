@@ -174,12 +174,12 @@ def quantize_data_per_channel(data, axis, qType, sym, reduce_range=False):
     return rmin.reshape(-1, 1), rmax.reshape(-1, 1), zero_point.reshape(-1, 1), scale.reshape(-1, 1), quantized_data
 
 
-def dequantize_data_with_scale_zero(tensor_value, scale_value, zo_value):  # pragma: no cover
+def dequantize_data_with_scale_zero(tensor_value, scale_value, zo_value):
     """Dequantize tensor with scale and zero point."""
     return (tensor_value.astype(scale_value.dtype) - zo_value.astype(scale_value.dtype)) * scale_value
 
 
-def dequantize_data(tensor_value, scale_value, zo_value, axis=0):  # pragma: no cover
+def dequantize_data(tensor_value, scale_value, zo_value, axis=0):
     """Dequantize tensor."""
     if not isinstance(scale_value, np.ndarray):
         return dequantize_data_with_scale_zero(tensor_value, scale_value, zo_value)
@@ -386,7 +386,7 @@ def make_matmul_weight_only_node(
             # require onnxruntime > 1.16.3
             kwargs["accuracy_level"] = accuracy_level
 
-    else:
+    else:  # pragma: no cover
         offset = 5 if zero_point is not None else 4
         op_type = "MatMulFpQ4"
 

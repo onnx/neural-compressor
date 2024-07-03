@@ -99,6 +99,9 @@ class TestRTNQuantWithInternalAPI(TestRTNQuant):
         rtn_config2 = config.RTNConfig.from_dict(quant_config_dict["rtn"])
         self.assertEqual(rtn_config1.to_dict(), rtn_config2.to_dict())
 
+        tuning_config = config.RTNConfig.get_config_set_for_tuning()
+        self.assertTrue(isinstance(tuning_config, config.RTNConfig))
+
     def test_quantize_rtn_from_dict_default(self):
 
         qmodel = self._apply_rtn(quant_config=config.get_default_rtn_config())
@@ -111,7 +114,7 @@ class TestRTNQuantWithInternalAPI(TestRTNQuant):
         qmodel = self._apply_rtn(quant_config)
         self.assertIsNotNone(qmodel)
 
-    def test_quantize_rtn_fallback_from_class_beginner(self):
+    def test_quantize_rtn_fallback(self):
 
         fp32_config = config.RTNConfig(weight_dtype="fp32")
         quant_config = config.RTNConfig(
@@ -126,11 +129,23 @@ class TestRTNQuantWithInternalAPI(TestRTNQuant):
         self.assertEqual(self._count_woq_matmul(qmodel), 29)
         self.assertFalse(self._check_node_is_quantized(qmodel, "/h.4/mlp/fc_out/MatMul"))
 
+        # test quant_last_matmul
+        quant_config = config.RTNConfig(
+            weight_bits=4,
+            weight_dtype="int",
+            weight_sym=False,
+            weight_group_size=32,
+            quant_last_matmul=False,
+        )
+        qmodel = self._apply_rtn(quant_config)
+        self.assertIsNotNone(qmodel)
+        self.assertEqual(self._count_woq_matmul(qmodel), 29)
+        self.assertFalse(self._check_node_is_quantized(qmodel, "/h.4/mlp/fc_out/MatMul"))
+
 
 class TestRTNQuantWithORTLikeAPI(TestRTNQuant):
 
     def test_rtn_config_4bits(self):
-
         algo_config = matmul_4bits_quantizer.RTNWeightOnlyQuantConfig()
 
         quant = matmul_4bits_quantizer.MatMul4BitsQuantizer(
@@ -142,6 +157,28 @@ class TestRTNQuantWithORTLikeAPI(TestRTNQuant):
         quant.process()
         self.assertIsNotNone(quant.model)
         self.assertTrue(self._check_model_is_quantized(quant.model))
+
+    def test_rtn_config_4bits_with_accuracy_level(self):
+        algo_config = matmul_4bits_quantizer.RTNWeightOnlyQuantConfig()
+
+        for accuracy_level in [0, 1, 2, 3, 4]:
+            quant = matmul_4bits_quantizer.MatMul4BitsQuantizer(
+                copy.deepcopy(self.gptj),
+                block_size=32,
+                is_symmetric=False,
+                algo_config=algo_config,
+                accuracy_level=accuracy_level,
+            )
+            quant.process()
+
+            for node in quant.model.graph.node:
+                if node.op_type == "MatMulNBits":
+                    for attr in node.attribute:
+                        if attr.name == "accuracy_level":
+                            self.assertEqual(attr.i, accuracy_level)
+                            break
+            self.assertIsNotNone(quant.model)
+            self.assertTrue(self._check_model_is_quantized(quant.model))
 
     def test_rtn_config_4bits_with_exclude_node(self):
 

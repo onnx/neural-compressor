@@ -69,7 +69,7 @@ class DataReader(data_reader.CalibrationDataReader):
         self.enum_data = None
 
 
-class TestONNXRT3xAutoTune(unittest.TestCase):
+class TestONNXRTAutoTune(unittest.TestCase):
 
     @classmethod
     def setUpClass(self):

@@ -4,10 +4,10 @@ Quantization
 1. [Quantization Introduction](#quantization-introduction)
 2. [Quantization Fundamentals](#quantization-fundamentals)
 3. [Accuracy Aware Tuning](#with-or-without-accuracy-aware-tuning)
-4. [Get Started](#get-started)  
-   4.1 [Post Training Quantization](#post-training-quantization)    
-   4.2 [Specify Quantization Rules](#specify-quantization-rules)    
-   4.3 [Specify Quantization Backend and Device](#specify-quantization-backend-and-device)  
+4. [Get Started](#get-started)
+   4.1 [Post Training Quantization](#post-training-quantization)
+   4.2 [Specify Quantization Rules](#specify-quantization-rules)
+   4.3 [Specify Quantization Backend and Device](#specify-quantization-backend-and-device)
 5. [Examples](#examples)
 
 ## Quantization Introduction
@@ -22,7 +22,7 @@ The math equation is like: $$X_{int8} = round(Scale \times X_{fp32} + ZeroPoint)
 
 **Affine Quantization**
 
-This is so-called `asymmetric quantization`, in which we map the min/max range in the float tensor to the integer range. Here int8 range is [-128, 127], uint8 range is [0, 255]. 
+This is so-called `asymmetric quantization`, in which we map the min/max range in the float tensor to the integer range. Here int8 range is [-128, 127], uint8 range is [0, 255].
 
 here:
 
@@ -34,13 +34,13 @@ If UINT8 is specified, $Scale = (|X_{f_{max}} - X_{f_{min}}|) / 255$ and $ZeroPo
 
 **Scale Quantization**
 
-This is so-called `Symmetric quantization`, in which we use the maximum absolute value in the float tensor as float range and map to the corresponding integer range. 
+This is so-called `Symmetric quantization`, in which we use the maximum absolute value in the float tensor as float range and map to the corresponding integer range.
 
 The math equation is like:
 
 here:
 
-If INT8 is specified, $Scale = max(abs(X_{f_{max}}), abs(X_{f_{min}})) / 127$ and $ZeroPoint = 0$. 
+If INT8 is specified, $Scale = max(abs(X_{f_{max}}), abs(X_{f_{min}})) / 127$ and $ZeroPoint = 0$.
 
 or
 
@@ -61,10 +61,10 @@ Sometimes the reduce_range feature, that's using 7 bit width (1 sign bit + 6 dat
 + Symmetric Quantization
     + int8: scale = 2 * max(abs(rmin), abs(rmax)) / (max(int8) - min(int8) - 1)
 + Asymmetric Quantization
-    + uint8: scale = (rmax - rmin) / (max(uint8) - min(uint8)); zero_point = min(uint8)  - round(rmin / scale) 
+    + uint8: scale = (rmax - rmin) / (max(uint8) - min(uint8)); zero_point = min(uint8)  - round(rmin / scale)
 
 #### Reference
-+ MLAS:  [MLAS Quantization](https://github.com/microsoft/onnxruntime/blob/master/onnxruntime/python/tools/quantization/onnx_quantizer.py) 
++ MLAS:  [MLAS Quantization](https://github.com/microsoft/onnxruntime/blob/master/onnxruntime/python/tools/quantization/onnx_quantizer.py)
 
 ### Quantization Approaches
 
@@ -88,7 +88,7 @@ This approach is major quantization approach people should try because it could 
 
 ## With or Without Accuracy Aware Tuning
 
-Accuracy aware tuning is one of unique features provided by Neural Compressor, compared with other 3rd party model compression tools. This feature can be used to solve accuracy loss pain points brought by applying low precision quantization and other lossy optimization methods. 
+Accuracy aware tuning is one of unique features provided by Neural Compressor, compared with other 3rd party model compression tools. This feature can be used to solve accuracy loss pain points brought by applying low precision quantization and other lossy optimization methods.
 
 This tuning algorithm creates a tuning space based on user-defined configurations, generates quantized graph, and evaluates the accuracy of this quantized graph. The optimal model will be yielded if the pre-defined accuracy goal is met.
 
@@ -105,7 +105,7 @@ User could refer to below chart to understand the whole tuning flow.
 
 ## Get Started
 
-The design philosophy of the quantization interface of ONNX Neural Compressor is easy-of-use. It requests user to provide `model`, `calibration dataloader`, and `evaluation function`. Those parameters would be used to quantize and tune the model. 
+The design philosophy of the quantization interface of ONNX Neural Compressor is easy-of-use. It requests user to provide `model`, `calibration dataloader`, and `evaluation function`. Those parameters would be used to quantize and tune the model.
 
 `model` is the framework model location or the framework model object.
 
@@ -123,12 +123,11 @@ User could execute:
 This means user could leverage ONNX Neural Compressor to directly generate a fully quantized model without accuracy aware tuning. It's user responsibility to ensure the accuracy of the quantized model meets expectation. ONNX Neural Compressor supports `Post Training Static Quantization` and `Post Training Dynamic Quantization`.
 
 ``` python
-from onnx_neural_compressor import config
-from onnx_neural_compressor.quantization import quantize
-from onnx_neural_compressor.quantization import calibrate
+from onnx_neural_compressor.quantization import quantize, config
+from onnx_neural_compressor import data_reader
 
 
-class DataReader(calibrate.CalibrationDataReader):
+class DataReader(data_reader.CalibrationDataReader):
     def get_next(self): ...
 
     def rewind(self): ...
@@ -144,17 +143,10 @@ quantize(model, q_model_path, qconfig)
 This means user could leverage the advance feature of ONNX Neural Compressor to tune out a best quantized model which has best accuracy and good performance. User should provide `eval_fn`.
 
 ``` python
-from onnx_neural_compressor.quantization import calibrate
-from onnx_neural_compressor.quantization import tuning
-    CalibrationDataReader,
-    GPTQConfig,
-    RTNConfig,
-    autotune,
-    get_woq_tuning_config,
-)
+from onnx_neural_compressor import data_reader
+from onnx_neural_compressor.quantization import tuning, config
 
-
-class DataReader(calibrate.CalibrationDataReader):
+class DataReader(data_reader.CalibrationDataReader):
     def get_next(self): ...
 
     def rewind(self): ...
@@ -200,7 +192,7 @@ Neural-Compressor will quantized models with user-specified backend or detecting
         <tr>
             <th>Backend</th>
             <th>Backend Library</th>
-            <th>Support Device(cpu as default)</th> 
+            <th>Support Device(cpu as default)</th>
         </tr>
     </thead>
     <tbody>
@@ -235,9 +227,9 @@ Neural-Compressor will quantized models with user-specified backend or detecting
 <br>
 
 > ***Note***
-> 
+>
 > DmlExecutionProvider support works as experimental, please expect exceptions.
-> 
+>
 > Known limitation: the batch size of onnx models has to be fixed to 1 for DmlExecutionProvider, no multi-batch and dynamic batch support yet.
 
 

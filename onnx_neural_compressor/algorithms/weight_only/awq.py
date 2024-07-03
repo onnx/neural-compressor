@@ -50,7 +50,7 @@ def _apply_awq_scale(model, weight_config, absorb_pairs, output_dicts):
 
     input_name_to_nodes = model.input_name_to_nodes()
     for parent, nodes in absorb_pairs.items():
-        if any([node.input[0] not in output_dicts for node in nodes]):
+        if any([node.input[0] not in output_dicts for node in nodes]):  # pragma: no cover
             logger.warning(
                 "Miss input tensors of nodes {} during AWQ, skip it!".format(
                     ", ".join([node.name for node in nodes if node.input[0] not in output_dicts])
@@ -102,7 +102,7 @@ def _apply_awq_scale(model, weight_config, absorb_pairs, output_dicts):
                     version.Version(ort.__version__) >= constants.ONNXRT116_VERSION
                     and num_bits == 4
                     and group_size == 32
-                ):  # pragma: no cover
+                ):
                     # MatMulFpQ4 support 4 bits and 32 group_size with ort 1.16.0 and 1.16.1 versions
                     # MatMulNBits supports 4 bits and 2^n group_size with ort > 1.16.1
                     q_weight = quant_utils.qdq_data(
@@ -154,7 +154,9 @@ def _apply_awq_scale(model, weight_config, absorb_pairs, output_dicts):
 
         if parent.op_type in ["LayerNormalization", "BatchNormalization", "InstanceNormalization"] and len(
             input_name_to_nodes[nodes[0].input[0]]
-        ) == len(nodes):
+        ) == len(
+            nodes
+        ):  # pragma: no cover
             for idx in [1, 2]:
                 tensor = onnx.numpy_helper.to_array(model.get_initializer(parent.input[idx]), base_dir)
                 dtype = tensor.dtype
@@ -187,7 +189,7 @@ def _apply_awq_scale(model, weight_config, absorb_pairs, output_dicts):
             updated_nodes.append(parent.name)
             output_dicts[parent.output[0]] = output_dicts[parent.output[0]] / np.reshape(best_scale, (1, -1))
 
-        else:  # pragma: no cover
+        else:
             # insert mul
             scale_tensor = onnx.helper.make_tensor(
                 name=parent.output[0] + "_weight_only_scale",
@@ -256,7 +258,7 @@ def _apply_awq_clip(model, weight_config, absorb_pairs, output_dicts):
                     version.Version(ort.__version__) >= constants.ONNXRT116_VERSION
                     and num_bits == 4
                     and group_size == 32
-                ):  # pragma: no cover
+                ):
                     # MatMulFpQ4 support 4 bits and 32 group_size with ort 1.16.0 and 1.16.1 versions
                     # MatMulNBits supports 4 bits and 2^n group_size with ort > 1.16.1
                     weight = quant_utils.qdq_data(
@@ -342,7 +344,8 @@ def awq_quantize(
                 output_names.append(node.input[0])
         output_names = list(set(output_names))
         model.add_tensors_to_outputs(output_names)
-        if model.is_large_model:
+
+        if model.is_large_model:  # pragma: no cover
             onnx.save_model(
                 model.model,
                 model.model_path + "_augment.onnx",
@@ -374,7 +377,7 @@ def awq_quantize(
                 ):
                     dump_pairs[parent.name].append(model.get_node(node.name))
 
-            if len(dump_pairs[parent.name]) == 0:
+            if len(dump_pairs[parent.name]) == 0:  # pragma: no cover
                 continue
 
             output_dicts = {}
