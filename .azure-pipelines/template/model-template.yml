@@ -29,6 +29,19 @@ steps:
       && bash ${{ parameters.script_path }} --model=${{ parameters.modelName }} --stage='prepare_model'"
     displayName: Export Models
 
+  - task: DownloadPipelineArtifact@2
+    continueOnError: true
+    inputs:
+      source: "specific"
+      artifact: "FinalReport"
+      patterns: "**.json"
+      path: $(Build.SourcesDirectory)/.azure-pipelines/scripts/models/refer_summary.json
+      project: $(System.TeamProject)
+      pipeline: "onc model test"
+      runVersion: "specific"
+      runId: $(refer_buildId)
+    displayName: "Download refer logs"
+
   - script: |
       docker exec ${{ parameters.modelContainerName }} bash -c "cd /neural-compressor/.azure-pipelines/scripts/models \
       && bash ${{ parameters.script_path }} --model=${{ parameters.modelName }} --stage='quantize'"
