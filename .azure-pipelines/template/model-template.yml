@@ -35,7 +35,7 @@ steps:
       source: "specific"
       artifact: "FinalReport"
       patterns: "**.json"
-      path: $(Build.SourcesDirectory)/.azure-pipelines/scripts/models/refer_summary.json
+      path: $(Build.SourcesDirectory)/.azure-pipelines/scripts/models/
       project: $(System.TeamProject)
       pipeline: "onc model test"
       runVersion: "specific"
@@ -65,7 +65,7 @@ steps:
         pip install requests
         docker exec ${{ parameters.modelContainerName }} bash -c "cd /neural-compressor/.azure-pipelines/scripts/models \
         && python collect_results.py --model=${{ parameters.modelName }} --build_id=$(Build.BuildId)"
-    displayName: Collect Log
+    displayName: Collect Log & Check Results
 
   - task: PublishPipelineArtifact@1
     inputs:
