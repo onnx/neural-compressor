@@ -386,7 +386,7 @@ def make_matmul_weight_only_node(
             # require onnxruntime > 1.16.3
             kwargs["accuracy_level"] = accuracy_level
 
-    else: # pragma: no cover
+    else:  # pragma: no cover
         offset = 5 if zero_point is not None else 4
         op_type = "MatMulFpQ4"
 

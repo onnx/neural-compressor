@@ -1,9 +1,10 @@
 """Tests for algorithm utility components."""
 
 import os
-import onnx
 import unittest
+
 import numpy as np
+import onnx
 
 from onnx_neural_compressor.algorithms import utility as quant_utils
 
@@ -15,6 +16,7 @@ def find_onnx_file(folder_path):
             if file.endswith(".onnx"):
                 return os.path.join(root, file)
     return None
+
 
 class TestUtilityFunctions(unittest.TestCase):
 

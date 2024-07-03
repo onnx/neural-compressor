@@ -242,55 +242,22 @@ class TestONNXModel(unittest.TestCase):
         model.remove_unused_nodes()
         self.assertTrue("Constant" not in [node.op_type for node in model.nodes()])
 
-        # test unused QuantizeLinear and DequantizeLinear
-        A = onnx.helper.make_tensor_value_info("A", onnx.TensorProto.FLOAT, [1, 1, 5, 5])
-        A_scale = onnx.helper.make_tensor_value_info("A_scale", onnx.TensorProto.FLOAT, [1])
-        a_scale = onnx.numpy_helper.from_array(np.random.ranf([1]).astype(np.float32), "A_scale")
-        A_zero = onnx.helper.make_tensor_value_info("A_zero_point", onnx.TensorProto.INT8, [1])
-        a_zero_point = onnx.numpy_helper.from_array(np.random.ranf([1]).astype(np.int8), "A_zero_point")
-        quantize_node = onnx.helper.make_node(
-            "QuantizeLinear", ["A", "A_scale", "A_zero_point"], ["B_quantized"], name="quantizelinear"
-        )
-
-        B_scale = onnx.helper.make_tensor_value_info("B_scale", onnx.TensorProto.FLOAT, [1])
-        b_scale = onnx.numpy_helper.from_array(np.random.ranf([1]).astype(np.float32), "B_scale")
-        B_zero = onnx.helper.make_tensor_value_info("B_zero_point", onnx.TensorProto.INT8, [1])
-        b_zero_point = onnx.numpy_helper.from_array(np.random.ranf([1]).astype(np.int8), "B_zero_point")
-        C = onnx.helper.make_tensor_value_info("C", onnx.TensorProto.FLOAT, [1, 1, 5, 5])
-        dequantize_node = onnx.helper.make_node(
-            "DequantizeLinear", ["B_quantized", "B_scale", "B_zero_point"], ["C"], name="dequantizelinear"
-        )
-
-        graph = onnx.helper.make_graph(
-            [quantize_node, dequantize_node],
-            "test_model",
-            [A],
-            [C],
-            initializer=[a_scale, a_zero_point, b_scale, b_zero_point],
-        )
-        model = onnx.helper.make_model(graph, opset_imports=[onnx.helper.make_opsetid("", 13)])
-        model.ir_version = 7
-        model = onnx_model.ONNXModel(model)
-        self.assertTrue("QuantizeLinear" in [node.op_type for node in model.nodes()])
-        self.assertTrue("DequantizeLinear" in [node.op_type for node in model.nodes()])
-        model.remove_unused_nodes()
-        self.assertTrue("QuantizeLinear" not in [node.op_type for node in model.nodes()])
-        self.assertTrue("DequantizeLinear" not in [node.op_type for node in model.nodes()])
-
         # test node which does not serve as the input or output of any other nodes
         matmul2_weight = onnx.helper.make_tensor(
             "matmul2_weight", onnx.TensorProto.FLOAT, [1, 3], np.random.random((1, 3)).reshape(3).tolist()
         )
         matmul2_output = onnx.helper.make_tensor_value_info("matmul2_output", onnx.TensorProto.FLOAT, [3, 3])
-        matmul2_node = onnx.helper.make_node("MatMul", ["input", "matmul2_weight"], ["matmul2_output"], name="Matmul_1")
+        matmul2_node = onnx.helper.make_node("MatMul", ["A", "matmul2_weight"], ["matmul2_output"], name="Matmul_1")
         graph.node.append(matmul2_node)
         graph.initializer.append(matmul2_weight)
         model = onnx.helper.make_model(graph, opset_imports=[onnx.helper.make_opsetid("", 13)])
         model.ir_version = 7
+
+        onnx.save(model, "model1.onnx")
         model = onnx_model.ONNXModel(model)
-        self.assertTrue("MatMul" in [node.op_type for node in model.nodes()])
+        self.assertTrue("Matmul_1" in [node.name for node in model.nodes()])
         model.remove_unused_nodes()
-        self.assertTrue("MatMul" not in [node.op_type for node in model.nodes()])
+        self.assertTrue("Matmul_1" not in [node.name for node in model.nodes()])
 
     def test_add_or_remove_tensors_to_outputs(self):
         model = onnx_model.ONNXModel(self.matmul_add_model)

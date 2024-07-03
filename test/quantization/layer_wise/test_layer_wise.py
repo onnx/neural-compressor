@@ -15,7 +15,6 @@ from onnx_neural_compressor.quantization import algorithm_entry as algos
 from onnx_neural_compressor.quantization import config, matmul_4bits_quantizer
 
 
-
 def find_onnx_file(folder_path):
     # return first .onnx file path in folder_path
     for root, dirs, files in os.walk(folder_path):
@@ -217,6 +216,7 @@ class TestLayerWiseQuant(unittest.TestCase):
 
     def test__check_model_with_infer_shapes(self):
         from onnx_neural_compressor.algorithms.layer_wise import core as lwq_core
+
         self.assertFalse(lwq_core._check_model_with_infer_shapes(self.llama))
         self.assertTrue(lwq_core._check_model_with_infer_shapes(self.llama_optimized))
         self.assertTrue(
