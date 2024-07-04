@@ -32,7 +32,6 @@ def get_ratio(cur, last):
     else:
         ratio = (float(cur) - float(last)) / float(last) * 100
         ratio = round(float(ratio), 2)
-        ratio = f"{ratio}%"
     return ratio
 
 
@@ -47,7 +46,7 @@ def get_accuracy_ratio(current_json, last_accuracy_dict):
         last_performance = last_accuracy_dict.get(model, {}).get("performance", {}).get("value", "N/A")
         performance_ratio = get_ratio(current_performance, last_performance)
 
-        if current_accuracy == "N/A" or current_performance == "N/A":
+        if accuracy_ratio == "N/A" or performance_ratio == "N/A":
             status = "FAILURE"
         elif accuracy_ratio != 0:
             status = "FAILURE"
@@ -56,15 +55,17 @@ def get_accuracy_ratio(current_json, last_accuracy_dict):
         else:
             status = "SUCCESS"
 
+        format_ratio = lambda x: f"{x}%" if x != "N/A" else x
+
         compare_result_dict.append(
             {
                 "model": model,
                 "current_accuracy": current_accuracy,
                 "last_accuracy": last_accuracy,
-                "accuracy_ratio": accuracy_ratio,
+                "accuracy_ratio": format_ratio(accuracy_ratio),
                 "current_performance": current_performance,
                 "last_performance": last_performance,
-                "performance_ratio": performance_ratio,
+                "performance_ratio": format_ratio(performance_ratio),
                 "status": status,
             }
         )
