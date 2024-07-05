@@ -38,6 +38,7 @@ def check_status(performance, accuracy):
 
     refer_accuracy = refer.get(args.model, {}).get("accuracy", {}).get("value", "N/A")
     refer_performance = refer.get(args.model, {}).get("performance", {}).get("value", "N/A")
+    print(f"{accuracy=}\n{refer_accuracy=}\n{performance=}\n{refer_performance=}")
 
     assert accuracy != "N/A" and performance != "N/A"
     if refer_accuracy != "N/A":

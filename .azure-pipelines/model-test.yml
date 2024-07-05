@@ -52,7 +52,7 @@ stages:
 
   - stage: ONNX_Models
     displayName: Run ONNX Model
-    pool: ICX-16C
+    pool: MODEL_PERF_TEST
     dependsOn: []
     jobs:
       - ${{ each model in parameters.models }}:
