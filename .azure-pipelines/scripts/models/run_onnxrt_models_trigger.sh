@@ -44,12 +44,12 @@ function run_quantize() {
             --dataset_location="$dataset_location" \
             --label_path="$label_path" \
             --output_model="./model_tune" \
-            --quant_format="QDQ" | tee -a ${log_dir}/tuning.log
+            --quant_format="QDQ" | tee -a "$log_dir/tuning.log"
     else
         bash run_quant.sh --input_model="$input_model" \
             --dataset_location="$dataset_location" \
             --label_path="$label_path" \
-            --output_model="./model_tune" | tee -a ${log_dir}/tuning.log
+            --output_model="./model_tune" | tee -a "$log_dir/tuning.log"
     fi
 }
 
@@ -58,7 +58,7 @@ function run_accuracy() {
         --dataset_location="$dataset_location" \
         --label_path="$label_path" \
         --mode="accuracy" \
-        --batch_size="16" | tee -a ${log_dir}/accuracy.log
+        --batch_size="16" | tee -a "$log_dir/accuracy.log"
 }
 
 function run_performance() {
@@ -67,7 +67,7 @@ function run_performance() {
         --label_path="$label_path" \
         --mode="performance" \
         --intra_op_num_threads="8" \
-        --batch_size="1" | tee -a ${log_dir}/performance.log
+        --batch_size="1" | tee -a "$log_dir/performance.log"
 }
 
 function main() {

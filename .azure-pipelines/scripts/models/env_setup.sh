@@ -24,8 +24,8 @@ if [ -d "${log_dir}/${model}" ]; then
     $BOLD_GREEN && echo "${log_dir}/${model} already exists, don't need to mkdir." && $RESET
 else
     $BOLD_GREEN && echo "no log dir ${log_dir}/${model}, create." && $RESET
-    cd ${log_dir}
-    mkdir ${model}
+    cd "${log_dir}"
+    mkdir "${model}"
 fi
 
 $BOLD_YELLOW && echo "====== install ONC ======" && $RESET
