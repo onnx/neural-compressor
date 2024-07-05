@@ -13,7 +13,7 @@ URL = (
     + args.build_id
     + "&view=artifacts&pathAsName=false&type=publishedArtifacts"
 )
-REFER_SUMMARY_PATH = "/neural-compressor/.azure-pipelines/scripts/models/refer_summary.json"
+REFER_SUMMARY_PATH = "/neural-compressor/.azure-pipelines/scripts/models/summary.json"
 
 
 def str_to_float(value):
