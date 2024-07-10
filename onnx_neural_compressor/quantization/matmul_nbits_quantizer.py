@@ -171,13 +171,24 @@ class MatMulNBitsQuantizer:
         model = self.model
         opt_tmp_file = tempfile.TemporaryDirectory()
 
+        if getattr(self.algo_config, "layer_wise_quant", False) and not isinstance(model, str):
+            logger.warning("Please use model path for layer-wise quantization.")
+
         # do graph optimization if not layer_wise_quant
         if (
             not getattr(self.algo_config, "layer_wise_quant", False)
             and self.optimization_level != ort.GraphOptimizationLevel.ORT_DISABLE_ALL
         ):
             if not isinstance(model, str):
-                onnx.save(model, pathlib.Path(opt_tmp_file.name).joinpath("tmp.onnx").as_posix())
+                onnx.save_model(
+                    model,
+                    pathlib.Path(opt_tmp_file.name).joinpath("tmp.onnx").as_posix(),
+                    save_as_external_data=True,
+                    all_tensors_to_one_file=True,
+                    location="tmp.onnx_data",
+                    size_threshold=1024,
+                    convert_attribute=False,
+                )
                 model = pathlib.Path(opt_tmp_file.name).joinpath("tmp.onnx").as_posix()
             logger.info("Start graph optimization...")
             sess_options = ort.SessionOptions()
@@ -189,7 +200,7 @@ class MatMulNBitsQuantizer:
             sess_options.add_session_config_entry(
                 "session.optimized_model_external_initializers_min_size_in_bytes", "1024"
             )
-            session = ort.InferenceSession(model, sess_options)
+            session = ort.InferenceSession(model, sess_options, providers=["CPUExecutionProvider"])
             model = sess_options.optimized_model_filepath
             del session
             logger.info("Graph optimization done.")

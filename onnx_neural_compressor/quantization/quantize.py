@@ -42,7 +42,7 @@ def quantize(
             sess_options.add_session_config_entry(
                 "session.optimized_model_external_initializers_min_size_in_bytes", "1024"
             )
-            session = ort.InferenceSession(model_input, sess_options)
+            session = ort.InferenceSession(model_input, sess_options, provides=["CPUExecutionProvider"])
             del session
             model_input = sess_options.optimized_model_filepath
 

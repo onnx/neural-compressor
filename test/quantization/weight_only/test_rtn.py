@@ -4,6 +4,9 @@ import os
 import shutil
 import unittest
 
+import numpy as np
+import onnx
+import onnxruntime as ort
 from optimum.exporters.onnx import main_export
 
 from onnx_neural_compressor import logger
@@ -20,6 +23,24 @@ def find_onnx_file(folder_path):
     return None
 
 
+def build_matmul_model():
+    # MatMul - Add - Add
+    A = onnx.helper.make_tensor_value_info("A", onnx.TensorProto.FLOAT, [1, 11008])
+    C = onnx.helper.make_tensor_value_info("C", onnx.TensorProto.FLOAT, [1, 1024])
+    D = onnx.helper.make_tensor_value_info("D", onnx.TensorProto.FLOAT, [1, 1024])
+
+    B_init = onnx.helper.make_tensor("B", onnx.TensorProto.FLOAT, [11008, 1024], np.random.random((11008, 1024)))
+    E_init = onnx.helper.make_tensor("E", onnx.TensorProto.FLOAT, [1, 1024], np.random.random((1, 1024)))
+
+    matmul_node = onnx.helper.make_node("MatMul", ["A", "B"], ["C"], name="Matmul")
+    add = onnx.helper.make_node("Add", ["C", "E"], ["D"], name="add")
+
+    graph = onnx.helper.make_graph([matmul_node, add], "test_graph_1", [A], [D], [B_init, E_init])
+    model = onnx.helper.make_model(graph)
+    model = onnx.helper.make_model(graph, **{"opset_imports": [onnx.helper.make_opsetid("", 13)]})
+    return model
+
+
 class TestRTNQuant(unittest.TestCase):
 
     @classmethod
@@ -29,6 +50,7 @@ class TestRTNQuant(unittest.TestCase):
             output="gptj",
         )
         self.gptj = find_onnx_file("./gptj")
+        self.matmul_model = build_matmul_model()
 
     @classmethod
     def tearDownClass(self):
@@ -228,6 +250,22 @@ class TestRTNQuantWithORTLikeAPI(TestRTNQuant):
             quant.process()
             self.assertIsNotNone(quant.model)
             self.assertEqual(self._count_woq_matmul(quant.model, bits=n_bits, group_size=32), 29)
+
+    def test_rtn_with_specified_matmul(self):
+
+        algo_config = matmul_nbits_quantizer.RTNWeightOnlyQuantConfig()
+
+        quant = matmul_nbits_quantizer.MatMulNBitsQuantizer(
+            copy.deepcopy(self.matmul_model),
+            n_bits=4,
+            block_size=32,
+            is_symmetric=False,
+            algo_config=algo_config,
+            optimization_level=ort.GraphOptimizationLevel.ORT_DISABLE_ALL,
+        )
+        quant.process()
+        self.assertIsNotNone(quant.model)
+        self.assertEqual(self._count_woq_matmul(quant.model, bits=4, group_size=32), 1)
 
 
 if __name__ == "__main__":

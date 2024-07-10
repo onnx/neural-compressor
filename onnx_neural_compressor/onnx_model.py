@@ -480,21 +480,28 @@ class ONNXModel:
     def remove_unused_nodes(self):
         """Remove unused nodes."""
         unused_nodes = []
-        nodes = self.nodes()
+        for node in self.model.graph.node:
+            # remove constant
+            if node.op_type == "Constant":
+                tensor = node.attribute[0].t
+                tensor.name = node.output[0]
+                self.add_initializer(tensor)
+                unused_nodes.append(node)
+
+            # remove identity
+            if node.op_type == "Identity":
+                tensor = self.get_initializer(node.input[0])
+                if tensor is not None:
+                    new_tensor = copy.deepcopy(tensor)
+                    new_tensor.name = node.output[0]
+                    unused_nodes.append(node)
+                    self.add_initializer(new_tensor)
+        self.remove_nodes(unused_nodes)
 
         if len(self._input_name_to_nodes) == 0:
             self._input_name_to_nodes = self.input_name_to_nodes()
         if len(self._output_name_to_node) == 0:
             self._output_name_to_node = self.output_name_to_node()
-        for node in nodes:
-            if (
-                node.op_type == "Constant"
-                and node.output[0] not in self.model.graph.output
-                and node.output[0] not in self._input_name_to_nodes
-            ):
-                unused_nodes.append(node)
-
-        self.remove_nodes(unused_nodes)
 
         unvalid_nodes = [
             i
@@ -795,17 +802,71 @@ class ONNXModel:
                         [None, 0, None, 0, 0],
                     ),
                 ]
-            if not start_node:
-                continue
-            if not any(qkv_nodes_list):
-                continue
-            start_nodes.append(start_node)
+            if qkv_nodes_list is not None and any(qkv_nodes_list):
+                start_nodes.append(start_node)
+
+        # can't find qkv nodes with above patterns, use Softmax nodes to split model
+        if len(start_nodes) == 0:
+            for node in self.model.graph.node:
+                if node.op_type == "Softmax":
+                    start_nodes.append(node)
         return start_nodes
 
     def find_split_nodes(self):
         """Find split nodes for layer-wise quantization."""
+        self.remove_unused_nodes()
         split_nodes = self.find_split_node_for_layer_wise_quantization()
         return split_nodes
+
+    def _infer_tensor_dtype(self):
+        """Infer the elem_type of tensors."""
+        initializers = dict([(i.name, i.data_type) for i in self.model.graph.initializer])
+        inputs = dict([(i.name, i.type.tensor_type.elem_type) for i in self.model.graph.input])
+        value_info = dict([(i.name, i.type.tensor_type.elem_type) for i in self.model.graph.value_info])
+        outputs = dict([(i.name, i.type.tensor_type.elem_type) for i in self.model.graph.output])
+        for node in self.model.graph.node:
+            if node.output[0] in value_info:
+                continue
+            elem_type = None
+            if node.op_type in ["And", "Equal", "Greater", "GreaterOrEqual", "Less", "LessOrEqual", "Or", "Xor"]:
+                elem_type = onnx.TensorProto.BOOL
+            elif node.op_type in ["ArgMax", "ArgMin", "NonZero", "Shape"]:
+                elem_type = onnx.TensorProto.INT64
+            elif node.op_type == "Cast" and len(node.attribute) > 0:
+                elem_type = node.attribute[0].i
+            elif node.op_type in ["Constant", "ConstantOfShape"] and len(node.attribute) > 0:
+                elem_type = node.attribute[0].t.data_type
+            elif len(node.input) >= 2:
+                for inp in node.input[:2]:
+                    if inp in initializers and initializers[inp] != onnx.TensorProto.INT64:
+                        elem_type = initializers[inp]
+                        break
+
+            # output elem_type aligns with input
+            if elem_type is None and len(node.input) > 0:
+                inp = node.input[0]
+                if inp in value_info:
+                    elem_type = value_info[inp]
+                elif inp in inputs:
+                    elem_type = inputs[inp]
+                elif inp in outputs:
+                    elem_type = outputs[inp]
+            if elem_type is not None:
+                if node.op_type in ["Split", "Slice"]:
+                    for out in node.output:
+                        value_info.update({out: elem_type})
+                else:
+                    value_info.update({node.output[0]: elem_type})
+
+        return value_info
+
+    def _build_input_output_tensor(self, tensor_name, value_info):
+        if tensor_name in self.input():
+            return self.model.graph.input[self.input().index(tensor_name)]
+        if tensor_name in self.output():
+            return self.model.graph.output[self.output().index(tensor_name)]
+        tensor_type = value_info.get(tensor_name, onnx.TensorProto.FLOAT)
+        return onnx.helper.make_tensor_value_info(tensor_name, tensor_type, None)
 
     def split_model_with_node(self, split_node_name, path_of_model_to_split, save_both_split_models=True):
         """Split model into two parts at a given node.
@@ -824,7 +885,9 @@ class ONNXModel:
         # origin model : ... -> node_1 -> split_node -> node_2 -> ...
         # split model 1: ... -> node_1 -> split_node
         # split model 2: node_2 -> ...
-        self.remove_unused_nodes()
+
+        # infer elem_type of tensors to make sure layer-wise quant run successfully
+        value_info = self._infer_tensor_dtype()
 
         split_model_part_1 = onnx.ModelProto()
         split_model_part_1.CopyFrom(self.model)
@@ -852,8 +915,7 @@ class ONNXModel:
         )
         split_tensor_name = split_node_output[0]
 
-        split_tensor_type, split_tensor_shape = self._get_output_type_shape_by_tensor_name(split_tensor_name)
-        split_tensor = onnx.helper.make_tensor_value_info(split_tensor_name, split_tensor_type, split_tensor_shape)
+        split_tensor = self._build_input_output_tensor(split_tensor_name, value_info)
 
         split_model_part_1.graph.output.append(split_tensor)
         split_model_part_2.graph.input.append(split_tensor)
@@ -869,8 +931,7 @@ class ONNXModel:
         insert_input_for_model_2 = []
         for output in split_model_part_1._output_name_to_node.keys():
             if output in split_model_part_2._input_name_to_nodes.keys():
-                output_type, output_shape = self._get_output_type_shape_by_tensor_name(output)
-                output_tensor = onnx.helper.make_tensor_value_info(output, output_type, output_shape)
+                output_tensor = self._build_input_output_tensor(output, value_info)
                 if output_tensor not in split_model_part_1.model.graph.output:
                     insert_output_for_model_1.append(output_tensor)
                 if output_tensor not in split_model_part_2.model.graph.input:
@@ -928,26 +989,6 @@ class ONNXModel:
             size_threshold=1024,
             convert_attribute=False,
         )
-
-    def _get_output_type_shape_by_tensor_name(self, tensor_name):
-        """Get output type and shape with a tensor name.
-
-        Args:
-            tensor_name (str): name of a tensor
-
-        Returns:
-            tuple: output type and shape
-        """
-        elem_type = onnx.TensorProto.FLOAT
-        shape = None
-        for output in self.model.graph.value_info:
-            if output.name == tensor_name:
-                elem_type = output.type.tensor_type.elem_type
-                shape = [
-                    dim.dim_value if dim.HasField("dim_value") else -1 for dim in output.type.tensor_type.shape.dim
-                ]
-                break
-        return elem_type, shape
 
     def _remove_unused_input_output(self):
         """Remove unused input & output for split model."""

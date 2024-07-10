@@ -46,17 +46,15 @@ def layer_wise_quant(
     Returns:
         _type_: _description_
     """
-    # check whether model shape is inferred
-    if not _check_model_with_infer_shapes(model):
-        logger.error(
-            "Before applying layer-wise quantization, please make sure to "
-            "run symbolic shape inference on your model like follows:\n"
-            "import onnxruntime.tools.symbolic_shape_infer as symbolic_shape_infer\n"
-            "model = onnx.load(your_model_path)\n"
-            "out = symbolic_shape_infer.SymbolicShapeInference.infer_shapes(model, auto_merge=True)\n"
-            "onnx.save(out, infer_shape_model_path)\n"
-        )
-        raise ValueError("Fail to run layer-wise quantization.")
+    logger.warning(
+        "Layer-wise quantization requires data_type info for some tensors. "
+        "We will try to infer the data_type automatically if it doesn't exist."
+        "You can use model with symbolic shape inference before layer-wise quantization as well like follows:\n"
+        "import onnxruntime.tools.symbolic_shape_infer as symbolic_shape_infer\n"
+        "model = onnx.load(your_model_path)\n"
+        "out = symbolic_shape_infer.SymbolicShapeInference.infer_shapes(model, auto_merge=True)\n"
+        "onnx.save(out, infer_shape_model_path)\n"
+    )
 
     if not isinstance(model, onnx_model.ONNXModel):
         model = onnx_model.ONNXModel(model, ignore_warning=True, load_external_data=False)
@@ -110,6 +108,7 @@ def layer_wise_quant(
         split_model_part_1, split_model_part_2 = split_model.split_model_with_node(
             split_node.name, model.model_path, save_both_split_models
         )
+
         if not save_both_split_models:
             # append split_model_part_2 to do next split
             model_to_split.append(split_model_part_2)
@@ -117,9 +116,11 @@ def layer_wise_quant(
         logger.info("Quantize split model {}".format(split_idx))
         if require_data_reader:
             # process data_reader for current split and next split
+
             current_data_reader = _filter_data_reader_for_current_split_model(
-                split_model_part_1.model, current_data_reader
+                split_model_part_1.model, current_data_reader, data_reader
             )
+            # next_data_reader contains split_model_part_1 output data
             next_data_reader = _prepare_data_reader_for_next_split_model(
                 split_model_part_1.model_path, current_data_reader, providers
             )
@@ -166,7 +167,7 @@ def layer_wise_quant(
                 # process data_reader for current split
                 current_data_reader = lwq_data_reader.pop(0)
                 current_data_reader = _filter_data_reader_for_current_split_model(
-                    split_model_part_2.model, current_data_reader
+                    split_model_part_2.model, current_data_reader, data_reader
                 )
 
                 # perform quantization
@@ -204,7 +205,6 @@ def layer_wise_quant(
     onnx.external_data_helper.load_external_data_for_model(
         quantized_model_merged.model, os.path.dirname(quantized_model_merged.model_path)
     )
-
     return quantized_model_merged
 
 
@@ -222,18 +222,36 @@ class DataReader(data_reader.CalibrationDataReader):
         self.iter_next = iter(self.data_list)
 
 
-def _filter_data_reader_for_current_split_model(model: onnx.ModelProto, data_reader: data_reader.CalibrationDataReader):
+def _filter_data_reader_for_current_split_model(
+    model: onnx.ModelProto,
+    current_data_reader: data_reader.CalibrationDataReader,
+    data_reader: data_reader.CalibrationDataReader,
+):
     """Filter data reader to remove data that is not in model input.
 
     Args:
         model (onnx.ModelProto): onnx model.
-        data_reader (data_reader.CalibrationDataReader): data reader.
+        current_data_reader (data_reader.CalibrationDataReader): data reader of current split model.
+        data_reader (data_reader.CalibrationDataReader): data reader of the original model.
 
     Returns:
         data_reader.CalibrationDataReader: filtered data reader.
     """
     filter_inputs = []
     input_names = [input.name for input in model.graph.input]
+    current_data_reader.rewind()
+    data_reader.rewind()
+
+    while True:
+        inputs = current_data_reader.get_next()
+        if not inputs:
+            break
+        filter_input = {
+            input_name: input_tensor for input_name, input_tensor in inputs.items() if input_name in input_names
+        }
+        filter_inputs.append(filter_input)
+
+    idx = 0
     while True:
         inputs = data_reader.get_next()
         if not inputs:
@@ -241,7 +259,9 @@ def _filter_data_reader_for_current_split_model(model: onnx.ModelProto, data_rea
         filter_input = {
             input_name: input_tensor for input_name, input_tensor in inputs.items() if input_name in input_names
         }
-        filter_inputs.append(filter_input)
+        if len(filter_input) > 0:
+            filter_inputs[idx].update(filter_input)
+        idx += 1
     return DataReader(filter_inputs)
 
 
@@ -275,14 +295,3 @@ def _prepare_data_reader_for_next_split_model(
         inputs.update({name: value for name, value in zip(output_names, out)})
         data_reader_for_next_split_model.append(inputs)
     return DataReader(data_reader_for_next_split_model)
-
-
-def _check_model_with_infer_shapes(model):
-    """Check if the model has been shape inferred."""
-    if isinstance(model, (pathlib.Path, str)):
-        model = onnx.load(model, load_external_data=False)
-    elif isinstance(model, onnx_model.ONNXModel):
-        model = model.model
-    if len(model.graph.value_info) > 0:
-        return True
-    return False

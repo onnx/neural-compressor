@@ -148,8 +148,10 @@ def _apply_awq_scale(model, weight_config, absorb_pairs, output_dicts):
             if init_share_num == 1:
                 model.remove_initializer(weight_tensor)
 
+        if parent is None:
+            continue
         parent = model.get_node(parent)
-        if parent.name in updated_nodes:
+        if parent is None or parent.name in updated_nodes:
             continue
 
         if parent.op_type in ["LayerNormalization", "BatchNormalization", "InstanceNormalization"] and len(
@@ -363,8 +365,9 @@ def awq_quantize(
         output_name_to_node = model.output_name_to_node()
         input_name_to_nodes = model.input_name_to_nodes()
         for input_name in output_names:
-            parent = output_name_to_node[input_name]
-            dump_pairs = {parent.name: []}
+            # input_name maybe the input of graph and there is no parent node
+            parent = output_name_to_node[input_name].name if input_name in output_name_to_node else None
+            dump_pairs = {parent: []}
 
             for node in input_name_to_nodes[input_name]:
                 # check op_type of node is MatMul
@@ -375,9 +378,9 @@ def awq_quantize(
                     and model.get_initializer(node.input[1]) is not None
                     and weight_config.get(node.name, {}).get("weight_dtype", "fp32") != "fp32"
                 ):
-                    dump_pairs[parent.name].append(model.get_node(node.name))
+                    dump_pairs[parent].append(model.get_node(node.name))
 
-            if len(dump_pairs[parent.name]) == 0:  # pragma: no cover
+            if len(dump_pairs[parent]) == 0:  # pragma: no cover
                 continue
 
             output_dicts = {}

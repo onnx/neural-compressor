@@ -3,6 +3,7 @@ import os
 import shutil
 import unittest
 
+import numpy as np
 import onnx
 import onnxruntime as ort
 import onnxruntime.tools.symbolic_shape_infer as symbolic_shape_infer
@@ -26,10 +27,13 @@ def find_onnx_file(folder_path):
 
 class DummyNLPDataloader(data_reader.CalibrationDataReader):
 
-    def __init__(self, model_name):
+    def __init__(self, model_name, model_path):
         self.tokenizer = transformers.AutoTokenizer.from_pretrained(model_name)
         self.sequence_a = "intel-extension-for-transformers is based in SH"
         self.sequence_b = "Where is intel-extension-for-transformers based? NYC or SH"
+        model = onnx.load(model_path, load_external_data=False)
+        config = transformers.AutoConfig.from_pretrained(model_name)
+        inputs_names = [input.name for input in model.graph.input]
 
         self.encoded_list = []
         encoded_input = dict(self.tokenizer(self.sequence_a, self.sequence_b, return_tensors="pt"))
@@ -37,6 +41,14 @@ class DummyNLPDataloader(data_reader.CalibrationDataReader):
         encoded_input["position_ids"] = (
             torch.arange(0, input_shape[-1], dtype=torch.long).unsqueeze(0).view(-1, input_shape[-1])
         )
+
+        num_attention_heads = config.num_key_value_heads
+        embed_size_per_head = config.hidden_size // config.num_attention_heads
+        shape = (1, num_attention_heads, 0, embed_size_per_head)
+        key_or_value = np.zeros(shape, dtype=np.float32)
+        for input_name in inputs_names:
+            if input_name not in encoded_input:
+                encoded_input[input_name] = key_or_value
 
         # convert torch tensor to numpy
         for input_name, input_value in encoded_input.items():
@@ -62,7 +74,7 @@ class TestLayerWiseQuant(unittest.TestCase):
         # limit transformers to 4.37.2
         # TODO: remove transformers version limitation
         llama_id = "yujiepan/llama-2-tiny-3layers-random"
-        main_export(llama_id, output="llama-2-tiny-3layers-random", task="text-generation")
+        main_export(llama_id, output="llama-2-tiny-3layers-random", task="text-generation-with-past")
         model_path = find_onnx_file("llama-2-tiny-3layers-random")
         self.llama = model_path
 
@@ -74,10 +86,10 @@ class TestLayerWiseQuant(unittest.TestCase):
         sess_options = ort.SessionOptions()
         sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_EXTENDED
         sess_options.optimized_model_filepath = "llama-2-tiny-3layers-random/optimized_model.onnx"
-        ort.InferenceSession(infer_shape_model_path, sess_options)
+        ort.InferenceSession(infer_shape_model_path, sess_options, providers=["CPUExecutionProvider"])
 
         self.llama_optimized = "llama-2-tiny-3layers-random/optimized_model.onnx"
-        self.calibration_data_reader = DummyNLPDataloader(llama_id)
+        self.calibration_data_reader = DummyNLPDataloader(llama_id, self.llama_optimized)
 
     @classmethod
     def tearDownClass(self):
@@ -105,8 +117,8 @@ class TestLayerWiseQuant(unittest.TestCase):
                 weight_init = onnx.numpy_helper.to_array(init)
         return weight_init
 
-    def _apply_quantize(self, quant_config, quant_func, data_reader=None):
-        fp32_model = copy.deepcopy(self.llama_optimized)
+    def _apply_quantize(self, model, quant_config, quant_func, data_reader=None):
+        fp32_model = copy.deepcopy(model)
         if data_reader is None:
             qmodel = quant_func(fp32_model, quant_config)
         else:
@@ -115,12 +127,28 @@ class TestLayerWiseQuant(unittest.TestCase):
         return qmodel
 
     def test_rtn_layer_wise(self):
+        # optimized model
         rtn_config = config.RTNConfig(layer_wise_quant=True)
-        qmodel_lwq = self._apply_quantize(rtn_config, algos.rtn_quantize_entry)
+        qmodel_lwq = self._apply_quantize(self.llama_optimized, rtn_config, algos.rtn_quantize_entry)
         self.assertTrue(self._check_model_is_quantized(qmodel_lwq))
 
         rtn_config = config.RTNConfig(layer_wise_quant=False)
-        qmodel = self._apply_quantize(rtn_config, algos.rtn_quantize_entry)
+        qmodel = self._apply_quantize(self.llama_optimized, rtn_config, algos.rtn_quantize_entry)
+        self.assertTrue(self._check_model_is_quantized(qmodel))
+
+        lwq_quantized_weight = self._get_quantized_matmul_weight(qmodel_lwq, "/lm_head/MatMul_Q4")
+        self.assertIsNotNone(lwq_quantized_weight)
+        quantized_weight = self._get_quantized_matmul_weight(qmodel, "/lm_head/MatMul_Q4")
+        self.assertIsNotNone(quantized_weight)
+        self.assertTrue((lwq_quantized_weight == quantized_weight).all())
+
+        # original model
+        rtn_config = config.RTNConfig(layer_wise_quant=True)
+        qmodel_lwq = self._apply_quantize(self.llama, rtn_config, algos.rtn_quantize_entry)
+        self.assertTrue(self._check_model_is_quantized(qmodel_lwq))
+
+        rtn_config = config.RTNConfig(layer_wise_quant=False)
+        qmodel = self._apply_quantize(self.llama, rtn_config, algos.rtn_quantize_entry)
         self.assertTrue(self._check_model_is_quantized(qmodel))
 
         lwq_quantized_weight = self._get_quantized_matmul_weight(qmodel_lwq, "/lm_head/MatMul_Q4")
@@ -162,14 +190,38 @@ class TestLayerWiseQuant(unittest.TestCase):
         self.assertTrue((lwq_quantized_weight == quantized_weight).all())
 
     def test_gptq_layer_wise(self):
+        # optimized model
         self.calibration_data_reader.rewind()
         gptq_config = config.GPTQConfig(layer_wise_quant=True)
-        qmodel_lwq = self._apply_quantize(gptq_config, algos.gptq_quantize_entry, self.calibration_data_reader)
+        qmodel_lwq = self._apply_quantize(
+            self.llama_optimized, gptq_config, algos.gptq_quantize_entry, self.calibration_data_reader
+        )
         self.assertTrue(self._check_model_is_quantized(qmodel_lwq))
 
         self.calibration_data_reader.rewind()
         gptq_config = config.GPTQConfig(layer_wise_quant=False)
-        qmodel = self._apply_quantize(gptq_config, algos.gptq_quantize_entry, self.calibration_data_reader)
+        qmodel = self._apply_quantize(
+            self.llama_optimized, gptq_config, algos.gptq_quantize_entry, self.calibration_data_reader
+        )
+        self.assertTrue(self._check_model_is_quantized(qmodel))
+
+        lwq_quantized_weight = self._get_quantized_matmul_weight(qmodel_lwq, "/lm_head/MatMul_Q4")
+        self.assertIsNotNone(lwq_quantized_weight)
+        quantized_weight = self._get_quantized_matmul_weight(qmodel, "/lm_head/MatMul_Q4")
+        self.assertIsNotNone(quantized_weight)
+        self.assertTrue((lwq_quantized_weight == quantized_weight).all())
+
+        # original model
+        self.calibration_data_reader.rewind()
+        gptq_config = config.GPTQConfig(layer_wise_quant=True)
+        qmodel_lwq = self._apply_quantize(
+            self.llama, gptq_config, algos.gptq_quantize_entry, self.calibration_data_reader
+        )
+        self.assertTrue(self._check_model_is_quantized(qmodel_lwq))
+
+        self.calibration_data_reader.rewind()
+        gptq_config = config.GPTQConfig(layer_wise_quant=False)
+        qmodel = self._apply_quantize(self.llama, gptq_config, algos.gptq_quantize_entry, self.calibration_data_reader)
         self.assertTrue(self._check_model_is_quantized(qmodel))
 
         lwq_quantized_weight = self._get_quantized_matmul_weight(qmodel_lwq, "/lm_head/MatMul_Q4")
@@ -213,17 +265,6 @@ class TestLayerWiseQuant(unittest.TestCase):
         quantized_weight = self._get_quantized_matmul_weight(qmodel, "/lm_head/MatMul_Q4")
         self.assertIsNotNone(quantized_weight)
         self.assertTrue((lwq_quantized_weight == quantized_weight).all())
-
-    def test__check_model_with_infer_shapes(self):
-        from onnx_neural_compressor.algorithms.layer_wise import core as lwq_core
-
-        self.assertFalse(lwq_core._check_model_with_infer_shapes(self.llama))
-        self.assertTrue(lwq_core._check_model_with_infer_shapes(self.llama_optimized))
-        self.assertTrue(
-            lwq_core._check_model_with_infer_shapes(
-                onnx_model.ONNXModel(onnx.load(self.llama_optimized, load_external_data=False))
-            )
-        )
 
 
 if __name__ == "__main__":

@@ -334,7 +334,7 @@ def gptq_quantize(
                 k_blocks = (org_shape[0] + group_size - 1) // group_size
                 q_weight = quant_utils.pad_tensor(q_weight, group_size, k_blocks)
                 _, _, zp, scale, q_weight = quant_utils.quantize_data(
-                    q_weight.T,
+                    q_weight.T.reshape((-1, group_size)),
                     "uint" + str(num_bits),
                     sym,
                     axis=1,
@@ -345,7 +345,7 @@ def gptq_quantize(
                     num_bits=num_bits,
                     group_size=group_size,
                     k_blocks=k_blocks,
-                    q_weight=q_weight.astype("uint8"),
+                    q_weight=q_weight,
                     scale=scale.astype(dtype),
                     zero_point=zp if not sym else None,
                     accuracy_level=accuracy_level,

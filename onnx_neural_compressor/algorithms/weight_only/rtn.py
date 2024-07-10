@@ -124,7 +124,7 @@ def rtn_quantize(
                     num_bits=num_bits,
                     group_size=group_size,
                     k_blocks=k_blocks,
-                    q_weight=q_weight.astype("uint8"),
+                    q_weight=q_weight,
                     scale=scale.astype(dtype),
                     zero_point=zp if not sym else None,
                     accuracy_level=accuracy_level,
