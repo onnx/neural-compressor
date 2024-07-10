@@ -95,8 +95,8 @@ parser.add_argument("--trust_remote_code", type=bool, default=False)
 args = parser.parse_args()
 
 # load model
-tokenizer = transformers.LlamaTokenizer.from_pretrained(args.tokenizer)
-model_config = transformers.LlamaConfig.from_pretrained(args.model_path)
+tokenizer = transformers.AutoTokenizer.from_pretrained(args.tokenizer)
+model_config = transformers.AutoConfig.from_pretrained(args.model_path)
 
 
 def tokenize_function(examples):
@@ -324,18 +324,20 @@ if __name__ == "__main__":
             print("Accuracy: %.5f" % acc_result)
 
     if args.tune:
-        model_name = "model.onnx"  # require optimum >= 1.14.0
+        model_name = "optimized_model.onnx"  # require optimum >= 1.14.0
         model_path = os.path.join(args.model_path, model_name)
 
         best_model = None
         if args.algorithm.upper() == "RTN":
-            algo_config = matmul_nbits_quantizer.RTNWeightOnlyQuantConfig()
+            algo_config = matmul_nbits_quantizer.RTNWeightOnlyQuantConfig(layer_wise_quant=False)
             quant = matmul_nbits_quantizer.MatMulNBitsQuantizer(
                 model_path,
                 n_bits=4,
                 block_size=32,
                 is_symmetric=True,
                 algo_config=algo_config,
+                # nodes_to_exclude=["/lm_head/MatMul"],
+                optimization_level=ort.GraphOptimizationLevel.ORT_DISABLE_ALL,
             )
             quant.process()
             best_model = quant.model
@@ -343,7 +345,8 @@ if __name__ == "__main__":
         elif args.algorithm.upper() == "AWQ":
             calibration_data_reader = AWQDataloader(model_path, pad_max=args.pad_max, batch_size=1)
             algo_config = matmul_nbits_quantizer.AWQWeightOnlyQuantConfig(
-                calibration_data_reader=calibration_data_reader, enable_mse_search=False
+                calibration_data_reader=calibration_data_reader,
+                enable_mse_search=False,
             )
             quant = matmul_nbits_quantizer.MatMulNBitsQuantizer(
                 model_path,
@@ -359,6 +362,7 @@ if __name__ == "__main__":
             calibration_data_reader = GPTQDataloader(model_path, seqlen=args.seqlen, batch_size=1)
             algo_config = matmul_nbits_quantizer.GPTQWeightOnlyQuantConfig(
                 calibration_data_reader=calibration_data_reader,
+                layer_wise_quant=True
             )
             quant = matmul_nbits_quantizer.MatMulNBitsQuantizer(
                 model_path,
@@ -366,6 +370,8 @@ if __name__ == "__main__":
                 block_size=32,
                 is_symmetric=False,
                 algo_config=algo_config,
+                nodes_to_exclude=["/lm_head/MatMul"],
+                optimization_level=ort.GraphOptimizationLevel.ORT_DISABLE_ALL,
             )
             quant.process()
             best_model = quant.model
