@@ -57,6 +57,7 @@ stages:
     jobs:
       - ${{ each model in parameters.models }}:
           - job:
+            displayName: ${{ model }}
             steps:
               - template: template/model-template.yml
                 parameters:
