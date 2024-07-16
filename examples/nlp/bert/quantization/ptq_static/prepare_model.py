@@ -1,7 +1,7 @@
 import argparse
 import os
 import sys
-import urllib
+import urllib.request
 import zipfile
 
 import torch
