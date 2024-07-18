@@ -338,7 +338,6 @@ if __name__ == "__main__":
         best_model = None
 
         nodes_to_exclude=["/lm_head/MatMul"] if not args.quantize_lm_head else []
-        print(nodes_to_exclude, args.nodes_to_exclude)
         nodes_to_exclude = list(set(args.nodes_to_exclude + nodes_to_exclude))
         if args.algorithm.upper() == "RTN":
             algo_config = matmul_nbits_quantizer.RTNWeightOnlyQuantConfig(

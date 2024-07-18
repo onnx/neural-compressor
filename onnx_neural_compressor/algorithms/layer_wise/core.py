@@ -46,16 +46,6 @@ def layer_wise_quant(
     Returns:
         _type_: _description_
     """
-    logger.warning(
-        "Layer-wise quantization requires data_type info for some tensors. "
-        "We will try to infer the data_type automatically if it doesn't exist."
-        "You can use model with symbolic shape inference before layer-wise quantization as well like follows:\n"
-        "import onnxruntime.tools.symbolic_shape_infer as symbolic_shape_infer\n"
-        "model = onnx.load(your_model_path)\n"
-        "out = symbolic_shape_infer.SymbolicShapeInference.infer_shapes(model, auto_merge=True)\n"
-        "onnx.save(out, infer_shape_model_path)\n"
-    )
-
     if not isinstance(model, onnx_model.ONNXModel):
         model = onnx_model.ONNXModel(model, ignore_warning=True, load_external_data=False)
 
@@ -66,16 +56,7 @@ def layer_wise_quant(
     # get and check split nodes
     split_nodes = origin_model.find_split_nodes()
     if len(split_nodes) == 0:
-        logger.error(
-            "Can't find split nodes for layer-wise quantization. "
-            "We recommend applying graph optimization for your model like follows: \n"
-            "import onnxruntime as ort \n"
-            "sess_options = ort.SessionOptions() \n"
-            "sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_EXTENDED "
-            "# or ORT_ENABLE_BASIC \n"
-            "sess_options.optimized_model_filepath = 'optimized_model_path' \n"
-            "ort.InferenceSession(infer_shape_model_path, sess_options)"
-        )
+        logger.error("Can't find split nodes for layer-wise quantization.")
         raise ValueError("Fail to run layer-wise quantization.")
     logger.info(
         "Will split model into {} parts to do layer-wise quantization".format(
