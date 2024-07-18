@@ -28,7 +28,6 @@ Note that this README.md uses meta-llama/Llama-2-7b-hf as an example. There are 
 Export to ONNX model:
 ```bash
 python prepare_model.py  --input_model="meta-llama/Llama-2-7b-hf" \
-                         --output_model="./llama-2-7b-hf" \
                          --task=text-generation-with-past \ # or text-generation
 ```
 
@@ -53,7 +52,7 @@ Accuracy:
 
 ```bash
 bash run_benchmark.sh --input_model=path/to/model \ # folder path of onnx model
-                      --batch_size=batch_size \ # optional 
+                      --batch_size=batch_size \ # optional
                       --mode=accuracy \
                       --tokenizer=meta-llama/Llama-2-7b-hf \ # model name or folder path containing all relevant files for model's tokenizer
                       --tasks=lambada_openai

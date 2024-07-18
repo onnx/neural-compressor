@@ -44,7 +44,7 @@ parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFo
 parser.add_argument("--model_path", type=str, help="Folder path of pre-trained onnx model")
 parser.add_argument("--benchmark", action="store_true", default=False)
 parser.add_argument("--tune", action="store_true", default=False, help="whether quantize the model")
-parser.add_argument("--output_model", type=str, default=None, help="output model path")
+parser.add_argument("--output_model", type=str, default=None, help="path of output dircectory")
 parser.add_argument(
     "--batch_size",
     default=1,
@@ -92,11 +92,19 @@ parser.add_argument("--dataset", nargs="?", default="NeelNanda/pile-10k", const=
 parser.add_argument("--mode", type=str, help="benchmark mode of performance or accuracy")
 parser.add_argument("--intra_op_num_threads", type=int, default=24)
 parser.add_argument("--trust_remote_code", type=bool, default=False)
+parser.add_argument("--layer_wise", action="store_true", default=False)
+parser.add_argument("--quantize_lm_head", action="store_true", default=False,
+                    help="language modelling head will not be quantized by default. Doesn't take effect when 'algorithm' is 'WOQ_TUNE'")
+parser.add_argument("--nodes_to_exclude", nargs="+", default=[],
+                    help="nodes that will not be quantized. Doesn't take effect when 'algorithm' is 'WOQ_TUNE'")
 args = parser.parse_args()
 
+if not os.path.exists(args.output_model):
+    os.makedirs(args.output_model)
+
 # load model
-tokenizer = transformers.LlamaTokenizer.from_pretrained(args.tokenizer)
-model_config = transformers.LlamaConfig.from_pretrained(args.model_path)
+tokenizer = transformers.AutoTokenizer.from_pretrained(args.tokenizer)
+model_config = transformers.AutoConfig.from_pretrained(args.model_path)
 
 
 def tokenize_function(examples):
@@ -110,7 +118,8 @@ def replace_architectures(json_path):
     # refer to https://github.com/huggingface/transformers/issues/22222#issuecomment-1477171703
     with open(json_path, "r") as file:
         data = json.load(file)
-        data["architectures"] = ["LlamaForCausalLM"]
+        if data["architectures"] == ["LLaMATokenizer"]:
+            data["architectures"] = ["LlamaForCausalLM"]
 
     with open(json_path, "w") as file:
         json.dump(data, file, indent=4)
@@ -327,15 +336,20 @@ if __name__ == "__main__":
         model_name = "model.onnx"  # require optimum >= 1.14.0
         model_path = os.path.join(args.model_path, model_name)
         best_model = None
+
+        nodes_to_exclude=["/lm_head/MatMul"] if not args.quantize_lm_head else []
+        print(nodes_to_exclude, args.nodes_to_exclude)
+        nodes_to_exclude = list(set(args.nodes_to_exclude + nodes_to_exclude))
         if args.algorithm.upper() == "RTN":
-            algo_config = matmul_nbits_quantizer.RTNWeightOnlyQuantConfig(layer_wise_quant=True)
+            algo_config = matmul_nbits_quantizer.RTNWeightOnlyQuantConfig(
+                layer_wise_quant=args.layer_wise)
             quant = matmul_nbits_quantizer.MatMulNBitsQuantizer(
                 model_path,
                 n_bits=4,
                 block_size=32,
                 is_symmetric=True,
                 algo_config=algo_config,
-                optimization_level=ort.GraphOptimizationLevel.ORT_DISABLE_ALL,
+                nodes_to_exclude=nodes_to_exclude,
             )
             quant.process()
             best_model = quant.model
@@ -351,6 +365,7 @@ if __name__ == "__main__":
                 block_size=32,
                 is_symmetric=True,
                 algo_config=algo_config,
+                nodes_to_exclude=nodes_to_exclude,
             )
             quant.process()
             best_model = quant.model
@@ -358,7 +373,8 @@ if __name__ == "__main__":
         elif args.algorithm.upper() == "GPTQ":
             calibration_data_reader = GPTQDataloader(model_path, seqlen=args.seqlen, batch_size=1)
             algo_config = matmul_nbits_quantizer.GPTQWeightOnlyQuantConfig(
-                calibration_data_reader=calibration_data_reader, layer_wise_quant=True
+                calibration_data_reader=calibration_data_reader,
+                layer_wise_quant=args.layer_wise
             )
             quant = matmul_nbits_quantizer.MatMulNBitsQuantizer(
                 model_path,
@@ -366,6 +382,7 @@ if __name__ == "__main__":
                 block_size=32,
                 is_symmetric=False,
                 algo_config=algo_config,
+                nodes_to_exclude=nodes_to_exclude,
             )
             quant.process()
             best_model = quant.model
