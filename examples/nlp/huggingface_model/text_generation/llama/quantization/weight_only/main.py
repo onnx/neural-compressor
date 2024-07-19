@@ -335,7 +335,6 @@ if __name__ == "__main__":
                 block_size=32,
                 is_symmetric=True,
                 algo_config=algo_config,
-                optimization_level=ort.GraphOptimizationLevel.ORT_DISABLE_ALL,
             )
             quant.process()
             best_model = quant.model
