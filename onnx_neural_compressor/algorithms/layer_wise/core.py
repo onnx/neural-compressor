@@ -53,7 +53,7 @@ def layer_wise_quant(
         "import onnxruntime.tools.symbolic_shape_infer as symbolic_shape_infer\n"
         "model = onnx.load(your_model_path)\n"
         "out = symbolic_shape_infer.SymbolicShapeInference.infer_shapes(model, auto_merge=True)\n"
-        "onnx.save(out, infer_shape_model_path)\n"
+        "onnx.save_model(out, infer_shape_model_path, save_as_external_data=True)\n"
     )
 
     if not isinstance(model, onnx_model.ONNXModel):
@@ -123,7 +123,10 @@ def layer_wise_quant(
 
             # next_data_reader contains split_model_part_1 output data
             complete_data_reader = _prepare_data_reader_for_next_split_model(
-                split_model_part_1.model_path, [i.name for i in split_model_part_2.model.graph.input], complete_data_reader, providers
+                split_model_part_1.model_path,
+                [i.name for i in split_model_part_2.model.graph.input],
+                complete_data_reader,
+                providers,
             )
 
             lwq_data_reader.append(complete_data_reader)
@@ -281,9 +284,7 @@ def _prepare_data_reader_for_next_split_model(
         if not inputs:
             break
         out = session.run(None, {name: inputs[name] for name in input_names})
-        filter_input = {
-            name: value for name, value in zip(output_names, out)
-        }
+        filter_input = {name: value for name, value in zip(output_names, out)}
         for name, value in inputs.items():
             if name in next_model_input_names and name not in filter_input:
                 filter_input[name] = value
