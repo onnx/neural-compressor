@@ -1,0 +1,121 @@
+trigger: none
+
+pr:
+  autoCancel: true
+  drafts: false
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - onnx_neural_compressor
+      - setup.py
+      - requirements.txt
+      - .azure-pipelines/scripts/models
+      - .azure-pipelines/model-test.yml
+      - .azure-pipelines/template/model-template.yml
+    exclude:
+      - test
+
+variables:
+  OUT_SCRIPT_PATH: $(Build.SourcesDirectory)/.azure-pipelines/scripts/models
+  SCRIPT_PATH: /neural_compressor/.azure-pipelines/scripts
+
+parameters:
+  - name: algorithms
+    type: object
+    default:
+      - SQ
+      - WOQ
+  - name: models
+    type: object
+    default:
+      - bert_base_MRPC
+      - bert_base_MRPC_dynamic
+      - resnet50-v1-12_qdq
+      - resnet50-v1-12
+
+stages:
+  # - stage: ONNX_LLM_Models
+  #   displayName: Run ONNX LLM Model
+  #   pool: ICX-16C
+  #   dependsOn: []
+  #   jobs:
+  #     - ${{ each algorithm in parameters.algorithms }}:
+  #         - job:
+  #           steps:
+  #             - template: template/model-template.yml
+  #               parameters:
+  #                 modelName: "facebook/opt-125m"
+  #                 algorithm: "${{ algorithm }}"
+  #                 script_path: "run_onnxrt_llm_models_trigger.sh"
+
+  - stage: ONNX_Models
+    displayName: Run ONNX Model
+    pool: MODEL_PERF_TEST
+    dependsOn: []
+    jobs:
+      - ${{ each model in parameters.models }}:
+          - job:
+            displayName: ${{ model }}
+            steps:
+              - template: template/model-template.yml
+                parameters:
+                  modelName: "${{ model }}"
+                  algorithm: "Quantize"
+                  script_path: "run_onnxrt_models_trigger.sh"
+
+  - stage: GenerateLogs
+    displayName: Generate Report
+    pool:
+      vmImage: "ubuntu-latest"
+    dependsOn: [ONNX_Models]
+    jobs:
+      - job: GenerateReport
+        steps:
+          - script: |
+              echo ${BUILD_SOURCESDIRECTORY}
+              rm -fr ${BUILD_SOURCESDIRECTORY} || sudo rm -fr ${BUILD_SOURCESDIRECTORY} || true
+              echo y | docker system prune
+            displayName: "Clean workspace"
+          - checkout: self
+            clean: true
+            displayName: "Checkout out Repo"
+          - task: DownloadPipelineArtifact@2
+            inputs:
+              artifact:
+              patterns: "**/result.json"
+              path: $(OUT_SCRIPT_PATH)
+          - task: UsePythonVersion@0
+            displayName: "Use Python 3.10"
+            inputs:
+              versionSpec: "3.10"
+          - script: |
+              cd ${OUT_SCRIPT_PATH}
+              mkdir generated last_generated
+              python -u summarize_results.py --logs_dir $(OUT_SCRIPT_PATH) --output_dir generated
+            displayName: "Summarize all results"
+          - task: DownloadPipelineArtifact@2
+            continueOnError: true
+            inputs:
+              source: "specific"
+              artifact: "FinalReport"
+              patterns: "**.json"
+              path: $(OUT_SCRIPT_PATH)/last_generated
+              project: $(System.TeamProject)
+              pipeline: "onc model test"
+              runVersion: "specific"
+              runId: $(refer_buildId)
+            displayName: "Download last logs"
+          - script: |
+              echo "------ Generating final report.html ------"
+              cd ${OUT_SCRIPT_PATH}
+              pip install jinja2
+              python generate_report.py --json_path generated/summary.json --last_json_path last_generated/summary.json
+            displayName: "Generate report"
+          - task: PublishPipelineArtifact@1
+            inputs:
+              targetPath: $(OUT_SCRIPT_PATH)/generated
+              artifact: FinalReport
+              publishLocation: "pipeline"
+            displayName: "Publish report"

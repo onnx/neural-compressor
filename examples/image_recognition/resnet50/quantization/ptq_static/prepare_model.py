@@ -1,7 +1,7 @@
 import argparse
 import os
 import sys
-import urllib
+import urllib.request
 
 MODEL_URL = "https://github.com/onnx/models/raw/main/validated/vision/classification/resnet/model/resnet50-v1-12.onnx"
 MAX_TIMES_RETRY_DOWNLOAD = 5
