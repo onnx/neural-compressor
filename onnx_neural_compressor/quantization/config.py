@@ -1525,7 +1525,7 @@ class StaticQuantConfig(BaseConfig, ort_quant.StaticQuantConfig):
         calibration_data_reader: data_reader.CalibrationDataReader = None,
         calibrate_method=quantization.CalibrationMethod.MinMax,
         quant_format=quantization.QuantFormat.QOperator,
-        activation_type=quantization.QuantType.QInt8,
+        activation_type=quantization.QuantType.QUInt8,
         weight_type=quantization.QuantType.QInt8,
         op_types_to_quantize=None,
         nodes_to_quantize=None,
