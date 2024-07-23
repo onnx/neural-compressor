@@ -121,7 +121,7 @@ def layer_wise_quant(
                 split_model_part_1.model, complete_data_reader
             )
 
-            # next_data_reader contains split_model_part_1 output data
+            # complete_data_reader contains split_model_part_1 output data
             complete_data_reader = _prepare_data_reader_for_next_split_model(
                 split_model_part_1.model_path,
                 [i.name for i in split_model_part_2.model.graph.input],
