@@ -248,7 +248,9 @@ class ONNXModel:
         else:
             onnx.save(self.model, root)
 
-        if self._config is not None:
+        self._model_path = root
+
+        if self._config is not None and not os.path.exists(os.path.join(os.path.split(root)[0], "config.json")):
             model_type = "" if not hasattr(self._config, "model_type") else getattr(self._config, "model_type")
             setattr(self._config.__class__, "model_type", model_type)
             output_config_file = pathlib.Path(root).parent.joinpath("config.json").as_posix()
