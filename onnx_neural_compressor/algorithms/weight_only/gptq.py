@@ -380,6 +380,7 @@ def gptq_quantize(
     if return_modelproto:
         return model.model
     else:
+        model.save(model.model_path + "_quant.onnx")
         return model
 
 

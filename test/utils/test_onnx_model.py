@@ -146,11 +146,7 @@ class TestONNXModel(unittest.TestCase):
         save_path = ".large_model_save.onnx"
         model.save(save_path)
 
-        # test save path does not exist
-        with self.assertRaises(ValueError) as cm:
-            save_path = "./gptj_output/test.onnx"
-            model.save(save_path)
-        self.assertEqual(str(cm.exception), '"root" directory does not exists.')
+        self.assertEqual(model.model_path, ".large_model_save.onnx")
 
     def test_get_initializer_share_num(self):
         model = onnx_model.ONNXModel(self.matmul_add_model)

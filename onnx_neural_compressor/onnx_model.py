@@ -233,7 +233,7 @@ class ONNXModel:
     def save(self, root):
         """Save ONNX model."""
         if os.path.split(root)[0] != "" and not os.path.exists(os.path.split(root)[0]):
-            raise ValueError('"root" directory does not exists.')
+            os.mkdir(os.path.split(root)[0])
         if self.is_large_model:  # pragma: no cover
             onnx.external_data_helper.load_external_data_for_model(self.model, os.path.split(self._model_path)[0])
             onnx.save_model(
@@ -248,7 +248,9 @@ class ONNXModel:
         else:
             onnx.save(self.model, root)
 
-        if self._config is not None:
+        self._model_path = root
+
+        if self._config is not None and not os.path.exists(os.path.join(os.path.split(root)[0], "config.json")):
             model_type = "" if not hasattr(self._config, "model_type") else getattr(self._config, "model_type")
             setattr(self._config.__class__, "model_type", model_type)
             output_config_file = pathlib.Path(root).parent.joinpath("config.json").as_posix()
@@ -897,30 +899,44 @@ class ONNXModel:
         split_model_part_2.CopyFrom(self.model)
         split_model_part_2.graph.ClearField("node")
 
-        split_node_output = None
-        part_idx = 1
+        split_node = None
+        nodes = []
         for node in self.model.graph.node:
-            if part_idx == 1:
-                split_model_part_1.graph.node.append(node)
-            elif part_idx == 2:
-                split_model_part_2.graph.node.append(node)
+            nodes.append(node)
 
             if node.name == split_node_name:
-                split_node_output = node.output
-                part_idx = 2
+                split_node = node
+                break
 
-        assert len(split_node_output) == 1, (
+        assert len(split_node.output) == 1, (
             "Only support split at node with 1 output tensor, while "
-            "current split node {} has {} output tensors".format(split_node_name, len(split_node_output))
+            "current split node {} has {} output tensors".format(split_node_name, len(split_node.output))
         )
-        split_tensor_name = split_node_output[0]
+        split_tensor_name = split_node.output[0]
 
         split_tensor = self._build_input_output_tensor(split_tensor_name, value_info)
 
+        split_model_part_1.graph.node.extend(nodes)
         split_model_part_1.graph.output.append(split_tensor)
-        split_model_part_2.graph.input.append(split_tensor)
-
         split_model_part_1 = ONNXModel(split_model_part_1, ignore_warning=True)
+
+        # remove isolated graphs which are not related to the split_node
+        output_name_to_node = split_model_part_1.output_name_to_node()
+        valid_nodes = [split_node]
+        while len(valid_nodes) > 0:
+            node = valid_nodes.pop(0)
+            for inp in node.input:
+                if inp in output_name_to_node:
+                    valid_nodes.append(output_name_to_node[inp])
+            if node in nodes:
+                nodes.remove(node)
+        split_model_part_1.remove_nodes(nodes)
+
+        for node in self.model.graph.node:
+            if node not in split_model_part_1.nodes():
+                split_model_part_2.graph.node.append(node)
+
+        split_model_part_2.graph.input.append(split_tensor)
         split_model_part_2 = ONNXModel(split_model_part_2, ignore_warning=True)
 
         # remove unused input & output
@@ -994,14 +1010,14 @@ class ONNXModel:
         """Remove unused input & output for split model."""
         remove_outputs = []
         remove_inputs = []
-        if len(self._input_name_to_nodes) == 0:
-            self._input_name_to_nodes = self.input_name_to_nodes()
+        input_name_to_nodes = self.input_name_to_nodes()
+        output_name_to_node = self.output_name_to_node()
         for output in self.model.graph.output:
-            if output.name not in self._output_name_to_node.keys():
+            if output.name not in output_name_to_node.keys():
                 remove_outputs.append(output)
 
         for input in self.model.graph.input:
-            if input.name not in self._input_name_to_nodes.keys():
+            if input.name not in input_name_to_nodes.keys():
                 remove_inputs.append(input)
 
         for output in remove_outputs:
