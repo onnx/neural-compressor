@@ -1249,6 +1249,7 @@ class ExtraOptions:
         SmoothQuantOpTypes=["Gemm", "Conv", "MatMul", "FusedConv"],
         SmoothQuantCalibIter=100,
         SmoothQuantScalesPerOp=True,
+        GemmToMatMul=True,
         **kwargs,
     ):
         self.ActivationSymmetric = ActivationSymmetric
@@ -1262,6 +1263,7 @@ class ExtraOptions:
         self.SmoothQuantOpTypes = SmoothQuantOpTypes
         self.SmoothQuantCalibIter = SmoothQuantCalibIter
         self.SmoothQuantScalesPerOp = SmoothQuantScalesPerOp
+        self.GemmToMatMul = GemmToMatMul
 
 
 def static_basic_check(config, optype, execution_provider, quant_format):
@@ -1545,7 +1547,6 @@ class StaticQuantConfig(BaseConfig, ort_quant.StaticQuantConfig):
         Inherit from StaticQuantConfig:
         https://github.com/microsoft/onnxruntime/blob/v1.17.1/onnxruntime/python/tools/quantization/quantize.py#L78
         extra_options:
-            Support smoothquant args.
             - SmoothQuant = True/False :
                 Default is False. If enabled, SmoothQuant algorithm will be applied before quantization to do
                 fake input channel quantization.
@@ -1565,6 +1566,8 @@ class StaticQuantConfig(BaseConfig, ort_quant.StaticQuantConfig):
                 Default is True. It only works if SmoothQuant is True.
                 If enabled, each op will have an individual scale, mainlyfor accuracy.
                 If not enabled,  ops with the same input will share a scale, mainly for performance.
+            - GemmToMatMul = True/False :
+                Default is True. If enabled, Gemm will be converted to MatMul + Add.
         """
         if execution_provider is None:
             execution_provider = utility.auto_detect_ep()
@@ -1617,6 +1620,7 @@ class StaticQuantConfig(BaseConfig, ort_quant.StaticQuantConfig):
         self.optypes_to_exclude_output_quant = _extra_options.OpTypesToExcludeOutputQuantization
         self.dedicated_qdq_pair = _extra_options.DedicatedQDQPair
         self.add_qdq_pair_to_weight = _extra_options.AddQDQPairToWeight
+        self.gemm_to_matmul = _extra_options.GemmToMatMul
         self.white_list = white_list
         self._post_init()
 

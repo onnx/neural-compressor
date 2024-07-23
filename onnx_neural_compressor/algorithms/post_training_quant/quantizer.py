@@ -982,7 +982,6 @@ class DynamicQuantizer(Quantizer):
         self,
         model,
         q_config,
-        quantization_params={},
         op_types_to_quantize=[],
         fallback_list=["fp32"],
         reduce_range=None,
@@ -993,12 +992,9 @@ class DynamicQuantizer(Quantizer):
         Args:
             model (ModelProto or onnx_model.ONNXModel): onnx model or onnx model wrapper by neural compressor
             q_config (dict): op-wise quantization config.
-            quantization_params (dict): scale and zero point of tensors
             op_types_to_quantize (list): optypes to quantize
             fallback_list (list, optional): fallback data type. Defaults to ['fp32'].
             reduce_range (bool, optional): use 7 bit or not. Defaults to None.
-            add_qdq_pair_to_weight (bool, optional): add QDQ pair to weight or not. Defaults to False.
-            dedicated_qdq_pair (bool, optional): dedicate QDQ pair or not. Defaults to False.
             execution_provider (str, optional): execution_provider of onnxrt adaptor. Defaults to CPUExecutionProvider
         """
         super().__init__(
@@ -1006,7 +1002,7 @@ class DynamicQuantizer(Quantizer):
             model=model,
             q_config=q_config,
             static=False,
-            quantization_params=quantization_params,
+            quantization_params={},
             op_types_to_quantize=op_types_to_quantize,
         )
 

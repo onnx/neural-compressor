@@ -19,7 +19,7 @@ from typing import Union
 import onnx
 import onnxruntime as ort
 
-from onnx_neural_compressor import constants, data_reader, logger, utility
+from onnx_neural_compressor import constants, data_reader, logger, onnx_model, utility
 from onnx_neural_compressor.algorithms.post_training_quant import calibrate, quantizer
 from onnx_neural_compressor.algorithms.smoother import core
 from onnx_neural_compressor.algorithms.weight_only import awq, gptq, rtn
@@ -126,38 +126,46 @@ def static_quantize_entry(
         calibration_data_reader, data_reader.CalibrationDataReader
     ), "Please follow onnx_neural_compressor/quantization/calibrate.py to implement calibration_data_reader"
 
-    if len(quant_config.config_mapping) == 0:
-        # map config to each op
-        model_info = config.StaticQuantConfig.get_model_info(model=model)
-        config_mapping = quant_config.to_config_mapping(model_info=model_info)
-        logger.debug(config_mapping)
-    else:
-        config_mapping = quant_config.config_mapping
 
-    calibration_data_reader.rewind()
-    augment = calibrate.ONNXRTAugment(
-        model,
-        calibration_data_reader,
-        dump_op_types=quant_config.op_types_to_quantize,
-        execution_provider=quant_config.execution_provider,
-        iterations=list(range(0, quant_config.calibration_sampling_size)),
-    )
-    min_max = augment.dump_minmax(config_mapping)
-    quantize_params = augment.dump_calibration(config_mapping, min_max=min_max)
-    _quantizer = quantizer.StaticQuantizer(
-        model,
-        config_mapping,
-        quant_format=quant_config.quant_format.name.lower(),
-        quantization_params=quantize_params,
-        op_types_to_quantize=quant_config.op_types_to_quantize,
-        execution_provider=quant_config.execution_provider,
-        optypes_to_exclude_output_quant=quant_config.optypes_to_exclude_output_quant,
-        dedicated_qdq_pair=quant_config.dedicated_qdq_pair,
-        add_qdq_pair_to_weight=quant_config.add_qdq_pair_to_weight,
-    )
-    _quantizer.quantize_model()
-    if model_output is not None:
-        _quantizer.model.save(model_output)
+    with tempfile.TemporaryDirectory(prefix="ort.quant.") as tmp_dir:
+        if quant_config.gemm_to_matmul:
+            onc_model = onnx_model.ONNXModel(model)
+            onc_model.replace_gemm_with_matmul()
+            onc_model.save(pathlib.Path(tmp_dir).joinpath("tmp.onnx").as_posix())
+            model = onc_model.model_path
+
+        if len(quant_config.config_mapping) == 0:
+            # map config to each op
+            model_info = config.StaticQuantConfig.get_model_info(model=model)
+            config_mapping = quant_config.to_config_mapping(model_info=model_info)
+            logger.debug(config_mapping)
+        else:
+            config_mapping = quant_config.config_mapping
+
+        calibration_data_reader.rewind()
+        augment = calibrate.ONNXRTAugment(
+            model,
+            calibration_data_reader,
+            dump_op_types=quant_config.op_types_to_quantize,
+            execution_provider=quant_config.execution_provider,
+            iterations=list(range(0, quant_config.calibration_sampling_size)),
+        )
+        min_max = augment.dump_minmax(config_mapping)
+        quantize_params = augment.dump_calibration(config_mapping, min_max=min_max)
+        _quantizer = quantizer.StaticQuantizer(
+            model,
+            config_mapping,
+            quant_format=quant_config.quant_format.name.lower(),
+            quantization_params=quantize_params,
+            op_types_to_quantize=quant_config.op_types_to_quantize,
+            execution_provider=quant_config.execution_provider,
+            optypes_to_exclude_output_quant=quant_config.optypes_to_exclude_output_quant,
+            dedicated_qdq_pair=quant_config.dedicated_qdq_pair,
+            add_qdq_pair_to_weight=quant_config.add_qdq_pair_to_weight,
+        )
+        _quantizer.quantize_model()
+        if model_output is not None:
+            _quantizer.model.save(model_output)
     return _quantizer.model.model
 
 
@@ -227,20 +235,27 @@ def dynamic_quantize_entry(
         logger.warning("No candidate op type to do quantization, exit.")
         exit(0)
 
-    if len(quant_config.config_mapping) == 0:
-        # map config to each op
-        model_info = config.DynamicQuantConfig.get_model_info(model=model)
-        config_mapping = quant_config.to_config_mapping(model_info=model_info)
-        logger.debug(config_mapping)
-    else:
-        config_mapping = quant_config.config_mapping
+    with tempfile.TemporaryDirectory(prefix="ort.quant.") as tmp_dir:
+        if quant_config.gemm_to_matmul:
+            onc_model = onnx_model.ONNXModel(model)
+            onc_model.replace_gemm_with_matmul()
+            onc_model.save(pathlib.Path(tmp_dir).joinpath("tmp.onnx").as_posix())
+            model = onc_model.model_path
 
-    _quantizer = quantizer.DynamicQuantizer(
-        model,
-        config_mapping,
-        op_types_to_quantize=quant_config.op_types_to_quantize,
-    )
-    _quantizer.quantize_model()
-    if model_output is not None:
-        _quantizer.model.save(model_output)
+        if len(quant_config.config_mapping) == 0:
+            # map config to each op
+            model_info = config.DynamicQuantConfig.get_model_info(model=model)
+            config_mapping = quant_config.to_config_mapping(model_info=model_info)
+            logger.debug(config_mapping)
+        else:
+            config_mapping = quant_config.config_mapping
+
+        _quantizer = quantizer.DynamicQuantizer(
+            model,
+            config_mapping,
+            op_types_to_quantize=quant_config.op_types_to_quantize,
+        )
+        _quantizer.quantize_model()
+        if model_output is not None:
+            _quantizer.model.save(model_output)
     return _quantizer.model.model

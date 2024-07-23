@@ -57,6 +57,39 @@ def build_matmul_model():
     model = onnx.helper.make_model(graph, **{"opset_imports": [onnx.helper.make_opsetid("", 13)]})
     return model
 
+def build_gemm_model():
+    input_name = "input"
+    output_name = "output"
+    initializers = []
+    weight_shape = [100, 10]
+    weight_name = "linear1.weight"
+    bias_shape = [100]
+    bias_name = "linear1.bias"
+    node_name = "gemm"
+
+    weight_data = np.random.normal(0, 0.1, weight_shape).astype(np.float32)
+    initializers.append(onnx.numpy_helper.from_array(weight_data, name=weight_name))
+
+    bias_data = np.random.normal(0, 0.1, bias_shape).astype(np.float32)
+    initializers.append(onnx.numpy_helper.from_array(bias_data, name=bias_name))
+
+    gemm1_node = onnx.helper.make_node(
+        "Gemm", [input_name, weight_name, bias_name], [output_name], alpha=1.0, beta=1.0, transB=1, name=node_name
+    )
+
+    gemm1_output_name = "gemm1_output"
+    input_tensor = onnx.helper.make_tensor_value_info(input_name, onnx.TensorProto.FLOAT, [-1, 10])
+    output_tensor = onnx.helper.make_tensor_value_info(output_name, onnx.TensorProto.FLOAT, [-1, 100])
+    graph_name = "gemm_test"
+    graph = onnx.helper.make_graph(
+        [gemm1_node],
+        graph_name,
+        [input_tensor],
+        [output_tensor],
+        initializer=initializers,
+    )
+    model = onnx.helper.make_model(graph, opset_imports=[onnx.helper.make_opsetid("", 13)])
+    return model
 
 class TestONNXModel(unittest.TestCase):
 
@@ -82,16 +115,33 @@ class TestONNXModel(unittest.TestCase):
         matmul_add_model = build_matmul_model()
         onnx.save(matmul_add_model, "matmul_add.onnx")
         self.matmul_add_model = "matmul_add.onnx"
+        gemm_model = build_gemm_model()
+        onnx.save(gemm_model, "gemm.onnx")
+        self.gemm_model = "gemm.onnx"
 
     @classmethod
     def tearDownClass(self):
         shutil.rmtree("./gptj", ignore_errors=True)
         shutil.rmtree("./large_model", ignore_errors=True)
         os.remove("matmul_add.onnx")
+        os.remove("gemm.onnx")
+        os.remove("model1.onnx")
+        os.remove("large_model_save.onnx")
+        os.remove("large_model_save.onnx_data")
 
     def setUp(self):
         # print the test name
         logger.info(f"Running ONNXRT TestONNXModel test: {self.id()}")
+
+    def test_gemm_to_matmul(self):
+        model = onnx_model.ONNXModel(self.gemm_model)
+        self.assertTrue("Gemm" in set([i.op_type for i in model.nodes()]))
+        self.assertTrue("MatMul" not in set([i.op_type for i in model.nodes()]))
+
+        model.replace_gemm_with_matmul()
+        self.assertTrue("Gemm" not in set([i.op_type for i in model.nodes()]))
+        self.assertTrue("MatMul" in set([i.op_type for i in model.nodes()]))
+        self.assertTrue("Add" in set([i.op_type for i in model.nodes()]))
 
     def test_model_atrribute(self):
         model = onnx_model.ONNXModel(self.gptj)
@@ -143,7 +193,7 @@ class TestONNXModel(unittest.TestCase):
 
         # test large model save
         model = onnx_model.ONNXModel(self.large_model)
-        save_path = ".large_model_save.onnx"
+        save_path = "large_model_save.onnx"
         model.save(save_path)
 
         # test save path does not exist
