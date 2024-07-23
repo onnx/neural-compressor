@@ -94,7 +94,7 @@ parser.add_argument("--intra_op_num_threads", type=int, default=24)
 parser.add_argument("--trust_remote_code", type=bool, default=False)
 parser.add_argument("--layer_wise", action="store_true", default=False)
 parser.add_argument("--quantize_lm_head", action="store_true", default=False,
-                    help="language modelling head will not be quantized by default. Doesn't take effect when 'algorithm' is 'WOQ_TUNE'")
+                    help="language modeling head will not be quantized by default. Doesn't take effect when 'algorithm' is 'WOQ_TUNE'")
 parser.add_argument("--nodes_to_exclude", nargs="+", default=[],
                     help="nodes that will not be quantized. Doesn't take effect when 'algorithm' is 'WOQ_TUNE'")
 args = parser.parse_args()
