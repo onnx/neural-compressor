@@ -57,7 +57,7 @@ function run_tuning {
     fi
 
     if [[ "${input_model}" =~ "Phi-3-mini-128k-instruct" ]]; then
-        nodes_to_exclude="/model/layers./self_attn/qkv_proj/MatMul /model/layers./mlp/down_proj/MatMul"
+        nodes_to_exclude="/model/layers.*/self_attn/qkv_proj/MatMul /model/layers.*/mlp/down_proj/MatMul"
         extra_cmd="--nodes_to_exclude ${nodes_to_exclude}"
     fi
     if [[ "${input_model}" =~ "Meta-Llama-3-8B" ]]; then

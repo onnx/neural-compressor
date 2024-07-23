@@ -99,12 +99,12 @@ parser.add_argument("--nodes_to_exclude", nargs="+", default=[],
                     help="nodes that will not be quantized. Doesn't take effect when 'algorithm' is 'WOQ_TUNE'")
 args = parser.parse_args()
 
-if not os.path.exists(args.output_model):
+if args.tune and not os.path.exists(args.output_model):
     os.makedirs(args.output_model)
 
 # load model
 tokenizer = transformers.AutoTokenizer.from_pretrained(args.tokenizer)
-model_config = transformers.AutoConfig.from_pretrained(args.model_path)
+model_config = transformers.AutoConfig.from_pretrained(args.model_path, trust_remote_code=True)
 
 
 def tokenize_function(examples):
