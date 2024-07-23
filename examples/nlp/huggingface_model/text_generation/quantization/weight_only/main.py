@@ -93,10 +93,18 @@ parser.add_argument("--mode", type=str, help="benchmark mode of performance or a
 parser.add_argument("--intra_op_num_threads", type=int, default=24)
 parser.add_argument("--trust_remote_code", type=bool, default=False)
 parser.add_argument("--layer_wise", action="store_true", default=False)
-parser.add_argument("--quantize_lm_head", action="store_true", default=False,
-                    help="language modeling head will not be quantized by default. Doesn't take effect when 'algorithm' is 'WOQ_TUNE'")
-parser.add_argument("--nodes_to_exclude", nargs="+", default=[],
-                    help="nodes that will not be quantized. Doesn't take effect when 'algorithm' is 'WOQ_TUNE'")
+parser.add_argument(
+    "--quantize_lm_head",
+    action="store_true",
+    default=False,
+    help="language modeling head will not be quantized by default. Doesn't take effect when 'algorithm' is 'WOQ_TUNE'",
+)
+parser.add_argument(
+    "--nodes_to_exclude",
+    nargs="+",
+    default=[],
+    help="nodes that will not be quantized. Doesn't take effect when 'algorithm' is 'WOQ_TUNE'",
+)
 args = parser.parse_args()
 
 if args.tune and not os.path.exists(args.output_model):
@@ -337,11 +345,10 @@ if __name__ == "__main__":
         model_path = os.path.join(args.model_path, model_name)
         best_model = None
 
-        nodes_to_exclude=["/lm_head/MatMul"] if not args.quantize_lm_head else []
+        nodes_to_exclude = ["/lm_head/MatMul"] if not args.quantize_lm_head else []
         nodes_to_exclude = list(set(args.nodes_to_exclude + nodes_to_exclude))
         if args.algorithm.upper() == "RTN":
-            algo_config = matmul_nbits_quantizer.RTNWeightOnlyQuantConfig(
-                layer_wise_quant=args.layer_wise)
+            algo_config = matmul_nbits_quantizer.RTNWeightOnlyQuantConfig(layer_wise_quant=args.layer_wise)
             quant = matmul_nbits_quantizer.MatMulNBitsQuantizer(
                 model_path,
                 n_bits=4,
@@ -372,8 +379,7 @@ if __name__ == "__main__":
         elif args.algorithm.upper() == "GPTQ":
             calibration_data_reader = GPTQDataloader(model_path, seqlen=args.seqlen, batch_size=1)
             algo_config = matmul_nbits_quantizer.GPTQWeightOnlyQuantConfig(
-                calibration_data_reader=calibration_data_reader,
-                layer_wise_quant=args.layer_wise
+                calibration_data_reader=calibration_data_reader, layer_wise_quant=args.layer_wise
             )
             quant = matmul_nbits_quantizer.MatMulNBitsQuantizer(
                 model_path,

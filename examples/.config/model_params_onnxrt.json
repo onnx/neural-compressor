@@ -1,58 +1,79 @@
 {
     "onnxrt": {
       "llama-2-7b-rtn": {
-        "model_src_dir": "nlp/huggingface_model/text_generation/llama/quantization/weight_only",
+        "model_src_dir": "nlp/huggingface_model/text_generation/quantization/weight_only",
         "dataset_location": "",
         "input_model": "/tf_dataset2/models/onnx/Llama-2-7b-hf",
         "main_script": "main.py",
         "batch_size": 1
       },
       "llama-2-7b-rtn-with-past": {
-        "model_src_dir": "nlp/huggingface_model/text_generation/llama/quantization/weight_only",
+        "model_src_dir": "nlp/huggingface_model/text_generation/quantization/weight_only",
         "dataset_location": "",
         "input_model": "/tf_dataset2/models/onnx/Llama-2-7b-hf-with-past",
         "main_script": "main.py",
         "batch_size": 1
       },
       "llama-2-7b-awq": {
-        "model_src_dir": "nlp/huggingface_model/text_generation/llama/quantization/weight_only",
+        "model_src_dir": "nlp/huggingface_model/text_generation/quantization/weight_only",
         "dataset_location": "",
         "input_model": "/tf_dataset2/models/onnx/Llama-2-7b-hf",
         "main_script": "main.py",
         "batch_size": 1
       },
       "llama-2-7b-awq-with-past": {
-        "model_src_dir": "nlp/huggingface_model/text_generation/llama/quantization/weight_only",
+        "model_src_dir": "nlp/huggingface_model/text_generation/quantization/weight_only",
         "dataset_location": "",
         "input_model": "/tf_dataset2/models/onnx/Llama-2-7b-hf-with-past",
         "main_script": "main.py",
         "batch_size": 1
       },
       "llama-2-7b-gptq": {
-        "model_src_dir": "nlp/huggingface_model/text_generation/llama/quantization/weight_only",
+        "model_src_dir": "nlp/huggingface_model/text_generation/quantization/weight_only",
         "dataset_location": "",
         "input_model": "/tf_dataset2/models/onnx/Llama-2-7b-hf",
         "main_script": "main.py",
         "batch_size": 1
       },
       "llama-2-7b-gptq-with-past": {
-        "model_src_dir": "nlp/huggingface_model/text_generation/llama/quantization/weight_only",
+        "model_src_dir": "nlp/huggingface_model/text_generation/quantization/weight_only",
         "dataset_location": "",
         "input_model": "/tf_dataset2/models/onnx/Llama-2-7b-hf-with-past",
         "main_script": "main.py",
         "batch_size": 1
       },
       "llama-2-7b-woq_tune": {
-        "model_src_dir": "nlp/huggingface_model/text_generation/llama/quantization/weight_only",
+        "model_src_dir": "nlp/huggingface_model/text_generation/quantization/weight_only",
         "dataset_location": "",
         "input_model": "/tf_dataset2/models/onnx/Llama-2-7b-hf",
         "main_script": "main.py",
         "batch_size": 1
       },
       "llama-2-7b-woq_tune-with-past": {
-        "model_src_dir": "nlp/huggingface_model/text_generation/llama/quantization/weight_only",
+        "model_src_dir": "nlp/huggingface_model/text_generation/quantization/weight_only",
         "dataset_location": "",
         "input_model": "/tf_dataset2/models/onnx/Llama-2-7b-hf-with-past",
+        "main_script": "main.py",
+        "batch_size": 1
+      },
+      "llama-3-8b-gptq": {
+        "model_src_dir": "nlp/huggingface_model/text_generation/quantization/weight_only",
+        "dataset_location": "",
+        "input_model": "/tf_dataset2/models/onnx/Meta-Llama-3-8B-onnx",
+        "main_script": "main.py",
+        "batch_size": 1
+      },
+      "phi-3-mini-128k-instruct-rtn-with-past": {
+        "model_src_dir": "nlp/huggingface_model/text_generation/quantization/weight_only",
+        "dataset_location": "",
+        "input_model": "/tf_dataset2/models/onnx/Phi-3-mini-128k-instruct-onnx",
+        "main_script": "main.py",
+        "batch_size": 1
+      },
+      "qwen2-7b-instruct-rtn-with-past": {
+        "model_src_dir": "nlp/huggingface_model/text_generation/quantization/weight_only",
+        "dataset_location": "",
+        "input_model": "/tf_dataset2/models/onnx/Qwen2-7B-Instruct-onnx",
         "main_script": "main.py",
         "batch_size": 1
       },
