@@ -1525,7 +1525,7 @@ class StaticQuantConfig(BaseConfig, ort_quant.StaticQuantConfig):
         calibration_data_reader: data_reader.CalibrationDataReader = None,
         calibrate_method=quantization.CalibrationMethod.MinMax,
         quant_format=quantization.QuantFormat.QOperator,
-        activation_type=quantization.QuantType.QInt8,
+        activation_type=quantization.QuantType.QUInt8,
         weight_type=quantization.QuantType.QInt8,
         op_types_to_quantize=None,
         nodes_to_quantize=None,
@@ -1699,6 +1699,8 @@ class StaticQuantConfig(BaseConfig, ort_quant.StaticQuantConfig):
     def get_config_set_for_tuning(
         cls,
         quant_format=quantization.QuantFormat.QOperator,
+        activation_type=quantization.QuantType.QUInt8,
+        weight_type=quantization.QuantType.QInt8,
         execution_provider=None,
         op_types_to_quantize=None,
         nodes_to_exclude=None,
@@ -1733,6 +1735,8 @@ class StaticQuantConfig(BaseConfig, ort_quant.StaticQuantConfig):
         for item in op_type_candidate:
             cfg_lst.append(
                 StaticQuantConfig(
+                    activation_type=activation_type,
+                    weight_type=weight_type,
                     execution_provider=execution_provider,
                     quant_format=quant_format,
                     reduce_range=reduce_range,
@@ -2126,6 +2130,7 @@ class DynamicQuantConfig(BaseConfig, ort_quant.DynamicQuantConfig):
     @classmethod
     def get_config_set_for_tuning(
         cls,
+        weight_type=quantization.QuantType.QInt8,
         execution_provider=None,
         op_types_to_quantize: List[str] = None,
         nodes_to_exclude: List[str] = None,
@@ -2160,6 +2165,7 @@ class DynamicQuantConfig(BaseConfig, ort_quant.DynamicQuantConfig):
         for item in op_type_candidate:
             cfg_lst.append(
                 DynamicQuantConfig(
+                    weight_type=weight_type,
                     execution_provider=execution_provider,
                     op_types_to_quantize=item,
                     nodes_to_exclude=nodes_to_exclude,
