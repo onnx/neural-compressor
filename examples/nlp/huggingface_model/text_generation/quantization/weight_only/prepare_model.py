@@ -40,6 +40,7 @@ def prepare_model(input_model, output_model, task):
             "--task",
             task,
             f"{output_model}",
+            "--trust-remote-code",
         ],
         stdout=subprocess.PIPE,
         text=True,
