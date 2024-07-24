@@ -11,5 +11,5 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""ONNX Neural Compressor: An open-source Python library supporting popular model compression techniques for ONNX."""
+"""Neural Compressor: An open-source Python library supporting popular model compression techniques for ONNX models."""
 __version__ = "1.0"

@@ -9,7 +9,7 @@ Contribution Guidelines
 7. [Contributor Covenant Code of Conduct](#contributor-covenant-code-of-conduct)
 
 ## Create Pull Request
-If you have improvements to ONNX Neural Compressor, send your pull requests for
+If you have improvements to Neural Compressor, send your pull requests for
 [review](https://github.com/onnx/neural-compressor/pulls).
 If you are new to GitHub, view the pull request [How To](https://help.github.com/articles/using-pull-requests/).
 ### Step-by-Step guidelines
@@ -27,7 +27,7 @@ If you are new to GitHub, view the pull request [How To](https://help.github.com
 Before sending your pull requests, follow the information below:
 
 - Add unit tests in [Unit Tests](https://github.com/onnx/neural-compressor/tree/main/test) to cover the code you would like to contribute.
-- ONNX Neural Compressor has adopted the [Developer Certificate of Origin](https://en.wikipedia.org/wiki/Developer_Certificate_of_Origin), you must agree to the terms of Developer Certificate of Origin by signing off each of your commits with `-s`, e.g. `git commit -s -m 'This is my commit message'`.
+- Neural Compressor has adopted the [Developer Certificate of Origin](https://en.wikipedia.org/wiki/Developer_Certificate_of_Origin), you must agree to the terms of Developer Certificate of Origin by signing off each of your commits with `-s`, e.g. `git commit -s -m 'This is my commit message'`.
 
 ## Pull Request Template
 
@@ -43,7 +43,7 @@ See [PR template](/.github/pull_request_template.md)
 - Third-party dependency license compatible
 
 ## Pull Request Status Checks Overview
-ONNX Neural Compressor use [Azure DevOps](https://learn.microsoft.com/en-us/azure/devops/pipelines/?view=azure-devops) for CI test.
+Neural Compressor use [Azure DevOps](https://learn.microsoft.com/en-us/azure/devops/pipelines/?view=azure-devops) for CI test.
 And generally use [Azure Cloud Instance](https://azure.microsoft.com/en-us/pricing/purchase-options/pay-as-you-go) to deploy pipelines, e.g. Standard E16s v5.
 |     Test Name                 |     Test Scope                                |     Test Pass Criteria    |
 |-------------------------------|-----------------------------------------------|---------------------------|

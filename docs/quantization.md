@@ -3,12 +3,12 @@ Quantization
 
 1. [Quantization Introduction](#quantization-introduction)
 2. [Quantization Fundamentals](#quantization-fundamentals)
-3. [Accuracy Aware Tuning](#with-or-without-accuracy-aware-tuning)
-4. [Get Started](#get-started)
-   4.1 [Post Training Quantization](#post-training-quantization)
-   4.2 [Specify Quantization Rules](#specify-quantization-rules)
-   4.3 [Specify Quantization Backend and Device](#specify-quantization-backend-and-device)
-5. [Examples](#examples)
+3. [Get Started](#get-started)
+   3.1 [Post Training Quantization](#post-training-quantization)
+   3.2 [Specify Quantization Rules](#specify-quantization-rules)
+   3.3 [Specify Quantization Recipes](#specify-quantization-recipes)
+   3.4 [Specify Quantization Backend and Device](#specify-quantization-backend-and-device)
+4. [Examples](#examples)
 
 ## Quantization Introduction
 
@@ -54,29 +54,33 @@ Sometimes the reduce_range feature, that's using 7 bit width (1 sign bit + 6 dat
 
 | Framework | Backend Library |  Symmetric Quantization | Asymmetric Quantization |
 | :-------------- |:---------------:| ---------------:|---------------:|
-| ONNX Runtime | [MLAS](https://github.com/microsoft/onnxruntime/tree/master/onnxruntime/core/mlas) | Weight (int8) | Activation (uint8) |
+| ONNX Runtime | [MLAS](https://github.com/microsoft/onnxruntime/tree/master/onnxruntime/core/mlas) | Activation (int8/uint8), Weight (int8/uint8) | Activation (int8/uint8), Weight (int8/uint8) |
+
+> ***Note***
+>
+> Activation (uint8) + Weight (int8) is recommended for performance on x86-64 machines with AVX2 and AVX512 extensions.
 
 
 #### Quantization Scheme
 + Symmetric Quantization
-    + int8: scale = 2 * max(abs(rmin), abs(rmax)) / (max(int8) - min(int8) - 1)
+    + int8: scale = 2 * max(abs(rmin), abs(rmax)) / (max(int8) - min(int8) - 1); zero_point = 0
+    + uint8: scale = 2 * max(abs(rmin), abs(rmax)) / (max(uint8) - min(uint8)); zero_point = 0
 + Asymmetric Quantization
-    + uint8: scale = (rmax - rmin) / (max(uint8) - min(uint8)); zero_point = min(uint8)  - round(rmin / scale)
+    + int8: scale = (rmax - rmin) / (max(int8) - min(int8)); zero_point = round(min(int8) - rmin / scale)
+    + uint8: scale = (rmax - rmin) / (max(uint8) - min(uint8)); zero_point = round(min(uint8) - rmin / scale)
 
 #### Reference
 + MLAS:  [MLAS Quantization](https://github.com/microsoft/onnxruntime/blob/master/onnxruntime/python/tools/quantization/onnx_quantizer.py)
 
 ### Quantization Approaches
 
-Quantization has three different approaches:
+Quantization has two different approaches whcih belong to optimization on inference:
 1) post training dynamic quantization
 2) post training static  quantization
 
-The first two approaches belong to optimization on inference. The last belongs to optimization during training. Currently. ONNX Runtime doesn't support the last one.
-
 #### Post Training Dynamic Quantization
 
-The weights of the neural network get quantized into int8 format from float32 format offline. The activations of the neural network is quantized as well with the min/max range collected during inference runtime.
+The weights of the neural network get quantized into 8 bits format from float32 format offline. The activations of the neural network is quantized as well with the min/max range collected during inference runtime.
 
 This approach is widely used in dynamic length neural networks, like NLP model.
 
@@ -86,41 +90,19 @@ Compared with `post training dynamic quantization`, the min/max range in weights
 
 This approach is major quantization approach people should try because it could provide the better performance comparing with `post training dynamic quantization`.
 
-## With or Without Accuracy Aware Tuning
-
-Accuracy aware tuning is one of unique features provided by Neural Compressor, compared with other 3rd party model compression tools. This feature can be used to solve accuracy loss pain points brought by applying low precision quantization and other lossy optimization methods.
-
-This tuning algorithm creates a tuning space based on user-defined configurations, generates quantized graph, and evaluates the accuracy of this quantized graph. The optimal model will be yielded if the pre-defined accuracy goal is met.
-
-Neural compressor also support to quantize all quantizable ops without accuracy tuning, user can decide whether to tune the model accuracy or not. Please refer to "Get Start" below.
-
-### Working Flow
-
-Currently `accuracy aware tuning` only supports `post training quantization`.
-
-User could refer to below chart to understand the whole tuning flow.
-
-<img src="./imgs/workflow.png" width=600 height=280 alt="accuracy aware tuning working flow">
-
-
 ## Get Started
 
-The design philosophy of the quantization interface of ONNX Neural Compressor is easy-of-use. It requests user to provide `model`, `calibration dataloader`, and `evaluation function`. Those parameters would be used to quantize and tune the model.
+The design philosophy of the quantization interface of Neural Compressor is easy-of-use. It requests user to provide `model_input`, `model_output` and `quant_config`. Those parameters would be used to quantize and save the model.
 
-`model` is the framework model location or the framework model object.
+`model_input` is the ONNX model location or the ONNX model object.
 
-`calibration dataloader` is used to load the data samples for calibration phase. In most cases, it could be the partial samples of the evaluation dataset.
+`model_output` is the path to save ONNX model.
 
-If a user needs to tune the model accuracy, the user should provide `evaluation function`.
+`quant_config` is the configuration to do quantization.
 
-`evaluation function` is a function used to evaluate model accuracy. It is a optional. This function should be same with how user makes evaluation on fp32 model, just taking `model` as input and returning a scalar value represented the evaluation accuracy.
+User could leverage Neural Compressor to directly generate a fully quantized model without accuracy validation. Currently, Neural Compressor supports `Post Training Static Quantization` and `Post Training Dynamic Quantization`.
 
-User could execute:
 ### Post Training Quantization
-
-1. Without Accuracy Aware Tuning
-
-This means user could leverage ONNX Neural Compressor to directly generate a fully quantized model without accuracy aware tuning. It's user responsibility to ensure the accuracy of the quantized model meets expectation. ONNX Neural Compressor supports `Post Training Static Quantization` and `Post Training Dynamic Quantization`.
 
 ``` python
 from onnx_neural_compressor.quantization import quantize, config
@@ -138,37 +120,8 @@ qconfig = config.StaticQuantConfig(calibration_data_reader)  # or qconfig = Dyna
 quantize(model, q_model_path, qconfig)
 ```
 
-2. With Accuracy Aware Tuning
-
-This means user could leverage the advance feature of ONNX Neural Compressor to tune out a best quantized model which has best accuracy and good performance. User should provide `eval_fn`.
-
-``` python
-from onnx_neural_compressor import data_reader
-from onnx_neural_compressor.quantization import tuning, config
-
-class DataReader(data_reader.CalibrationDataReader):
-    def get_next(self): ...
-
-    def rewind(self): ...
-
-
-data_reader = DataReader()
-
-# TuningConfig can accept:
-# 1) a set of candidate configs like tuning.TuningConfig(config_set=[config.RTNConfig(weight_bits=4), config.GPTQConfig(weight_bits=4)])
-# 2) one config with a set of candidate parameters like tuning.TuningConfig(config_set=[config.GPTQConfig(weight_group_size=[32, 64])])
-# 3) our pre-defined config set like tuning.TuningConfig(config_set=config.get_woq_tuning_config())
-custom_tune_config = tuning.TuningConfig(config_set=[config.RTNConfig(weight_bits=4), config.GPTQConfig(weight_bits=4)])
-best_model = tuning.autotune(
-    model_input=model,
-    tune_config=custom_tune_config,
-    eval_fn=eval_fn,
-    calibration_data_reader=data_reader,
-)
-```
-
 ### Specify Quantization Rules
-ONNX Neural Compressor support specify quantization rules by operator name. Users can use `set_local` API of configs to achieve the above purpose by below code:
+Neural Compressor support specify quantization rules by operator name. Users can use `set_local` API of configs to achieve the above purpose by below code:
 
 ```python
 fp32_config = config.GPTQConfig(weight_dtype="fp32")
@@ -235,4 +188,4 @@ Neural-Compressor will quantized models with user-specified backend or detecting
 
 ## Examples
 
-User could refer to [examples](../../examples/onnxrt) on how to quantize a new model.
+User could refer to [examples](../../examples) on how to quantize a new model.
