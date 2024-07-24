@@ -74,7 +74,7 @@ Sometimes the reduce_range feature, that's using 7 bit width (1 sign bit + 6 dat
 
 ### Quantization Approaches
 
-Quantization has two different approaches whcih belong to optimization on inference:
+Quantization has two different approaches which belong to optimization on inference:
 1) post training dynamic quantization
 2) post training static  quantization
 
