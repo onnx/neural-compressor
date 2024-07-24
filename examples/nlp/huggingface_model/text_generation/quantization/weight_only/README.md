@@ -25,8 +25,8 @@ Note that this README.md uses meta-llama/Llama-2-7b-hf as an example. We verifie
 | [meta-llama/Llama-2-70b-hf](https://huggingface.co/meta-llama/Llama-2-70b-hf) | 80 | 64 | 8192 |
 | [meta-llama/Llama-2-70b-chat-hf](https://huggingface.co/meta-llama/Llama-2-70b-chat-hf) | 80 | 64 | 8192 |
 | [meta-llama/Meta-Llama-3-8B](https://huggingface.co/meta-llama/Meta-Llama-3-8B) | 32 | 32 | 4096 |
-| [Phi-3-mini-128k-instruct](https://huggingface.co/microsoft/Phi-3-mini-128k-instruct) | 32 | 32 | 3072 |
-| [Qwen2-72B-Instruct](https://huggingface.co/Qwen/Qwen2-72B-Instruct) | 80 | 64 | 8192 |
+| [microsoft/Phi-3-mini-128k-instruct](https://huggingface.co/microsoft/Phi-3-mini-128k-instruct) | 32 | 32 | 3072 |
+| [Qwen/Qwen2-7B-Instruct](https://huggingface.co/Qwen/Qwen2-7B-Instruct) | 28 | 28 | 3584 |
 
 Export to ONNX model:
 ```bash

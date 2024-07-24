@@ -56,24 +56,24 @@
         "main_script": "main.py",
         "batch_size": 1
       },
-      "llama-3-8b-gptq": {
+      "llama-3-8b-gptq-with-past": {
         "model_src_dir": "nlp/huggingface_model/text_generation/quantization/weight_only",
         "dataset_location": "",
-        "input_model": "/tf_dataset2/models/onnx/Meta-Llama-3-8B-onnx",
+        "input_model": "/tf_dataset2/models/onnx/Meta-Llama-3-8B-with-past",
         "main_script": "main.py",
         "batch_size": 1
       },
       "phi-3-mini-128k-instruct-rtn-with-past": {
         "model_src_dir": "nlp/huggingface_model/text_generation/quantization/weight_only",
         "dataset_location": "",
-        "input_model": "/tf_dataset2/models/onnx/Phi-3-mini-128k-instruct-onnx",
+        "input_model": "/tf_dataset2/models/onnx/Phi-3-mini-128k-instruct-with-past",
         "main_script": "main.py",
         "batch_size": 1
       },
       "qwen2-7b-instruct-rtn-with-past": {
         "model_src_dir": "nlp/huggingface_model/text_generation/quantization/weight_only",
         "dataset_location": "",
-        "input_model": "/tf_dataset2/models/onnx/Qwen2-7B-Instruct-onnx",
+        "input_model": "/tf_dataset2/models/onnx/Qwen2-7B-Instruct-with-past",
         "main_script": "main.py",
         "batch_size": 1
       },
@@ -104,6 +104,6 @@
          "input_model": "/tf_dataset2/models/onnx/resnet50-v1-12/resnet50-v1-12.onnx",
          "main_script": "main.py",
          "batch_size": 1
-      },
+      }
     }
   }
