@@ -326,10 +326,9 @@ if __name__ == "__main__":
     if args.tune:
         model_name = "model.onnx"  # require optimum >= 1.14.0
         model_path = os.path.join(args.model_path, model_name)
-
         best_model = None
         if args.algorithm.upper() == "RTN":
-            algo_config = matmul_nbits_quantizer.RTNWeightOnlyQuantConfig()
+            algo_config = matmul_nbits_quantizer.RTNWeightOnlyQuantConfig(layer_wise_quant=True)
             quant = matmul_nbits_quantizer.MatMulNBitsQuantizer(
                 model_path,
                 n_bits=4,
@@ -358,7 +357,7 @@ if __name__ == "__main__":
         elif args.algorithm.upper() == "GPTQ":
             calibration_data_reader = GPTQDataloader(model_path, seqlen=args.seqlen, batch_size=1)
             algo_config = matmul_nbits_quantizer.GPTQWeightOnlyQuantConfig(
-                calibration_data_reader=calibration_data_reader,
+                calibration_data_reader=calibration_data_reader, layer_wise_quant=True
             )
             quant = matmul_nbits_quantizer.MatMulNBitsQuantizer(
                 model_path,

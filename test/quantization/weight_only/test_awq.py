@@ -5,8 +5,9 @@ import shutil
 import unittest
 
 import numpy as np
+import onnx
+import onnxruntime as ort
 import torch
-import torch.nn as nn
 import transformers
 from optimum.exporters.onnx import main_export
 
@@ -53,6 +54,37 @@ class DummyNLPDataloader(data_reader.CalibrationDataReader):
         self.iter_next = iter(self.encoded_list)
 
 
+class MatMulDataloader(data_reader.CalibrationDataReader):
+
+    def __init__(self):
+        self.encoded_list = [{"A": torch.randn((1, 11008)).numpy()}]
+        self.iter_next = iter(self.encoded_list)
+
+    def get_next(self):
+        return next(self.iter_next, None)
+
+    def rewind(self):
+        self.iter_next = iter(self.encoded_list)
+
+
+def build_matmul_model():
+    # MatMul - Add - Add
+    A = onnx.helper.make_tensor_value_info("A", onnx.TensorProto.FLOAT, [1, 11008])
+    C = onnx.helper.make_tensor_value_info("C", onnx.TensorProto.FLOAT, [1, 1024])
+    D = onnx.helper.make_tensor_value_info("D", onnx.TensorProto.FLOAT, [1, 1024])
+
+    B_init = onnx.helper.make_tensor("B", onnx.TensorProto.FLOAT, [11008, 1024], np.random.random((11008, 1024)))
+    E_init = onnx.helper.make_tensor("E", onnx.TensorProto.FLOAT, [1, 1024], np.random.random((1, 1024)))
+
+    matmul_node = onnx.helper.make_node("MatMul", ["A", "B"], ["C"], name="Matmul")
+    add = onnx.helper.make_node("Add", ["C", "E"], ["D"], name="add")
+
+    graph = onnx.helper.make_graph([matmul_node, add], "test_graph_1", [A], [D], [B_init, E_init])
+    model = onnx.helper.make_model(graph)
+    model = onnx.helper.make_model(graph, **{"opset_imports": [onnx.helper.make_opsetid("", 13)]})
+    return model
+
+
 class TestAWQQuant(unittest.TestCase):
 
     @classmethod
@@ -63,6 +95,9 @@ class TestAWQQuant(unittest.TestCase):
         )
         self.gptj = find_onnx_file("./gptj")
         self.calibration_data_reader = DummyNLPDataloader("hf-internal-testing/tiny-random-gptj")
+
+        self.matmul_model = build_matmul_model()
+        self.matmul_data_reader = MatMulDataloader()
 
     @classmethod
     def tearDownClass(self):
@@ -274,6 +309,22 @@ class TestAWQQuantWithORTLikeAPI(TestAWQQuant):
             quant.process()
             self.assertIsNotNone(quant.model)
             self.assertEqual(self._count_woq_matmul(quant.model, bits=n_bits, group_size=32), 29)
+
+    def test_awq_with_specified_matmul(self):
+
+        algo_config = matmul_nbits_quantizer.AWQWeightOnlyQuantConfig(calibration_data_reader=self.matmul_data_reader)
+
+        quant = matmul_nbits_quantizer.MatMulNBitsQuantizer(
+            copy.deepcopy(self.matmul_model),
+            n_bits=4,
+            block_size=32,
+            is_symmetric=False,
+            algo_config=algo_config,
+            optimization_level=ort.GraphOptimizationLevel.ORT_DISABLE_ALL,
+        )
+        quant.process()
+        self.assertIsNotNone(quant.model)
+        self.assertEqual(self._count_woq_matmul(quant.model, bits=4, group_size=32), 1)
 
 
 if __name__ == "__main__":

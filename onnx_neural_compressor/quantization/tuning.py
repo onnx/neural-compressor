@@ -501,7 +501,7 @@ def autotune(
             "session.optimized_model_external_initializers_file_name", "model.onnx_data"
         )
         sess_options.add_session_config_entry("session.optimized_model_external_initializers_min_size_in_bytes", "1024")
-        session = ort.InferenceSession(model_input, sess_options)
+        session = ort.InferenceSession(model_input, sess_options, providers=["CPUExecutionProvider"])
 
         # copy config.json to tmp dir for evaluation, LLMs evaluation may need it
         if isinstance(model_input, str) and os.path.exists(
