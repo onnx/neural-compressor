@@ -132,8 +132,7 @@ op_config = config.StaticQuantConfig(per_channel=False)
 quant_config = config.StaticQuantConfig(
     per_channel=True,
 )
-quant_config.set_local(
-    "/h.4/mlp/fc_out/MatMul", op_config)
+quant_config.set_local("/h.4/mlp/fc_out/MatMul", op_config)
 ```
 
 
