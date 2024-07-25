@@ -69,7 +69,7 @@ function run_tuning {
         extra_cmd="--nodes_to_exclude ${nodes_to_exclude}"
     fi
 
-    python main.py \
+    eval "python main.py \
             --model_path ${input_model} \
 	        --tokenizer ${tokenizer-meta-llama/Llama-2-7b-hf} \
             --output_model ${output_model} \
@@ -79,7 +79,7 @@ function run_tuning {
 	        --tasks ${tasks-lambada_openai} \
             --layer_wise \
             --tune \
-            ${extra_cmd}
+            ${extra_cmd}"
 }
 
 main "$@"
