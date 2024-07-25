@@ -1,0 +1,81 @@
+parameters:
+  - name: modelName
+    type: string
+  - name: modelContainerName
+    type: string
+    default: "ONC"
+  - name: algorithm
+    type: string
+  - name: script_path
+    type: string
+    default: "run_onnxrt_models_trigger.sh"
+
+steps:
+  - template: docker-template.yml
+    parameters:
+      dockerConfigName: "commonDockerConfig"
+      repoName: "neural-compressor"
+      repoTag: "py310"
+      dockerFileName: "Dockerfile"
+      containerName: ${{ parameters.modelContainerName }}
+
+  - script: |
+      docker exec ${{ parameters.modelContainerName }} bash -c \
+        "cd /neural-compressor/.azure-pipelines/scripts/models && bash env_setup.sh --model=${{ parameters.modelName }}"
+    displayName: Env setup
+
+  - script: |
+      docker exec ${{ parameters.modelContainerName }} bash -c "cd /neural-compressor/.azure-pipelines/scripts/models \
+      && bash ${{ parameters.script_path }} --model=${{ parameters.modelName }} --stage='prepare_model'"
+    displayName: Export Models
+
+  - task: DownloadPipelineArtifact@2
+    continueOnError: true
+    inputs:
+      source: "specific"
+      artifact: "FinalReport"
+      patterns: "**.json"
+      path: $(Build.SourcesDirectory)/.azure-pipelines/scripts/models/
+      project: $(System.TeamProject)
+      pipeline: "onc model test"
+      runVersion: "specific"
+      runId: $(refer_buildId)
+    displayName: "Download refer logs"
+
+  - script: |
+      docker exec ${{ parameters.modelContainerName }} bash -c "cd /neural-compressor/.azure-pipelines/scripts/models \
+      && bash ${{ parameters.script_path }} --model=${{ parameters.modelName }} --stage='quantize'"
+    displayName: Quantize
+
+  - script: |
+      docker exec ${{ parameters.modelContainerName }} bash -c "cd /neural-compressor/.azure-pipelines/scripts/models \
+      && bash ${{ parameters.script_path }} --model=${{ parameters.modelName }} --stage='accuracy'"
+    displayName: Run Accuracy Test
+
+  - ${{ if eq(parameters.algorithm, 'Quantize') }}:
+      - script: |
+          docker exec ${{ parameters.modelContainerName }} bash -c "cd /neural-compressor/.azure-pipelines/scripts/models \
+          && bash ${{ parameters.script_path }} --model=${{ parameters.modelName }} --stage='performance'"
+        displayName: Run Performance Test
+
+  - task: Bash@3
+    inputs:
+      targetType: "inline"
+      script: |
+        docker exec ${{ parameters.modelContainerName }} bash -c "cd /neural-compressor/.azure-pipelines/scripts/models \
+        && python collect_results.py --model=${{ parameters.modelName }} --build_id=$(Build.BuildId)"
+    displayName: Collect Log & Check Results
+
+  - task: PublishPipelineArtifact@1
+    inputs:
+      targetPath: $(Build.SourcesDirectory)/.azure-pipelines/scripts/models/${{ parameters.modelName }}/
+      artifact: ${{ parameters.algorithm }}_${{ parameters.modelName }}
+      publishLocation: "pipeline"
+
+  - task: Bash@3
+    condition: always()
+    inputs:
+      targetType: "inline"
+      script: |
+        docker exec ${{ parameters.modelContainerName }} bash -c "rm -fr /neural-compressor/* && rm -fr /neural-compressor/.* || true"
+    displayName: "Docker Clean Up"

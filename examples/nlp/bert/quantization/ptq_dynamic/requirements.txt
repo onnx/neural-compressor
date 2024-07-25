@@ -6,3 +6,4 @@ onnxruntime
 coloredlogs
 sympy
 onnxruntime-extensions
+scikit-learn

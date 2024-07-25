@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ONNX Neural Compressor - Model test</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: white no-repeat left top;
+        }
+
+        #main {
+            margin: 20px auto 10px auto;
+            background: white;
+            border-radius: 8px;
+            -moz-border-radius: 8px;
+            -webkit-border-radius: 8px;
+            padding: 0 30px 30px 30px;
+            border: 1px solid #adaa9f;
+            box-shadow: 0 2px 2px #9c9c9c;
+            -moz-box-shadow: 0 2px 2px #9c9c9c;
+            -webkit-box-shadow: 0 2px 2px #9c9c9c;
+        }
+
+        .model-test-table {
+            width: 100%;
+            margin: 0 auto;
+            border-collapse: separate;
+            border-spacing: 0;
+            text-shadow: 0 1px 0 #fff;
+            color: #2a2a2a;
+            background: #fafafa;
+            background-image: -moz-linear-gradient(top, #fff, #eaeaea, #fff);
+            background-image: -webkit-gradient(linear, center bottom, center top, from(#fff), color-stop(0.5, #eaeaea), to(#fff));
+            font-family: Verdana, Arial, Helvetica
+        }
+
+        .model-test-table th,
+        td {
+            text-align: center;
+            height: 25px;
+            line-height: 25px;
+            padding: 0 8px;
+            border: 1px solid #cdcdcd;
+            box-shadow: 0 1px 0 white;
+            -moz-box-shadow: 0 1px 0 white;
+            -webkit-box-shadow: 0 1px 0 white;
+            white-space: nowrap;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="main">
+        <h1 align="center">Model test
+            [ <a href={{ info['url'] }}>Job - {{ info['build_number'] }}</a> ]
+        </h1>
+
+        <h2>Summary</h2>
+        <table class="model-test-table">
+            <tr>
+                <th>Repo</th>
+                <th colspan=4>Test Branch</th>
+                <th colspan=4>Commit ID</th>
+            </tr>
+            <tr>
+                <td><a href="https://github.com/onnx/neural-compressor.git">Neural Compressor</a></td>
+                <th colspan=4><a href={{"%s%s"|format("https://github.com/onnx/neural-compressor/tree/",
+                        info['branch'])}}>{{info['branch'] }}</a>
+                </th>
+                <th colspan=4>
+                    <a href={{"%s%s"|format("https://github.com/onnx/neural-compressor/commit/", info['commit'])}}>{{
+                        info['commit'] }}</a>
+                </th>
+            </tr>
+        </table>
+
+        <h2>Model Test</h2>
+        <table class="model-test-table" style="margin: 0 auto 0 0;">
+            <tr>
+                {% for title in ["Platform", "Model", "Accuracy(new|last)", "Ratio(Accuracy)",
+                "Performance(new|last)", "Ratio(Performance)", "Status"] %}
+                <th style="width: 5%">{{ title }}</th>
+                {% endfor %}
+            </tr>
+            <div class="user-container">
+                {% for item in data %}
+                <tr>
+                    <td>ICX</td>
+                    <td><a href={{ item.url }}>{{ item.model }}</a></td>
+                    <td>{{ item.current_accuracy }} | {{ item.last_accuracy }}</td>
+                    <td>{{ item.accuracy_ratio }}</td>
+                    <td>{{ item.current_performance }} | {{ item.last_performance }}</td>
+                    <td>{{ item.performance_ratio }}</td>
+                    {% if item.status == 'SUCCESS' %}
+                    <td style="color:green">{{ item.status }}</td>
+                    {% else %}
+                    <td style="color: red;">{{ item.status }}</td>
+                    {% endif %}
+                </tr>
+                {% endfor %}
+            </div>
+        </table>
+    </div>
+</body>
+
+</html>
