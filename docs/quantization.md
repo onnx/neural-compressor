@@ -24,7 +24,7 @@ The math equation is like: $$X_{int8} = round(Scale \times X_{fp32} + ZeroPoint)
 
 **Affine Quantization**
 
-This is so-called `asymmetric quantization`, in which we map the min/max range in the float tensor to the integer range. Here int8 range is [-128, 127], uint8 range is [0, 255].
+This is so-called `Asymmetric quantization`, in which we map the min/max range in the float tensor to the integer range. Here int8 range is [-128, 127], uint8 range is [0, 255].
 
 here:
 
