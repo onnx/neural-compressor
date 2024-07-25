@@ -9,9 +9,7 @@ Quantization
 
    3.2 [Specify Quantization Rules](#specify-quantization-rules)
 
-   3.3 [Specify Quantization Recipes](#specify-quantization-recipes)
-
-   3.4 [Specify Quantization Backend and Device](#specify-quantization-backend-and-device)
+   3.3 [Specify Quantization Backend and Device](#specify-quantization-backend-and-device)
 4. [Examples](#examples)
 
 ## Quantization Introduction
@@ -30,11 +28,11 @@ This is so-called `asymmetric quantization`, in which we map the min/max range i
 
 here:
 
-If INT8 is specified, $Scale = (|X_{f_{max}} - X_{f_{min}}|) / 127$ and $ZeroPoint = -128 - X_{f_{min}} / Scale$.
+If INT8 is specified, $Scale = (|X_{max} - X_{min}|) / 127$ and $ZeroPoint = -128 - X_{min} / Scale$.
 
 or
 
-If UINT8 is specified, $Scale = (|X_{f_{max}} - X_{f_{min}}|) / 255$ and $ZeroPoint = - X_{f_{min}} / Scale$.
+If UINT8 is specified, $Scale = (|X_{max} - X_{min}|) / 255$ and  $ZeroPoint = - X_{min} / Scale$.
 
 **Scale Quantization**
 
@@ -44,11 +42,11 @@ The math equation is like:
 
 here:
 
-If INT8 is specified, $Scale = max(abs(X_{f_{max}}), abs(X_{f_{min}})) / 127$ and $ZeroPoint = 0$.
+If INT8 is specified, $Scale = max(abs(X_{max}), abs(X_{min})) / 127$ and $ZeroPoint = 0$.
 
 or
 
-If UINT8 is specified, $Scale = max(abs(X_{f_{max}}), abs(X_{f_{min}})) / 255$ and $ZeroPoint = 128$.
+If UINT8 is specified, $Scale = max(abs(X_{max}), abs(X_{min})) / 255$ and $ZeroPoint = 128$.
 
 *NOTE*
 
