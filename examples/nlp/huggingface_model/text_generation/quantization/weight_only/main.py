@@ -112,7 +112,7 @@ if args.tune and not os.path.exists(args.output_model):
 
 # load model
 tokenizer = transformers.AutoTokenizer.from_pretrained(args.tokenizer)
-model_config = transformers.AutoConfig.from_pretrained(args.model_path, trust_remote_code=True)
+model_config = transformers.AutoConfig.from_pretrained(args.model_path, trust_remote_code=args.trust_remote_code)
 
 
 def tokenize_function(examples):

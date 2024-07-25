@@ -56,12 +56,16 @@ function run_tuning {
 	echo "Created directory $output_model"
     fi
 
-    if [[ "${input_model}" =~ "Phi-3-mini-128k-instruct" ]]; then
+    if [[ "${tokenizer}" =~ "Phi-3-mini" ]]; then
         nodes_to_exclude="/model/layers.*/self_attn/qkv_proj/MatMul /model/layers.*/mlp/down_proj/MatMul"
+        extra_cmd="--nodes_to_exclude ${nodes_to_exclude} --trust_remote_code True"
+    fi
+    if [[ "${tokenizer}" =~ "Llama-3-8B" ]]; then
+        nodes_to_exclude="/model/layers.*/mlp/down_proj/MatMul"
         extra_cmd="--nodes_to_exclude ${nodes_to_exclude}"
     fi
-    if [[ "${input_model}" =~ "Meta-Llama-3-8B" ]]; then
-        nodes_to_exclude="/model/layers.*/mlp/down_proj/MatMul"
+    if [[ "${tokenizer}" =~ "Qwen2-7B" ]]; then
+        nodes_to_exclude="/model/layers.*/mlp/down_proj/MatMul /model/layers.*/mlp/up_proj/MatMul"
         extra_cmd="--nodes_to_exclude ${nodes_to_exclude}"
     fi
 
