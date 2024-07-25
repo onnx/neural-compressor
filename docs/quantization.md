@@ -4,9 +4,13 @@ Quantization
 1. [Quantization Introduction](#quantization-introduction)
 2. [Quantization Fundamentals](#quantization-fundamentals)
 3. [Get Started](#get-started)
+
    3.1 [Post Training Quantization](#post-training-quantization)
+
    3.2 [Specify Quantization Rules](#specify-quantization-rules)
+
    3.3 [Specify Quantization Recipes](#specify-quantization-recipes)
+
    3.4 [Specify Quantization Backend and Device](#specify-quantization-backend-and-device)
 4. [Examples](#examples)
 
@@ -124,14 +128,12 @@ quantize(model, q_model_path, qconfig)
 Neural Compressor support specify quantization rules by operator name. Users can use `set_local` API of configs to achieve the above purpose by below code:
 
 ```python
-fp32_config = config.GPTQConfig(weight_dtype="fp32")
-quant_config = config.GPTQConfig(
-    weight_bits=4,
-    weight_dtype="int",
-    weight_sym=False,
-    weight_group_size=32,
+op_config = config.StaticQuantConfig(per_channel=False)
+quant_config = config.StaticQuantConfig(
+    per_channel=True,
 )
-quant_config.set_local("/h.4/mlp/fc_out/MatMul", fp32_config)
+quant_config.set_local(
+    "/h.4/mlp/fc_out/MatMul", op_config)
 ```
 
 
