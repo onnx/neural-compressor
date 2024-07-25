@@ -63,14 +63,6 @@ Sometimes the reduce_range feature, that's using 7 bit width (1 sign bit + 6 dat
 > Activation (uint8) + Weight (int8) is recommended for performance on x86-64 machines with AVX2 and AVX512 extensions.
 
 
-#### Quantization Scheme
-+ Symmetric Quantization
-    + int8: scale = 2 * max(abs(rmin), abs(rmax)) / (max(int8) - min(int8) - 1); zero_point = 0
-    + uint8: scale = 2 * max(abs(rmin), abs(rmax)) / (max(uint8) - min(uint8)); zero_point = 0
-+ Asymmetric Quantization
-    + int8: scale = (rmax - rmin) / (max(int8) - min(int8)); zero_point = round(min(int8) - rmin / scale)
-    + uint8: scale = (rmax - rmin) / (max(uint8) - min(uint8)); zero_point = round(min(uint8) - rmin / scale)
-
 #### Reference
 + MLAS:  [MLAS Quantization](https://github.com/microsoft/onnxruntime/blob/master/onnxruntime/python/tools/quantization/onnx_quantizer.py)
 
