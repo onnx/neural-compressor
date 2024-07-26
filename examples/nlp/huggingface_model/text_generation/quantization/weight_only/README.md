@@ -14,7 +14,7 @@ pip install -r requirements.txt
 
 ## 2. Prepare Model
 
-Note that this README.md uses meta-llama/Llama-2-7b-hf as an example. There are other models available that can be used for weight-only quantization. The following table shows a few models' configurations:
+Note that this README.md uses meta-llama/Llama-2-7b-hf as an example. We verified weight-only quantization on other models as follows.
 
 | Model | Num Hidden Layers| Num Attention Heads | Hidden Size |
 | --- | --- | --- | --- |
@@ -24,13 +24,16 @@ Note that this README.md uses meta-llama/Llama-2-7b-hf as an example. There are 
 | [meta-llama/Llama-2-13b-chat-hf](https://huggingface.co/meta-llama/Llama-2-13b-chat-hf) | 40 | 40 | 5120 |
 | [meta-llama/Llama-2-70b-hf](https://huggingface.co/meta-llama/Llama-2-70b-hf) | 80 | 64 | 8192 |
 | [meta-llama/Llama-2-70b-chat-hf](https://huggingface.co/meta-llama/Llama-2-70b-chat-hf) | 80 | 64 | 8192 |
+| [meta-llama/Meta-Llama-3-8B](https://huggingface.co/meta-llama/Meta-Llama-3-8B) | 32 | 32 | 4096 |
+| [microsoft/Phi-3-mini-128k-instruct](https://huggingface.co/microsoft/Phi-3-mini-128k-instruct) | 32 | 32 | 3072 |
+| [Qwen/Qwen2-7B-Instruct](https://huggingface.co/Qwen/Qwen2-7B-Instruct) | 28 | 28 | 3584 |
 
 Export to ONNX model:
 ```bash
 python prepare_model.py  --input_model="meta-llama/Llama-2-7b-hf" \
-                         --output_model="./llama-2-7b-hf" \
                          --task=text-generation-with-past \ # or text-generation
 ```
+
 
 # Run
 
@@ -53,7 +56,7 @@ Accuracy:
 
 ```bash
 bash run_benchmark.sh --input_model=path/to/model \ # folder path of onnx model
-                      --batch_size=batch_size \ # optional 
+                      --batch_size=batch_size \ # optional
                       --mode=accuracy \
                       --tokenizer=meta-llama/Llama-2-7b-hf \ # model name or folder path containing all relevant files for model's tokenizer
                       --tasks=lambada_openai

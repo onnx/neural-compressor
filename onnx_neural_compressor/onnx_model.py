@@ -241,7 +241,7 @@ class ONNXModel:
                 root,
                 save_as_external_data=True,
                 all_tensors_to_one_file=True,
-                location=root.split("/")[-1] + "_data",
+                location=os.path.basename(root) + "_data",
                 size_threshold=1024,
                 convert_attribute=False,
             )
@@ -1001,7 +1001,7 @@ class ONNXModel:
             save_path,
             save_as_external_data=True,
             all_tensors_to_one_file=True,
-            location=save_path.split("/")[-1] + "_data",
+            location=os.path.basename(save_path) + "_data",
             size_threshold=1024,
             convert_attribute=False,
         )

@@ -10,8 +10,8 @@ OPTIMUM114_VERSION = version.Version("1.14.0")
 
 def parse_arguments():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input_model", type=str, required=False, default="")
-    parser.add_argument("--output_model", type=str, required=True)
+    parser.add_argument("--input_model", type=str, required=True, default="")
+    parser.add_argument("--output_model", type=str, required=False, default=None)
     parser.add_argument(
         "--task",
         type=str,
@@ -19,7 +19,10 @@ def parse_arguments():
         default="text-generation-with-past",
         choices=["text-generation-with-past", "text-generation"],
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.output_model is None:
+        args.output_model = os.path.basename(args.input_model) + "-onnx"
+    return args
 
 
 def prepare_model(input_model, output_model, task):
@@ -37,6 +40,7 @@ def prepare_model(input_model, output_model, task):
             "--task",
             task,
             f"{output_model}",
+            "--trust-remote-code",
         ],
         stdout=subprocess.PIPE,
         text=True,

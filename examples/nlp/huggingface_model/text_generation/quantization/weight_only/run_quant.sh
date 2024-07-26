@@ -56,7 +56,20 @@ function run_tuning {
 	echo "Created directory $output_model"
     fi
 
-    python main.py \
+    if [[ "${tokenizer}" =~ "Phi-3-mini" ]]; then
+        nodes_to_exclude="/model/layers.*/self_attn/qkv_proj/MatMul /model/layers.*/mlp/down_proj/MatMul"
+        extra_cmd="--nodes_to_exclude ${nodes_to_exclude} --trust_remote_code True"
+    fi
+    if [[ "${tokenizer}" =~ "Llama-3-8B" ]]; then
+        nodes_to_exclude="/model/layers.*/mlp/down_proj/MatMul"
+        extra_cmd="--nodes_to_exclude ${nodes_to_exclude}"
+    fi
+    if [[ "${tokenizer}" =~ "Qwen2-7B" ]]; then
+        nodes_to_exclude="/model/layers.*/mlp/down_proj/MatMul /model/layers.*/mlp/up_proj/MatMul"
+        extra_cmd="--nodes_to_exclude ${nodes_to_exclude}"
+    fi
+
+    eval "python main.py \
             --model_path ${input_model} \
 	        --tokenizer ${tokenizer-meta-llama/Llama-2-7b-hf} \
             --output_model ${output_model} \
@@ -64,8 +77,9 @@ function run_tuning {
             --dataset ${dataset-NeelNanda/pile-10k} \
 	        --algorithm ${algorithm-WOQ_TUNE} \
 	        --tasks ${tasks-lambada_openai} \
-            --tune
+            --layer_wise \
+            --tune \
+            ${extra_cmd}"
 }
 
 main "$@"
-

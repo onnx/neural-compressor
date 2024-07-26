@@ -1,60 +1,103 @@
 {
     "onnxrt": {
       "llama-2-7b-rtn": {
-        "model_src_dir": "nlp/huggingface_model/text_generation/llama/quantization/weight_only",
+        "model_name": "meta-llama/Llama-2-7b-hf",
+        "model_src_dir": "nlp/huggingface_model/text_generation/quantization/weight_only",
         "dataset_location": "",
         "input_model": "/tf_dataset2/models/onnx/Llama-2-7b-hf",
         "main_script": "main.py",
-        "batch_size": 1
+        "batch_size": 1,
+        "algorithm": "RTN"
       },
       "llama-2-7b-rtn-with-past": {
-        "model_src_dir": "nlp/huggingface_model/text_generation/llama/quantization/weight_only",
+        "model_name": "meta-llama/Llama-2-7b-hf",
+        "model_src_dir": "nlp/huggingface_model/text_generation/quantization/weight_only",
         "dataset_location": "",
         "input_model": "/tf_dataset2/models/onnx/Llama-2-7b-hf-with-past",
         "main_script": "main.py",
-        "batch_size": 1
+        "batch_size": 1,
+        "algorithm": "RTN"
       },
       "llama-2-7b-awq": {
-        "model_src_dir": "nlp/huggingface_model/text_generation/llama/quantization/weight_only",
+        "model_name": "meta-llama/Llama-2-7b-hf",
+        "model_src_dir": "nlp/huggingface_model/text_generation/quantization/weight_only",
         "dataset_location": "",
         "input_model": "/tf_dataset2/models/onnx/Llama-2-7b-hf",
         "main_script": "main.py",
-        "batch_size": 1
+        "batch_size": 1,
+        "algorithm": "AWQ"
       },
       "llama-2-7b-awq-with-past": {
-        "model_src_dir": "nlp/huggingface_model/text_generation/llama/quantization/weight_only",
+        "model_name": "meta-llama/Llama-2-7b-hf",
+        "model_src_dir": "nlp/huggingface_model/text_generation/quantization/weight_only",
         "dataset_location": "",
         "input_model": "/tf_dataset2/models/onnx/Llama-2-7b-hf-with-past",
         "main_script": "main.py",
-        "batch_size": 1
+        "batch_size": 1,
+        "algorithm": "AWQ"
       },
       "llama-2-7b-gptq": {
-        "model_src_dir": "nlp/huggingface_model/text_generation/llama/quantization/weight_only",
+        "model_name": "meta-llama/Llama-2-7b-hf",
+        "model_src_dir": "nlp/huggingface_model/text_generation/quantization/weight_only",
         "dataset_location": "",
         "input_model": "/tf_dataset2/models/onnx/Llama-2-7b-hf",
         "main_script": "main.py",
-        "batch_size": 1
+        "batch_size": 1,
+        "algorithm": "GPTQ"
       },
       "llama-2-7b-gptq-with-past": {
-        "model_src_dir": "nlp/huggingface_model/text_generation/llama/quantization/weight_only",
+        "model_name": "meta-llama/Llama-2-7b-hf",
+        "model_src_dir": "nlp/huggingface_model/text_generation/quantization/weight_only",
         "dataset_location": "",
         "input_model": "/tf_dataset2/models/onnx/Llama-2-7b-hf-with-past",
         "main_script": "main.py",
-        "batch_size": 1
+        "batch_size": 1,
+        "algorithm": "GPTQ"
       },
       "llama-2-7b-woq_tune": {
-        "model_src_dir": "nlp/huggingface_model/text_generation/llama/quantization/weight_only",
+        "model_name": "meta-llama/Llama-2-7b-hf",
+        "model_src_dir": "nlp/huggingface_model/text_generation/quantization/weight_only",
         "dataset_location": "",
         "input_model": "/tf_dataset2/models/onnx/Llama-2-7b-hf",
         "main_script": "main.py",
-        "batch_size": 1
+        "batch_size": 1,
+        "algorithm": "WOQ_TUNE"
       },
       "llama-2-7b-woq_tune-with-past": {
-        "model_src_dir": "nlp/huggingface_model/text_generation/llama/quantization/weight_only",
+        "model_name": "meta-llama/Llama-2-7b-hf",
+        "model_src_dir": "nlp/huggingface_model/text_generation/quantization/weight_only",
         "dataset_location": "",
         "input_model": "/tf_dataset2/models/onnx/Llama-2-7b-hf-with-past",
         "main_script": "main.py",
-        "batch_size": 1
+        "batch_size": 1,
+        "algorithm": "WOQ_TUNE"
+      },
+      "llama-3-8b-gptq-with-past": {
+        "model_name": "meta-llama/Meta-Llama-3-8B",
+        "model_src_dir": "nlp/huggingface_model/text_generation/quantization/weight_only",
+        "dataset_location": "",
+        "input_model": "/tf_dataset2/models/onnx/Meta-Llama-3-8B-with-past",
+        "main_script": "main.py",
+        "batch_size": 1,
+        "algorithm": "GPTQ"
+      },
+      "phi-3-mini-128k-instruct-rtn-with-past": {
+        "model_name": "microsoft/Phi-3-mini-128k-instruct",
+        "model_src_dir": "nlp/huggingface_model/text_generation/quantization/weight_only",
+        "dataset_location": "",
+        "input_model": "/tf_dataset2/models/onnx/Phi-3-mini-128k-instruct-with-past",
+        "main_script": "main.py",
+        "batch_size": 1,
+        "algorithm": "RTN"
+      },
+      "qwen2-7b-instruct-rtn-with-past": {
+        "model_name": "Qwen/Qwen2-7B-Instruct",
+        "model_src_dir": "nlp/huggingface_model/text_generation/quantization/weight_only",
+        "dataset_location": "",
+        "input_model": "/tf_dataset2/models/onnx/Qwen2-7B-Instruct-with-past",
+        "main_script": "main.py",
+        "batch_size": 1,
+        "algorithm": "RTN"
       },
       "bert_base_MRPC": {
          "model_src_dir": "nlp/bert/quantization/ptq_static",

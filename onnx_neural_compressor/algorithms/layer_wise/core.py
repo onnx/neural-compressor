@@ -66,16 +66,7 @@ def layer_wise_quant(
     # get and check split nodes
     split_nodes = origin_model.find_split_nodes()
     if len(split_nodes) == 0:
-        logger.error(
-            "Can't find split nodes for layer-wise quantization. "
-            "We recommend applying graph optimization for your model like follows: \n"
-            "import onnxruntime as ort \n"
-            "sess_options = ort.SessionOptions() \n"
-            "sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_EXTENDED "
-            "# or ORT_ENABLE_BASIC \n"
-            "sess_options.optimized_model_filepath = 'optimized_model_path' \n"
-            "ort.InferenceSession(infer_shape_model_path, sess_options)"
-        )
+        logger.error("Can't find split nodes for layer-wise quantization.")
         raise ValueError("Fail to run layer-wise quantization.")
     logger.info(
         "Will split model into {} parts to do layer-wise quantization".format(
