@@ -40,7 +40,7 @@ The following prerequisites and requirements must be satisfied for a successful 
 ## System Requirements
 
 ### Validated Hardware Environment
-#### ONNX Neural Compressor supports CPUs based on [Intel 64 architecture or compatible processors](https://en.wikipedia.org/wiki/X86-64):
+#### Neural Compressor supports CPUs based on [Intel 64 architecture or compatible processors](https://en.wikipedia.org/wiki/X86-64):
 
 * Intel Xeon Scalable processor (formerly Skylake, Cascade Lake, Cooper Lake, Ice Lake, and Sapphire Rapids)
 * Intel Xeon CPU Max Series (formerly Sapphire Rapids HBM)
