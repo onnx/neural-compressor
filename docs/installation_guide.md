@@ -42,8 +42,9 @@ The following prerequisites and requirements must be satisfied for a successful 
 ### Validated Hardware Environment
 #### Neural Compressor supports CPUs based on [Intel 64 architecture or compatible processors](https://en.wikipedia.org/wiki/X86-64):
 
-* Intel Xeon Scalable processor (formerly Skylake, Cascade Lake, Cooper Lake, Ice Lake, Lunar Lake, and Sapphire Rapids)
+* Intel Xeon Scalable processor (formerly Skylake, Cascade Lake, Cooper Lake, Ice Lake, and Sapphire Rapids)
 * Intel Xeon CPU Max Series (formerly Sapphire Rapids HBM)
+* Intel Core Ultra Processors (Meteor Lake, Lunar Lake)
 
 ### Validated Software Environment
 
