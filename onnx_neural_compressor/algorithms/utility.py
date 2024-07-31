@@ -298,6 +298,71 @@ def _get_blob_size(group_size, has_zp):  # pragma: no cover
     return blob_size
 
 
+def make_weight_only_dequant_node(node, block_size, k_blocks, num_bits, q_weight, scale, zero_point, axis=1):
+    """Build DequantizeLinear node.
+    Args:
+        node: original matmul node
+        block_size (int): how many elements share one scale/zp
+        k_blocks (int): block number
+        num_bits (int): num_bits
+        q_weight (array): quantized weight
+        scale (array): scale
+        zero_point (array): zero point
+        axis (int): the axis of the dequantizing dimension of the input tensor
+    Returns:
+        weight_only_dequant_node: DequantizeLinear node for weight dequantization
+        new_inits: initializers of the new node
+    """
+    new_inits = []
+    input_names = []
+    kwargs = {
+        "block_size": block_size,
+        "axis": axis
+        }
+
+    q_weight_tensor = onnx.helper.make_tensor(
+        name=node.input[1] + "_Q{}G{}".format(str(num_bits), str(block_size)),
+        data_type=onnx.TensorProto.UINT4,
+        dims=q_weight.shape,
+        vals=q_weight,
+        raw=False,
+    )
+    new_inits.append(q_weight_tensor)
+    input_names.append(q_weight_tensor.name)
+
+    scale_tensor = onnx.helper.make_tensor(
+        name=node.input[1] + "_scale",
+        data_type=onnx.helper.np_dtype_to_tensor_dtype(scale.dtype),
+        dims=scale.shape,
+        vals=scale.tobytes(),
+        raw=True,
+    )
+    input_names.append(scale_tensor.name)
+    new_inits.append(scale_tensor)
+
+    # build zero_point tensor
+    zp_shape = zero_point.shape
+    zp_tensor = onnx.helper.make_tensor(
+        name=node.input[1] + "_zp",
+        data_type=onnx.TensorProto.UINT4,
+        dims=zp_shape,
+        vals=zero_point,
+        raw=False,
+    )
+    input_names.append(zp_tensor.name)
+    new_inits.append(zp_tensor)
+
+    dequant_node = onnx.helper.make_node(
+        "DequantizeLinear",
+        inputs=input_names,
+        outputs=[q_weight_tensor.name + "_dequant"],
+        name=node.name + "_woq_dequant",
+        **kwargs,
+    )
+    node.input[1] = dequant_node.output[0]
+    return dequant_node, new_inits
+
+
 def make_matmul_weight_only_node(
     node: onnx.NodeProto,
     weight_shape: tuple,
