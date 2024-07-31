@@ -5,7 +5,7 @@ Neural Compressor
 <h3> An open-source Python library supporting popular model compression techniques for ONNX</h3>
 
 [![python](https://img.shields.io/badge/python-3.8%2B-blue)](https://github.com/onnx/neural-compressor)
-[![version](https://img.shields.io/badge/release-2.5-green)](https://github.com/onnx/neural-compressor/releases)
+[![version](https://img.shields.io/badge/release-1.0-green)](https://github.com/onnx/neural-compressor/releases)
 [![license](https://img.shields.io/badge/license-Apache%202-blue)](https://github.com/onnx/neural-compressor/blob/master/LICENSE)
 
 
