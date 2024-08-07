@@ -34,7 +34,7 @@ from torch.nn import functional
 from torch.utils import data
 
 from onnx_neural_compressor import data_reader
-from onnx_neural_compressor.quantization import config, matmul_nbits_quantizer, tuning
+from onnx_neural_compressor.quantization import config, matmul_nbits_quantizer, tuning, QuantFormat
 
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(name)s -   %(message)s", datefmt="%m/%d/%Y %H:%M:%S", level=logging.WARN
@@ -138,7 +138,7 @@ def eval_func(model):
     if isinstance(model, str) and model.endswith(".onnx"):
         model_dir = os.path.dirname(model)
 
-    replace_architectures(os.path.join(model_dir, "config.json"))
+    #replace_architectures(os.path.join(model_dir, "config.json"))
 
     eval_args = evaluation.LMEvalParser(
         model="hf",
@@ -147,6 +147,7 @@ def eval_func(model):
         tasks=",".join(args.tasks),
         provider="CPUExecutionProvider",
         trust_remote_code=args.trust_remote_code,
+        limit=10
     )
     results = evaluation.evaluate(eval_args)
 
@@ -348,7 +349,7 @@ if __name__ == "__main__":
         nodes_to_exclude = ["/lm_head/MatMul"] if not args.quantize_lm_head else []
         nodes_to_exclude = list(set(args.nodes_to_exclude + nodes_to_exclude))
         if args.algorithm.upper() == "RTN":
-            algo_config = matmul_nbits_quantizer.RTNWeightOnlyQuantConfig(layer_wise_quant=args.layer_wise)
+            algo_config = matmul_nbits_quantizer.RTNWeightOnlyQuantConfig(layer_wise_quant=args.layer_wise, quant_format=QuantFormat.QDQ)
             quant = matmul_nbits_quantizer.MatMulNBitsQuantizer(
                 model_path,
                 n_bits=4,

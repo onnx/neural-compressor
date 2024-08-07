@@ -40,7 +40,9 @@ def rtn_quantize_entry(
     else:
         config_mapping = quant_config.config_mapping
     quant_kwargs = {}
-    quant_kwargs = {key: getattr(quant_config, key) for key in config.RTNConfig.model_params_list}
+    for key in config.RTNConfig.model_params_list:
+        val = getattr(quant_config, key)
+        quant_kwargs[key] = getattr(val, "value", val)
     model = rtn.apply_rtn_on_model(model, config_mapping, **quant_kwargs)
     return model
 

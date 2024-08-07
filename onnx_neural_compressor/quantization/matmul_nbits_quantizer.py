@@ -22,11 +22,11 @@ import onnxruntime as ort
 
 from onnx_neural_compressor import data_reader, logger, onnx_model, utility
 from onnx_neural_compressor.quantization import algorithm_entry as algos
-from onnx_neural_compressor.quantization import config
+from onnx_neural_compressor.quantization import config, QuantFormat
 
 
 class WeightOnlyQuantConfig:
-    def __init__(self, algorithm):
+    def __init__(self, algorithm, quant_format=QuantFormat.QOperator):
         """This is the Base class for Weight Only Quant Configuration.
 
         Args:
@@ -34,13 +34,15 @@ class WeightOnlyQuantConfig:
                 weight only quantize algorithm name.
         """
         self.algorithm = algorithm
+        self.quant_format = quant_format
 
 
 class RTNWeightOnlyQuantConfig(WeightOnlyQuantConfig):
 
-    def __init__(self, ratios=None, layer_wise_quant=False):
+    def __init__(self, ratios=None, layer_wise_quant=False, quant_format=QuantFormat.QOperator):
         super().__init__(
             algorithm="RTN",
+            quant_format=quant_format,
         )
         if ratios is None:
             ratios = {}
@@ -59,9 +61,11 @@ class GPTQWeightOnlyQuantConfig(WeightOnlyQuantConfig):
         mse=False,
         perchannel=True,
         layer_wise_quant=False,
+        quant_format=QuantFormat.QOperator,
     ):
         super().__init__(
             algorithm="GPTQ",
+            quant_format=quant_format,
         )
         self.calibration_data_reader = calibration_data_reader
         self.percdamp = percdamp
@@ -79,8 +83,9 @@ class AWQWeightOnlyQuantConfig(WeightOnlyQuantConfig):
         calibration_data_reader: data_reader.CalibrationDataReader,
         enable_auto_scale=True,
         enable_mse_search=True,
+        quant_format=QuantFormat.QOperator,
     ):
-        super().__init__(algorithm="AWQ")
+        super().__init__(algorithm="AWQ", quant_format=quant_format)
         self.calibration_data_reader = calibration_data_reader
         self.enable_auto_scale = enable_auto_scale
         self.enable_mse_search = enable_mse_search
@@ -133,6 +138,7 @@ class MatMulNBitsQuantizer:
             "weight_sym": self.is_symmetric,
             "accuracy_level": self.accuracy_level,
             "providers": self.providers,
+            "quant_format": self.algo_config.quant_format,
         }
         if self.algorithm == "RTN":
             quant_kwargs.update(

@@ -254,8 +254,8 @@ def quantize_data(data, qType, sym, reduce_range=False, ratio=1.0, axis=None):
         axis (int, optional): process data along a specific axis. Default is None (process the whole data)
     """
     quantize_range = get_qmin_qmax_for_qType(qType, reduce_range, sym)
-    rmin = np.min(np.min(data), 0) if axis is None else np.min(data, axis=1, keepdims=True)
-    rmax = np.max(np.max(data), 0) if axis is None else np.max(data, axis=1, keepdims=True)
+    rmin = np.min(np.min(data), 0) if axis is None else np.min(data, axis=axis, keepdims=True)
+    rmax = np.max(np.max(data), 0) if axis is None else np.max(data, axis=axis, keepdims=True)
     rmin *= ratio
     rmax *= ratio
 
@@ -298,10 +298,11 @@ def _get_blob_size(group_size, has_zp):  # pragma: no cover
     return blob_size
 
 
-def make_weight_only_dequant_node(node, block_size, k_blocks, num_bits, q_weight, scale, zero_point, axis=1):
+def make_weight_only_dequant_node(node, weight_shape, block_size, k_blocks, num_bits, q_weight, scale, zero_point, axis=1):
     """Build DequantizeLinear node.
     Args:
         node: original matmul node
+        weight_shape (tuple): original weight shape
         block_size (int): how many elements share one scale/zp
         k_blocks (int): block number
         num_bits (int): num_bits
@@ -320,16 +321,19 @@ def make_weight_only_dequant_node(node, block_size, k_blocks, num_bits, q_weight
         "axis": axis
         }
 
+    q_weight_pairs = q_weight[::2, :] | q_weight[1::2, :] << 4
+
     q_weight_tensor = onnx.helper.make_tensor(
         name=node.input[1] + "_Q{}G{}".format(str(num_bits), str(block_size)),
         data_type=onnx.TensorProto.UINT4,
-        dims=q_weight.shape,
-        vals=q_weight,
-        raw=False,
+        dims=weight_shape,
+        vals=q_weight_pairs.T.flatten().tobytes(),
+        raw=True,
     )
     new_inits.append(q_weight_tensor)
     input_names.append(q_weight_tensor.name)
 
+    #scale = scale.reshape((-1, weight_shape[-1]))
     scale_tensor = onnx.helper.make_tensor(
         name=node.input[1] + "_scale",
         data_type=onnx.helper.np_dtype_to_tensor_dtype(scale.dtype),
@@ -341,13 +345,14 @@ def make_weight_only_dequant_node(node, block_size, k_blocks, num_bits, q_weight
     new_inits.append(scale_tensor)
 
     # build zero_point tensor
-    zp_shape = zero_point.shape
+    packed_zp = zero_point[:, ::2] | zero_point[:, 1::2] << 4
+
     zp_tensor = onnx.helper.make_tensor(
         name=node.input[1] + "_zp",
         data_type=onnx.TensorProto.UINT4,
-        dims=zp_shape,
-        vals=zero_point,
-        raw=False,
+        dims=scale.shape,
+        vals=packed_zp.flatten().tobytes(),
+        raw=True,
     )
     input_names.append(zp_tensor.name)
     new_inits.append(zp_tensor)

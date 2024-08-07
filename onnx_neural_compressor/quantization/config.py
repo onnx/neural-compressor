@@ -731,6 +731,7 @@ class RTNConfig(BaseConfig):
     model_params_list: List[str] = [
         "providers",
         "layer_wise_quant",
+        "quant_format",
     ]
     name: str = constants.RTN
 
@@ -746,6 +747,7 @@ class RTNConfig(BaseConfig):
         providers: List[str] = ["CPUExecutionProvider"],
         layer_wise_quant: bool = False,
         quant_last_matmul: bool = True,
+        quant_format: quantization.QuantFormat = quantization.QuantFormat.QOperator,
         white_list: List[Union[str, Callable]] = constants.RTN_OP_LIST,
     ):
         """Init RTN weight-only quantization config.
@@ -780,6 +782,7 @@ class RTNConfig(BaseConfig):
         self.providers = providers
         self.layer_wise_quant = layer_wise_quant
         self.quant_last_matmul = quant_last_matmul
+        self.quant_format = quant_format
         self._post_init()
 
     def _post_init(self):

@@ -35,6 +35,7 @@ def rtn_quantize(
     weight_config: dict = {},
     ratios: dict = {},
     providers: List[str] = ["CPUExecutionProvider"],
+    quant_format: int = 0,
     return_modelproto: bool = True,
 ):
     """Quantize the model with round to nearst method.
@@ -105,23 +106,24 @@ def rtn_quantize(
             satisfy_MatMulFpQ4_condition = (
                 version.Version(ort.__version__) >= constants.ONNXRT116_VERSION and num_bits == 4 and group_size == 32
             )
-            if model.model.opset_import[0].version <= 20:
+            if quant_format == 1:
                 _, _, zp, scale, q_weight =quant_utils.quantize_data(
                     weight.T.reshape((-1, group_size)),
                     "uint" + str(num_bits),
-                    sym,
+                    False,
                     ratio=ratios.get(node.input[1], 1),
                     axis=1,
                 )
                 dequant_node, new_inits =quant_utils.make_weight_only_dequant_node(
                     node=node,
+                    weight_shape=org_w_shape,
                     num_bits=num_bits,
                     k_blocks=k_blocks,
-                    q_weight=q_weight.reshape(weight.T.shape).T,
-                    scale=scale.astype(dtype),
-                    axis=1,
+                    q_weight=q_weight.reshape((-1, org_w_shape[-1])),
+                    scale=scale.reshape((org_w_shape[-1], -1)).T.astype(dtype),
+                    axis=0,
                     block_size=group_size,
-                    zero_point=zp,
+                    zero_point=zp.reshape((org_w_shape[-1], -1)).T,
                 )
                 model.add_initializers(new_inits)
                 new_nodes.append(dequant_node)
@@ -197,12 +199,14 @@ def apply_rtn_on_model(
     ratios: dict = {},
     providers: List[str] = ["CPUExecutionProvider"],
     layer_wise_quant: bool = False,
+    quant_format: int = 0,
 ) -> onnx.ModelProto:
     """Apply RTN on onnx model.
 
     Args:
         model (Union[onnx.ModelProto, onnx_model.ONNXModel, pathlib.Path, str]): onnx model.
         quant_config (dict): quantization config.
+        quant_format (int): using QOperator or QDQ format. 0 means QOperator, 1 means QDQ. Default 0.
 
     Returns:
         onnx.ModelProto: quantized onnx model.
@@ -210,6 +214,7 @@ def apply_rtn_on_model(
     quant_kwargs = {
         "ratios": ratios,
         "providers": providers,
+        "quant_format": quant_format,
     }
 
     if layer_wise_quant:
