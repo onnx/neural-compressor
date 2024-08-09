@@ -7,7 +7,6 @@ This example shows how to quantize the unet model of [stable-diffusion-v1-5](htt
 
 ## 1. Environment
 ```shell
-pip install onnx-neural-compressor
 pip install -r requirements.txt
 ```
 > Note: Validated ONNX Runtime [Version](/docs/installation_guide.md#validated-software-environment).
