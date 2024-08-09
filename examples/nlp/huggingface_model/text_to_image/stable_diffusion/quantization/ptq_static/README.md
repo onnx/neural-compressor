@@ -43,6 +43,6 @@ bash run_benchmark.sh --input_model=/path/to/stable-diffusion \ # folder path of
 Benchmark will print the throughput data and save the generated image.
 Our test results with default parameters is:
 <p float="left">
-  <img src="./imgs/fp32.jpg" width = "300" height = "300" alt="fp32" align=center />
-  <img src="./imgs/int8.jpg" width = "300" height = "300" alt="int8" align=center />
+  <img src="./imgs/fp32.png" width = "300" height = "300" alt="fp32" align=center />
+  <img src="./imgs/int8.png" width = "300" height = "300" alt="int8" align=center />
 </p>
