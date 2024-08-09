@@ -1,0 +1,6 @@
+torch
+diffusers
+onnx
+onnxruntime
+onnxruntime-extensions
+onnx_neural_compressor
