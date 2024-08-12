@@ -12,13 +12,13 @@ function init_params {
   do
     case $var in
       --input_model=*)
-          input_model=$(echo $var |cut -f2 -d=)
+          input_model=$(echo "$var" |cut -f2 -d=)
       ;;
       --output_model=*)
-          output_model=$(echo $var |cut -f2 -d=)
+          output_model=$(echo "$var" |cut -f2 -d=)
       ;;
       --alpha=*)
-          alpha=$(echo $var |cut -f2 -d=)
+          alpha=$(echo "$var" |cut -f2 -d=)
       ;;
     esac
   done
@@ -42,9 +42,9 @@ function run_tuning {
     fi
 
     python main.py \
-            --model_path ${input_model} \
-            --output_model ${output_model} \
-	    --alpha ${alpha-0.7} \
+            --model_path "${input_model}" \
+            --output_model "${output_model}" \
+	    --alpha "${alpha-0.7}" \
             --tune
 }
 

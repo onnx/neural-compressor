@@ -16,18 +16,20 @@
 # under the License.
 # pylint:disable=redefined-outer-name,logging-format-interpolation
 import argparse
+import inspect
 import logging
 import os
 import time
-import inspect
+from typing import List
+
 import numpy as np
 import onnx
 import onnxruntime as ort
 import torch
-from typing import List
+from diffusers import OnnxRuntimeModel, OnnxStableDiffusionPipeline
+
 from onnx_neural_compressor import data_reader
-from onnx_neural_compressor.quantization import config, quantize, QuantType
-from diffusers import OnnxStableDiffusionPipeline, OnnxRuntimeModel
+from onnx_neural_compressor.quantization import QuantType, config, quantize
 
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(name)s -   %(message)s", datefmt="%m/%d/%Y %H:%M:%S", level=logging.WARN
@@ -70,17 +72,13 @@ ORT_TO_NP_TYPE = {
     "tensor(double)": np.float64,
 }
 
+
 def benchmark(model):
     generator = None if args.seed is None else np.random.RandomState(args.seed)
 
-    pipe = OnnxStableDiffusionPipeline.from_pretrained(
-        args.model_path,
-        provider=args.provider
-    )
+    pipe = OnnxStableDiffusionPipeline.from_pretrained(args.model_path, provider=args.provider)
     if args.quantized_unet_path is not None:
-        unet = OnnxRuntimeModel(
-            model=ort.InferenceSession(args.quantized_unet_path, providers=[args.provider])
-        )
+        unet = OnnxRuntimeModel(model=ort.InferenceSession(args.quantized_unet_path, providers=[args.provider]))
         pipe.unet = unet
 
     image = None
@@ -249,7 +247,7 @@ if __name__ == "__main__":
             data_reader,
             weight_type=QuantType.QInt8,
             activation_type=QuantType.QUInt8,
-            op_types_to_quantize=["MatMul","Gemm"],
+            op_types_to_quantize=["MatMul", "Gemm"],
             per_channel=True,
             extra_options={
                 "SmoothQuant": True,
@@ -257,7 +255,7 @@ if __name__ == "__main__":
                 "WeightSymmetric": True,
                 "ActivationSymmetric": False,
                 "OpTypesToExcludeOutputQuantization": ["MatMul", "Gemm"],
-                }
-            )
+            },
+        )
         input_path = os.path.join(args.model_path, "unet/model.onnx")
         quantize(input_path, args.output_model, cfg, optimization_level=ort.GraphOptimizationLevel.ORT_ENABLE_EXTENDED)

@@ -276,7 +276,9 @@ class Smoother:
                     # Mul operator has broadcast mechanism
                     self.model.remove_initializer(tensor)
                     self.model.add_initializer(
-                        onnx.helper.make_tensor(inp, tensor.data_type, list(new_tensor.shape), new_tensor.flatten().tolist())
+                        onnx.helper.make_tensor(
+                            inp, tensor.data_type, list(new_tensor.shape), new_tensor.flatten().tolist()
+                        )
                     )
                     self.tensor_scales_info[key] = (
                         1.0 / scale

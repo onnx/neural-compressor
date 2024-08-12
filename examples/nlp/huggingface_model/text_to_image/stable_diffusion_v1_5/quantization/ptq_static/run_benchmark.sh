@@ -14,19 +14,19 @@ function init_params {
   do
     case $var in
       --input_model=*)
-          input_model=$(echo $var |cut -f2 -d=)
+          input_model=$(echo "$var" |cut -f2 -d=)
       ;;
       --quantized_unet_path=*)
-          quantized_unet_path=$(echo $var |cut -f2 -d=)
+          quantized_unet_path=$(echo "$var" |cut -f2 -d=)
       ;;
       --batch_size=*)
-          batch_size=$(echo $var |cut -f2 -d=)
+          batch_size=$(echo "$var" |cut -f2 -d=)
       ;;
       --prompt=*)
-	  prompt=$(echo $var |cut -f2 -d=)
+	  prompt=$(echo "$var" |cut -f2 -d=)
       ;;
       --image_path=*)
-	  image_path=$(echo $var |cut -f2 -d=)
+	  image_path=$(echo "$var" |cut -f2 -d=)
       ;;
     esac
   done
@@ -44,21 +44,21 @@ function run_benchmark {
 
     extra_cmd=""
 
-    if [ ! -z $quantized_unet_path ]; then
-        extra_cmd=$extra_cmd"--quantized_unet_path ${quantized_unet_path} "
+    if [ "$quantized_unet_path" ]; then
+        extra_cmd=$extra_cmd"--quantized_unet_path=${quantized_unet_path} "
     fi
 
-    if [ ! -z $prompt ]; then
-	extra_cmd=$extra_cmd"--prompt ${prompt} "
+    if [ "$prompt" ]; then
+	extra_cmd=$extra_cmd"--prompt=${prompt} "
     fi
 
-    if [ ! -z $image_path ]; then
-	extra_cmd=$extra_cmd"--image_path ${image_path} "
+    if [ "$image_path" ]; then
+	extra_cmd=$extra_cmd"--image_path=${image_path} "
     fi
 
     python main.py \
-            --model_path ${input_model} \
-            --batch_size=${batch_size-1} \
+            --model_path="${input_model}" \
+            --batch_size="${batch_size-1}" \
             --benchmark \
 	    ${extra_cmd}
             
