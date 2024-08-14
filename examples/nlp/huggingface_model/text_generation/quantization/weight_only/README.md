@@ -40,6 +40,7 @@ python prepare_model.py  --input_model="meta-llama/Llama-2-7b-hf" \
 ## 1. Quantization
 
 Set `algorithm=WOQ_TUNE` to tune weight-only quantization algorithm or specify algorithm to `RTN` or `GPTQ` or `AWQ`.
+
 `quant_format=QDQ` works only when:
 - onnxruntime >= 1.19.0
 - opset version of the model >= 21
