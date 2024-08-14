@@ -45,6 +45,7 @@ Set `algorithm=WOQ_TUNE` to tune weight-only quantization algorithm or specify a
 - onnxruntime >= 1.19.0
 - opset version of the model >= 21
 - quantized bits is in [4, 8]
+
 otherwise it will execute QOperator automatically.
 
 ```bash
