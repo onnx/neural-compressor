@@ -69,8 +69,11 @@ def gptq_quantize_entry(
         logger.debug(config_mapping)
     else:
         config_mapping = quant_config.config_mapping
+
     quant_kwargs = {}
-    quant_kwargs = {key: getattr(quant_config, key) for key in config.GPTQConfig.model_params_list}
+    for key in config.GPTQConfig.model_params_list:
+        val = getattr(quant_config, key)
+        quant_kwargs[key] = getattr(val, "value", val)
 
     # regenerate to ensure data exists
     calibration_data_reader.rewind()
@@ -100,8 +103,11 @@ def awq_quantize_entry(
         logger.debug(config_mapping)
     else:
         config_mapping = quant_config.config_mapping
+
     quant_kwargs = {}
-    quant_kwargs = {key: getattr(quant_config, key) for key in config.AWQConfig.model_params_list}
+    for key in config.AWQConfig.model_params_list:
+        val = getattr(quant_config, key)
+        quant_kwargs[key] = getattr(val, "value", val)
 
     # regenerate to ensure data exists
     calibration_data_reader.rewind()

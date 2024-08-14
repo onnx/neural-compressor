@@ -25,6 +25,8 @@ class QuantType(enum.Enum):  # pragma: no cover
 
     QInt8 = 0
     QUInt8 = 1
+    QInt4 = 4
+    QUInt4 = 5
 
     @property
     def tensor_type(self):
@@ -32,6 +34,10 @@ class QuantType(enum.Enum):  # pragma: no cover
             return onnx.TensorProto.INT8
         if self == QuantType.QUInt8:
             return onnx.TensorProto.UINT8
+        if self == QuantType.QInt8:
+            return onnx.TensorProto.INT4
+        if self == QuantType.QUInt4:
+            return onnx.TensorProto.UINT4
         raise ValueError(f"Unexpected value qtype={self!r}.")
 
 

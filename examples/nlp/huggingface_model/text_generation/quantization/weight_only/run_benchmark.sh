@@ -46,15 +46,15 @@ function run_benchmark {
         extra_cmd="--trust_remote_code True"
     fi
 
-    eval "python main.py \
-            --model_path ${input_model} \
-            --batch_size=${batch_size-1} \
-            --tokenizer=${tokenizer-meta-llama/Llama-2-7b-hf} \
-            --tasks=${tasks-lambada_openai} \
-            --mode=${mode} \
-            --intra_op_num_threads=${intra_op_num_threads-24} \
-            --benchmark \
-            ${extra_cmd}"
+    python main.py \
+      --model_path="${input_model}" \
+      --batch_size="${batch_size-1}" \
+      --tokenizer="${tokenizer-meta-llama/Llama-2-7b-hf}" \
+      --tasks="${tasks-lambada_openai}" \
+      --mode="${mode}" \
+      --intra_op_num_threads="${intra_op_num_threads-24}" \
+      --benchmark \
+      ${extra_cmd}
 
 }
 

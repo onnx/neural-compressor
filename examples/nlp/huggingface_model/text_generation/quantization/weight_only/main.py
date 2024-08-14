@@ -34,7 +34,7 @@ from torch.nn import functional
 from torch.utils import data
 
 from onnx_neural_compressor import data_reader
-from onnx_neural_compressor.quantization import config, matmul_nbits_quantizer, tuning, QuantFormat
+from onnx_neural_compressor.quantization import QuantFormat, config, matmul_nbits_quantizer, tuning
 
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(name)s -   %(message)s", datefmt="%m/%d/%Y %H:%M:%S", level=logging.WARN
@@ -105,6 +105,7 @@ parser.add_argument(
     default=[],
     help="nodes that will not be quantized. Doesn't take effect when 'algorithm' is 'WOQ_TUNE'",
 )
+parser.add_argument("--quant_format", type=str, default="QOperator", choices=["QOperator", "QDQ"])
 args = parser.parse_args()
 
 if args.tune and not os.path.exists(args.output_model):
@@ -138,7 +139,7 @@ def eval_func(model):
     if isinstance(model, str) and model.endswith(".onnx"):
         model_dir = os.path.dirname(model)
 
-    #replace_architectures(os.path.join(model_dir, "config.json"))
+    replace_architectures(os.path.join(model_dir, "config.json"))
 
     eval_args = evaluation.LMEvalParser(
         model="hf",
@@ -147,7 +148,6 @@ def eval_func(model):
         tasks=",".join(args.tasks),
         provider="CPUExecutionProvider",
         trust_remote_code=args.trust_remote_code,
-        limit=10
     )
     results = evaluation.evaluate(eval_args)
 
@@ -348,8 +348,11 @@ if __name__ == "__main__":
 
         nodes_to_exclude = ["/lm_head/MatMul"] if not args.quantize_lm_head else []
         nodes_to_exclude = list(set(args.nodes_to_exclude + nodes_to_exclude))
+        quant_format = QuantFormat.QOperator if args.quant_format == "QOperator" else QuantFormat.QDQ
         if args.algorithm.upper() == "RTN":
-            algo_config = matmul_nbits_quantizer.RTNWeightOnlyQuantConfig(layer_wise_quant=args.layer_wise, quant_format=QuantFormat.QDQ)
+            algo_config = matmul_nbits_quantizer.RTNWeightOnlyQuantConfig(
+                layer_wise_quant=args.layer_wise, quant_format=quant_format
+            )
             quant = matmul_nbits_quantizer.MatMulNBitsQuantizer(
                 model_path,
                 n_bits=4,
@@ -364,7 +367,9 @@ if __name__ == "__main__":
         elif args.algorithm.upper() == "AWQ":
             calibration_data_reader = AWQDataloader(model_path, pad_max=args.pad_max, batch_size=1)
             algo_config = matmul_nbits_quantizer.AWQWeightOnlyQuantConfig(
-                calibration_data_reader=calibration_data_reader, enable_mse_search=False
+                calibration_data_reader=calibration_data_reader,
+                enable_mse_search=False,
+                quant_format=quant_format,
             )
             quant = matmul_nbits_quantizer.MatMulNBitsQuantizer(
                 model_path,
@@ -380,7 +385,9 @@ if __name__ == "__main__":
         elif args.algorithm.upper() == "GPTQ":
             calibration_data_reader = GPTQDataloader(model_path, seqlen=args.seqlen, batch_size=1)
             algo_config = matmul_nbits_quantizer.GPTQWeightOnlyQuantConfig(
-                calibration_data_reader=calibration_data_reader, layer_wise_quant=args.layer_wise
+                calibration_data_reader=calibration_data_reader,
+                layer_wise_quant=args.layer_wise,
+                quant_format=quant_format,
             )
             quant = matmul_nbits_quantizer.MatMulNBitsQuantizer(
                 model_path,
@@ -396,7 +403,9 @@ if __name__ == "__main__":
         elif args.algorithm.upper() == "WOQ_TUNE":
             calibration_data_reader = GPTQDataloader(model_path, seqlen=args.seqlen, batch_size=1)
             # set tolerable_loss to 0.5% for test, default is 1%
-            custom_tune_config = tuning.TuningConfig(config_set=config.get_woq_tuning_config(), tolerable_loss=0.005)
+            custom_tune_config = tuning.TuningConfig(
+                config_set=config.get_woq_tuning_config(quant_format=quant_format), tolerable_loss=0.005
+            )
             best_model = tuning.autotune(
                 model_input=model_path,
                 tune_config=custom_tune_config,

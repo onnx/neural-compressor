@@ -29,6 +29,9 @@ function init_params {
       --algorithm=*)
           algorithm=$(echo $var |cut -f2 -d=)
       ;;
+      --quant_format=*)
+          quant_format=$(echo $var |cut -f2 -d=)
+      ;;
     esac
   done
 
@@ -69,17 +72,18 @@ function run_tuning {
         extra_cmd="--nodes_to_exclude ${nodes_to_exclude}"
     fi
 
-    eval "python main.py \
-            --model_path ${input_model} \
-	        --tokenizer ${tokenizer-meta-llama/Llama-2-7b-hf} \
-            --output_model ${output_model} \
-            --batch_size ${batch_size-1} \
-            --dataset ${dataset-NeelNanda/pile-10k} \
-	        --algorithm ${algorithm-WOQ_TUNE} \
-	        --tasks ${tasks-lambada_openai} \
-            --layer_wise \
-            --tune \
-            ${extra_cmd}"
+    python main.py \
+      --model_path "${input_model}" \
+      --tokenizer "${tokenizer-meta-llama/Llama-2-7b-hf}" \
+      --output_model "${output_model}" \
+      --batch_size "${batch_size-1}" \
+      --dataset "${dataset-NeelNanda/pile-10k}" \
+      --algorithm "${algorithm-WOQ_TUNE}" \
+      --tasks "${tasks-lambada_openai}" \
+      --quant_format "${quant_format-QOperator}" \
+      --layer_wise \
+      --tune \
+      ${extra_cmd}
 }
 
 main "$@"

@@ -40,6 +40,11 @@ python prepare_model.py  --input_model="meta-llama/Llama-2-7b-hf" \
 ## 1. Quantization
 
 Set `algorithm=WOQ_TUNE` to tune weight-only quantization algorithm or specify algorithm to `RTN` or `GPTQ` or `AWQ`.
+`quant_format=QDQ` works only when:
+- onnxruntime >= 1.19.0
+- opset version of the model >= 21
+- quantized bits is in [4, 8]
+otherwise it will execute QOperator automatically.
 
 ```bash
 bash run_quant.sh --input_model=/path/to/model \ # folder path of onnx model
@@ -47,7 +52,8 @@ bash run_quant.sh --input_model=/path/to/model \ # folder path of onnx model
                   --batch_size=batch_size # optional \
                   --dataset=NeelNanda/pile-10k \
                   --tokenizer=meta-llama/Llama-2-7b-hf \ # model name or folder path containing all relevant files for model's tokenizer
-                  --algorithm=WOQ_TUNE # support WOQ_TUNE, RTN, AWQ, GPTQ
+                  --algorithm=WOQ_TUNE # support WOQ_TUNE, RTN, AWQ, GPTQ \
+                  --quant_format=QOperator # support QOperator and QDQ
 ```
 
 ## 2. Benchmark

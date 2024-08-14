@@ -31,6 +31,8 @@ from onnx_neural_compressor.quantization import config
 
 from typing import List, Union  # isort: skip
 
+ort_version = Version(ort.__version__)
+
 
 def _gptq(
     W: np.array,
@@ -185,6 +187,7 @@ def gptq_quantize(
     mse: bool = False,
     perchannel: bool = True,
     providers: List[str] = ["CPUExecutionProvider"],
+    quant_format: int = 0,
     return_modelproto: bool = True,
 ):
     """Quant the model with GPTQ method.
@@ -211,6 +214,7 @@ def gptq_quantize(
         mse (bool, optional): whether get scale and zero point with mse error. Defaults to False.
         perchannel (bool, optional): whether quantize weight per-channel. Defaults to True.
         providers (list, optional): providers to use. Defaults to ["CPUExecutionProvider"].
+        quant_format (int, optional): using QOperator or QDQ format. 0 means QOperator, 1 meansQDQ. Default is 0.
         return_modelproto (bool, optionmal): whether to return onnx.Modelproto. set False for layer-wise quant.
             Default to True
 
@@ -228,12 +232,12 @@ def gptq_quantize(
     output_names = []
     for node in model.nodes():
         # check op_type of node is MatMul
+        # check op_name in quantization config
         # check dim 1 of input is weight tensor
-        # check weight_type is not "fp32"
         if (
             node.op_type in ["MatMul"]
+            and node.name in weight_config
             and model.get_initializer(node.input[1]) is not None
-            and weight_config.get(node.name, {}).get("weight_dtype", "fp32") != "fp32"
         ):
             output_names.append(node.input[0])
     output_names = list(set(output_names))
@@ -262,12 +266,12 @@ def gptq_quantize(
 
         for node in input_name_to_nodes[input_name]:
             # check op_type of node is MatMul
+            # check op_name in quantization config
             # check dim 1 of input is weight tensor
-            # check weight_type is not "fp32"
             if (
                 node.op_type in ["MatMul"]
+                and node.name in weight_config
                 and model.get_initializer(node.input[1]) is not None
-                and weight_config.get(node.name, {}).get("weight_dtype", "fp32") != "fp32"
             ):
                 weight = onnx.numpy_helper.to_array(
                     model.get_initializer(model.get_node(node.name).input[1]), base_dir
@@ -297,6 +301,7 @@ def gptq_quantize(
             weight,
             H,
         ) in zip(node_list, weights, Hs):
+            weight_dtype = weight_config[node.name].get("weight_dtype", "int")
             num_bits = weight_config[node.name].get("weight_bits", 4)
             group_size = weight_config[node.name].get("weight_group_size", 32)
             sym = weight_config[node.name].get("weight_sym", True)
@@ -304,6 +309,7 @@ def gptq_quantize(
             group_size = group_size if group_size != -1 else weight.shape[0]
             dtype = weight.dtype
 
+            # weight -> quant -> dequant -> q_weight
             q_weight = _gptq(
                 weight,
                 H,
@@ -318,40 +324,50 @@ def gptq_quantize(
             )
 
             weight_tensor = model.get_initializer(node.input[1])
+            org_shape = weight.shape
             init_share_num = model.get_initializer_share_num(node.input[1])
 
-            satisfy_MatMulNBits_condition = Version(ort.__version__) > constants.ONNXRT1161_VERSION and num_bits == 4
+            satisfy_MatMulNBits_condition = ort_version > constants.ONNXRT1161_VERSION and num_bits == 4
             satisfy_MatMulFpQ4_condition = (
-                Version(ort.__version__) >= constants.ONNXRT116_VERSION and num_bits == 4 and group_size == 32
+                ort_version >= constants.ONNXRT116_VERSION and num_bits == 4 and group_size == 32
             )
-            if model.opset_import[0].version > 20:
-                q_weight, scale, zp = woq_utility.quant_tensor(
-                    weight.T, num_bits, group_size, scheme, "uint"
-                )
-                k_blocks = (org_shape[0] + group_size - 1) // group_size
-                dequant_node, new_inits = woq_utility.make_weight_only_dequant_node(
-                    node=node,
-                    q_weight=q_weight.astype("uint8"),
-                    k_blocks=k_blocks,
-                    scale=scale.astype(dtype),
+            if (
+                quant_format == 1  # QDQ format
+                and num_bits in [4, 8]
+                and ort_version >= constants.ONNXRT119_VERSION
+                and model.opset_import[0].version > 20
+            ):
+                _, _, zp, scale, q_weight = quant_utils.quantize_data(
+                    weight.T.reshape((-1, group_size)),
+                    weight_dtype + str(num_bits),
+                    sym,
                     axis=1,
+                )
+                dequant_node, new_inits = quant_utils.make_weight_only_dequant_node(
+                    node=node,
+                    weight_shape=org_shape,
+                    num_bits=num_bits,
+                    dtype=weight_dtype,
+                    q_weight=q_weight,
+                    scale=scale.astype(weight.dtype),
+                    axis=0,
                     block_size=group_size,
-                    zero_point=zp if scheme == "asym" else None,
+                    zero_point=zp,
                 )
                 model.add_initializers(new_inits)
                 model.add_node(dequant_node)
+                node.name += "_Q"
             elif ("CUDAExecutionProvider" in providers and satisfy_MatMulNBits_condition) or (
                 "CUDAExecutionProvider" not in providers
                 and (satisfy_MatMulFpQ4_condition or satisfy_MatMulNBits_condition)
             ):
                 # MatMulFpQ4 support 4 bits and 32 group_size with ort 1.16.0 and 1.16.1 versions, supported by CPU EP
                 # MatMulNBits supports 4 bits and 2^n group_size with ort > 1.16.1, supported by CPU EP AND CUDA EP
-                org_shape = weight.shape
                 k_blocks = (org_shape[0] + group_size - 1) // group_size
                 q_weight = quant_utils.pad_tensor(q_weight, group_size, k_blocks)
                 _, _, zp, scale, q_weight = quant_utils.quantize_data(
                     q_weight.T.reshape((-1, group_size)),
-                    "uint" + str(num_bits),
+                    weight_dtype + str(num_bits),
                     sym,
                     axis=1,
                 )
@@ -411,6 +427,7 @@ def apply_gptq_on_model(
     perchannel: bool = True,
     providers: List[str] = ["CPUExecutionProvider"],
     layer_wise_quant: bool = False,
+    quant_format: int = 0,
 ) -> onnx.ModelProto:
     """Apply GPTQ on onnx model.
 
@@ -418,6 +435,7 @@ def apply_gptq_on_model(
         model (Union[onnx.ModelProto, onnx_model.ONNXModel, pathlib.Path, str]): onnx model.
         quant_config (dict): quantization config.
         calibration_data_reader (data_reader.CalibrationDataReader): data_reader for calibration.
+        quant_format (int): using QOperator or QDQ format. 0 means QOperator, 1 meansQDQ. Default is 0.
 
     Returns:
         onnx.ModelProto: quantized onnx model.
@@ -430,6 +448,7 @@ def apply_gptq_on_model(
         "mse": mse,
         "perchannel": perchannel,
         "providers": providers,
+        "quant_format": quant_format,
     }
 
     if layer_wise_quant:

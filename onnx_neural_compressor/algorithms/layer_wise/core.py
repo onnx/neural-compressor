@@ -18,6 +18,7 @@
 import copy
 import os
 import pathlib
+import tempfile
 
 import onnx
 import onnxruntime as ort
@@ -60,7 +61,7 @@ def layer_wise_quant(
         model = onnx_model.ONNXModel(model, ignore_warning=True, load_external_data=False)
 
     origin_model = copy.deepcopy(model)
-
+    tmp_file = tempfile.TemporaryDirectory()
     providers = kwargs.get("providers", ["CPUExecutionProvider"])
 
     # get and check split nodes
@@ -97,7 +98,7 @@ def layer_wise_quant(
 
         # split model with given split node
         split_model_part_1, split_model_part_2 = split_model.split_model_with_node(
-            split_node.name, model.model_path, save_both_split_models
+            split_node.name, model.model_path, save_both_split_models, save_path=tmp_file.name
         )
 
         if not save_both_split_models:
@@ -201,6 +202,8 @@ def layer_wise_quant(
     onnx.external_data_helper.load_external_data_for_model(
         quantized_model_merged.model, os.path.dirname(quantized_model_merged.model_path)
     )
+
+    tmp_file.cleanup()
     return quantized_model_merged
 
 

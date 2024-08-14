@@ -21,8 +21,9 @@ import onnx
 import onnxruntime as ort
 
 from onnx_neural_compressor import data_reader, logger, onnx_model, utility
+from onnx_neural_compressor.quantization import QuantFormat
 from onnx_neural_compressor.quantization import algorithm_entry as algos
-from onnx_neural_compressor.quantization import config, QuantFormat
+from onnx_neural_compressor.quantization import config
 
 
 class WeightOnlyQuantConfig:
@@ -105,6 +106,7 @@ class MatMulNBitsQuantizer:
         model: Union[onnx.ModelProto, str],
         block_size: int = 128,
         is_symmetric: bool = False,
+        is_signed: bool = False,
         accuracy_level: int = 0,
         nodes_to_exclude: List[str] = None,
         algo_config: WeightOnlyQuantConfig = None,
@@ -117,6 +119,7 @@ class MatMulNBitsQuantizer:
         self.model = model
         self.block_size = block_size
         self.is_symmetric = is_symmetric
+        self.is_signed = is_signed
         self.accuracy_level = accuracy_level
         self.nodes_to_exclude = list(set(nodes_to_exclude))
         self.algo_config = algo_config or RTNWeightOnlyQuantConfig()
@@ -133,12 +136,14 @@ class MatMulNBitsQuantizer:
     def _generate_nc_config(self):
         config_class = config.config_registry.get_cls_configs()[self.algorithm.lower()]
         quant_kwargs = {
+            "weight_dtype": "int" if self.is_signed else "uint",
             "weight_bits": self.n_bits,
             "weight_group_size": self.block_size,
             "weight_sym": self.is_symmetric,
             "accuracy_level": self.accuracy_level,
             "providers": self.providers,
             "quant_format": self.algo_config.quant_format,
+            "nodes_to_exclude": self.nodes_to_exclude,
         }
         if self.algorithm == "RTN":
             quant_kwargs.update(
@@ -165,10 +170,6 @@ class MatMulNBitsQuantizer:
                 }
             )
         nc_config = config_class(**quant_kwargs)
-
-        if len(self.nodes_to_exclude) > 0:
-            not_quant_kwargs = {"weight_dtype": "fp32", "white_list": self.nodes_to_exclude}
-            nc_config += config_class(**not_quant_kwargs)
 
         return nc_config
 

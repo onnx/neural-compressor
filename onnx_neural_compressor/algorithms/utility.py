@@ -95,6 +95,17 @@ ONNX_STR_TYPE_RANGE = {
 }
 
 
+ONNX_TENSOR_TYPE = {
+    "bfloat16": getattr(onnx.TensorProto, "BFLOAT16", 16),
+    "float32": getattr(onnx.TensorProto, "FLOAT", 1),
+    "float16": getattr(onnx.TensorProto, "FLOAT16", 10),
+    "int4": getattr(onnx.TensorProto, "INT4", 22),
+    "uint4": getattr(onnx.TensorProto, "UNT4", 21),
+    "int8": getattr(onnx.TensorProto, "INT8", 3),
+    "uint8": getattr(onnx.TensorProto, "UINT8", 2),
+}
+
+
 def _qType_to_np_type(qType):
     if isinstance(qType, int):
         return onnx.helper.tensor_dtype_to_np_dtype(qType)
@@ -211,11 +222,15 @@ def calculate_scale_zp(rmin, rmax, qType, sym, reduce_range=False):
     dtype = _qType_to_np_type(qType)
     if isinstance(rmax, np.ndarray):
         if sym:
-            max_range = np.maximum(abs(rmin), abs(rmax))
-            rmin = -max_range
-            rmax = max_range
-        scale = (rmax - rmin) / (qmax - qmin)
-        scale[scale < np.finfo(rmax.dtype).tiny] = 1
+            mask = abs(rmin) > abs(rmax)
+            scale = np.ones(rmin.shape).astype(rmin.dtype)
+            scale[mask] = rmin[mask]
+            scale[~mask] = rmax[~mask]
+            abs_max = round((qmax - qmin) / 2)
+            scale /= abs_max
+        else:
+            scale = (rmax - rmin) / (qmax - qmin)
+        scale[abs(scale) < np.finfo(rmax.dtype).tiny] = 1
         zero_point = (
             np.multiply(np.ones(rmax.shape), np.round((qmax + qmin) / 2.0)).astype(dtype)
             if sym
@@ -298,42 +313,59 @@ def _get_blob_size(group_size, has_zp):  # pragma: no cover
     return blob_size
 
 
-def make_weight_only_dequant_node(node, weight_shape, block_size, k_blocks, num_bits, q_weight, scale, zero_point, axis=1):
+def make_weight_only_dequant_node(
+    node: onnx.NodeProto,
+    weight_shape: tuple,
+    block_size: int,
+    num_bits: int,
+    dtype: str,
+    q_weight: np.array,
+    scale: np.array,
+    zero_point: np.array,
+    axis: int = 1,
+):
     """Build DequantizeLinear node.
     Args:
         node: original matmul node
         weight_shape (tuple): original weight shape
         block_size (int): how many elements share one scale/zp
-        k_blocks (int): block number
         num_bits (int): num_bits
+        dtype (str): use uint or int
         q_weight (array): quantized weight
         scale (array): scale
         zero_point (array): zero point
         axis (int): the axis of the dequantizing dimension of the input tensor
+
     Returns:
         weight_only_dequant_node: DequantizeLinear node for weight dequantization
         new_inits: initializers of the new node
     """
     new_inits = []
     input_names = []
-    kwargs = {
-        "block_size": block_size,
-        "axis": axis
-        }
+    kwargs = {"block_size": block_size, "axis": axis}
 
-    q_weight_pairs = q_weight[::2, :] | q_weight[1::2, :] << 4
+    q_weight = q_weight.reshape((-1, weight_shape[-1])).T
+    if num_bits == 4:
+        q_weight = ((q_weight[:, ::2] & 0xF | q_weight[:, 1::2] << 4) & 0xFF).astype("uint8")
+
+    qtype = ONNX_TENSOR_TYPE.get(dtype + str(num_bits), None)
+
+    if qtype is None:
+        raise ValueError(
+            "Unsupported qtype {}, only support {}".format(dtype + str(num_bits), list(ONNX_TENSOR_TYPE.keys()))
+        )
 
     q_weight_tensor = onnx.helper.make_tensor(
         name=node.input[1] + "_Q{}G{}".format(str(num_bits), str(block_size)),
-        data_type=onnx.TensorProto.UINT4,
+        data_type=qtype,
         dims=weight_shape,
-        vals=q_weight_pairs.T.flatten().tobytes(),
+        vals=q_weight.flatten().tobytes(),
         raw=True,
     )
     new_inits.append(q_weight_tensor)
     input_names.append(q_weight_tensor.name)
 
-    #scale = scale.reshape((-1, weight_shape[-1]))
+    scale = scale.reshape((weight_shape[-1], -1)).T
     scale_tensor = onnx.helper.make_tensor(
         name=node.input[1] + "_scale",
         data_type=onnx.helper.np_dtype_to_tensor_dtype(scale.dtype),
@@ -345,13 +377,15 @@ def make_weight_only_dequant_node(node, weight_shape, block_size, k_blocks, num_
     new_inits.append(scale_tensor)
 
     # build zero_point tensor
-    packed_zp = zero_point[:, ::2] | zero_point[:, 1::2] << 4
+    zero_point = zero_point.reshape((weight_shape[-1], -1)).T
+    if num_bits == 4:
+        zero_point = ((zero_point[:, ::2] & 0xF | zero_point[:, 1::2] << 4) & 0xFF).astype("uint8")
 
     zp_tensor = onnx.helper.make_tensor(
         name=node.input[1] + "_zp",
-        data_type=onnx.TensorProto.UINT4,
+        data_type=qtype,
         dims=scale.shape,
-        vals=packed_zp.flatten().tobytes(),
+        vals=zero_point.flatten().tobytes(),
         raw=True,
     )
     input_names.append(zp_tensor.name)
@@ -578,10 +612,12 @@ def dump_woq_stats(model, quantize_config):
 
         if optype not in res:
             res[optype] = {}
-        if re.fullmatch("^.*_Q\d*G\d*", node.input[1]):
-            search_out = re.search("_Q\d*", node.input[1])
+        if re.match("^.*_Q\d*G\d*", node.input[1]):
+            Q_position = re.search("_Q\d*", node.input[1])
+            full_position = re.search("_Q\d*G\d*", node.input[1])
             dtype = "A32W{}G{}".format(
-                node.input[1][search_out.start() + 2 : search_out.end()], node.input[1][search_out.end() + 1 :]
+                node.input[1][Q_position.start() + 2 : Q_position.end()],
+                node.input[1][Q_position.end() + 1 : full_position.end()],
             )
         else:
             dtype = "FP32"
