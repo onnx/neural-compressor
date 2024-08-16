@@ -56,12 +56,11 @@ function run_benchmark {
 	extra_cmd=$extra_cmd"--image_path=${image_path} "
     fi
 
-    python main.py \
-            --model_path="${input_model}" \
-            --batch_size="${batch_size-1}" \
-            --benchmark \
-	    ${extra_cmd}
-            
+    if [ "$batch_size" ]; then
+	extra_cmd=$extra_cmd"--batch_size=${batch_size} "
+    fi
+    extra_cmd=$extra_cmd"--benchmark"
+    eval "python main.py --model_path=${input_model} ${extra_cmd}"
 }
 
 main "$@"
