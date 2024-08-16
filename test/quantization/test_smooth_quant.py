@@ -74,9 +74,10 @@ class TestONNXRTSmoothQuant(unittest.TestCase):
         os.remove("Optimized_model.onnx")
 
     def test_sq_config(self):
+        model = onnx.load(self.gptj)
         sq_config = config.SmoothQuantConfig()
-        model_info = sq_config.get_model_info(model=onnx.load(self.gptj))
-        self.assertEqual(len(model_info), 40)
+        model_info = sq_config.get_model_info(model=model)
+        self.assertEqual(len(model_info), len(model.graph.node))
 
     def test_sq_from_class_beginner(self):
         self.data_reader.rewind()
