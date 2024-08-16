@@ -88,6 +88,7 @@ class TestONNXModel(unittest.TestCase):
         shutil.rmtree("./gptj", ignore_errors=True)
         shutil.rmtree("./large_model", ignore_errors=True)
         os.remove("matmul_add.onnx")
+        os.remove("model1.onnx")
 
     def setUp(self):
         # print the test name
@@ -102,7 +103,7 @@ class TestONNXModel(unittest.TestCase):
         # model_path
         self.assertEqual(model.model_path, self.matmul_add_model)
         # framework
-        self.assertEqual(model.framework(), "onnxruntime")
+        self.assertEqual(model.framework, "onnxruntime")
         # q_config
         quant_config = config.RTNConfig()
         model.q_config = quant_config

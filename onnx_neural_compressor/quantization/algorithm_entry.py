@@ -192,7 +192,7 @@ def smooth_quant_entry(
         calibration_data_reader,
         execution_provider=getattr(quant_config, "execution_provider", "CPUExecutionProvider"),
     )
-    smoothed_model = smoother.transform(**quant_config.to_dict())
+    smoothed_model = smoother.transform(**quant_config.get_model_params_dict())
     with tempfile.TemporaryDirectory(prefix="ort.quant.") as tmp_dir:
         # ORT quant API requires str input
         onnx.save_model(

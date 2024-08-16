@@ -222,14 +222,10 @@ def calculate_scale_zp(rmin, rmax, qType, sym, reduce_range=False):
     dtype = _qType_to_np_type(qType)
     if isinstance(rmax, np.ndarray):
         if sym:
-            mask = abs(rmin) > abs(rmax)
-            scale = np.ones(rmin.shape).astype(rmin.dtype)
-            scale[mask] = rmin[mask]
-            scale[~mask] = rmax[~mask]
-            abs_max = round((qmax - qmin) / 2)
-            scale /= abs_max
-        else:
-            scale = (rmax - rmin) / (qmax - qmin)
+            max_range = np.maximum(abs(rmin), abs(rmax))
+            rmin = -max_range
+            rmax = max_range
+        scale = (rmax - rmin) / (qmax - qmin)
         scale[abs(scale) < np.finfo(rmax.dtype).tiny] = 1
         zero_point = (
             np.multiply(np.ones(rmax.shape), np.round((qmax + qmin) / 2.0)).astype(dtype)
@@ -612,6 +608,7 @@ def dump_woq_stats(model, quantize_config):
 
         if optype not in res:
             res[optype] = {}
+
         if re.match("^.*_Q\d*G\d*", node.input[1]):
             Q_position = re.search("_Q\d*", node.input[1])
             full_position = re.search("_Q\d*G\d*", node.input[1])

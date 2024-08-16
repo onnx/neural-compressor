@@ -14,19 +14,19 @@ function init_params {
   do
     case $var in
       --input_model=*)
-          input_model=$(echo $var |cut -f2 -d=)
+          input_model=$(echo "$var" |cut -f2 -d=)
       ;;
       --batch_size=*)
-          batch_size=$(echo $var |cut -f2 -d=)
+          batch_size=$(echo "$var" |cut -f2 -d=)
       ;;
       --tokenizer=*)
-          tokenizer=$(echo $var |cut -f2 -d=)
+          tokenizer=$(echo "$var" |cut -f2 -d=)
       ;;
       --mode=*)
-          mode=$(echo $var |cut -f2 -d=)
+          mode=$(echo "$var" |cut -f2 -d=)
       ;;
       --intra_op_num_threads=*)
-          intra_op_num_threads=$(echo $var |cut -f2 -d=)
+          intra_op_num_threads=$(echo "$var" |cut -f2 -d=)
       ;;
     esac
   done
@@ -42,19 +42,27 @@ function run_benchmark {
         input_model=$(dirname "$input_model")
     fi
 
+    extra_cmd=""
+
     if [[ "${tokenizer}" =~ "Phi-3-mini" ]]; then
-        extra_cmd="--trust_remote_code True"
+        extra_cmd=$extra_cmd"--trust_remote_code True "
     fi
 
-    python main.py \
-      --model_path="${input_model}" \
-      --batch_size="${batch_size-1}" \
-      --tokenizer="${tokenizer-meta-llama/Llama-2-7b-hf}" \
-      --tasks="${tasks-lambada_openai}" \
-      --mode="${mode}" \
-      --intra_op_num_threads="${intra_op_num_threads-24}" \
-      --benchmark \
-      ${extra_cmd}
+    if [ "${batch_size}" ]; then
+	extra_cmd=$extra_cmd"--batch_size ${batch_size} "
+    fi
+    if [ "${tokenizer}" ]; then
+	extra_cmd=$extra_cmd"--tokenizer ${tokenizer} "
+    fi
+    if [ "${tasks}" ]; then
+	extra_cmd=$extra_cmd"--tasks ${tasks} "
+    fi
+    if [ "${intra_op_num_threads}" ]; then
+	extra_cmd=$extra_cmd"--intra_op_num_threads ${intra_op_num_threads} "
+    fi
+
+    extra_cmd=$extra_cmd"--benchmark"
+    eval "python main.py --model_path ${input_model} --mode ${mode} ${extra_cmd}"
 
 }
 

@@ -40,3 +40,7 @@ class TestUtilityFunctions(unittest.TestCase):
             beta=0.35,
         )
         self.assertFalse(quant_utils.is_B_transposed(node))
+
+
+if __name__ == "__main__":
+    unittest.main()

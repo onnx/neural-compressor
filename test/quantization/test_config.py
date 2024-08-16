@@ -329,28 +329,6 @@ class TestQuantizationConfig(unittest.TestCase):
                 self.assertLess(idx, 2)
 
     def test_config_white_lst(self):
-        global_config = config.RTNConfig(weight_bits=4)
-        # set operator instance
-        fc_out_config = config.RTNConfig(weight_dtype="fp32", white_list=["/h.4/mlp/fc_out/MatMul"])
-        # get model and quantize
-        fp32_model = self.gptj
-        qmodel = algos.rtn_quantize_entry(fp32_model, quant_config=global_config + fc_out_config)
-        self.assertIsNotNone(qmodel)
-        self.assertEqual(self._count_woq_matmul(qmodel), 29)
-        self.assertFalse(self._check_node_is_quantized(qmodel, "/h.4/mlp/fc_out/MatMul"))
-
-    def test_config_white_lst2(self):
-        global_config = config.RTNConfig(weight_dtype="fp32")
-        # set operator instance
-        fc_out_config = config.RTNConfig(weight_bits=4, white_list=["/h.4/mlp/fc_out/MatMul"])
-        # get model and quantize
-        fp32_model = self.gptj
-        qmodel = algos.rtn_quantize_entry(fp32_model, quant_config=global_config + fc_out_config)
-        self.assertIsNotNone(qmodel)
-        self.assertEqual(self._count_woq_matmul(qmodel), 1)
-        self.assertTrue(self._check_node_is_quantized(qmodel, "/h.4/mlp/fc_out/MatMul"))
-
-    def test_config_white_lst3(self):
 
         global_config = config.RTNConfig(weight_bits=4)
         # set operator instance

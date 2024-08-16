@@ -74,7 +74,8 @@ parser.add_argument(
 parser.add_argument(
     "--tasks",
     nargs="+",
-    default=[
+    default=["lambada_openai"],
+    choices=[
         "winogrande",
         "copa",
         "piqa",

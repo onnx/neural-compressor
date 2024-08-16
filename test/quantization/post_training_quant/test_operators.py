@@ -78,6 +78,9 @@ class TestQuantizer(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         shutil.rmtree("./onnxrt_test", ignore_errors=True)
+        os.remove("int8.onnx")
+        os.remove("qdq.onnx")
+        os.remove("test.onnx")
 
     def qlinear_test(self, model, q_config, quantize_params, quantizable_op_types, **kwargs):
         quant = quantizer.StaticQuantizer(
