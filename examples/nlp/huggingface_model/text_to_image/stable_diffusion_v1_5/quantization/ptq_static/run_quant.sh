@@ -35,10 +35,10 @@ function run_tuning {
     fi
 
     # Check if the directory exists
-    if [ ! -d $(dirname "$output_model") ]; then
+    if [ ! -d "$(dirname "$output_model")" ]; then
         # If the directory doesn't exist, create it
-	mkdir -p $(dirname "$output_model")
-	echo "Created directory $(dirname $output_model)"
+	mkdir -p "$(dirname "$output_model")"
+	echo "Created directory $(dirname "$output_model")"
     fi
 
     python main.py \
