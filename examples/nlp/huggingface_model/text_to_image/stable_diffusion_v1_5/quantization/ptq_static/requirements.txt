@@ -4,3 +4,4 @@ onnx
 onnxruntime
 onnxruntime-extensions
 onnx_neural_compressor
+transformers==4.42.0 # restricted by model export
