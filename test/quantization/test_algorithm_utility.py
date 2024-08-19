@@ -76,6 +76,14 @@ class TestUtilityFunctions(unittest.TestCase):
         split = any(["_nc_split_" in i.name for i in update_model.initializer()])
         self.assertTrue(split)
 
+    def test_get_qmin_qmax_for_qType(self):
+        with self.assertRaises(ValueError):
+            quant_utils.get_qmin_qmax_for_qType(onnx.TensorProto.INT64)
+
+        qmin, qmax = quant_utils.get_qmin_qmax_for_qType(onnx.TensorProto.INT8, reduce_range=True)
+        self.assertEqual(qmin, -64)
+        self.assertEqual(qmax, 64)
+
 
 if __name__ == "__main__":
     unittest.main()
