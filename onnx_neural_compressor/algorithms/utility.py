@@ -594,17 +594,18 @@ def pad_tensor(weight, group_size, k_blocks):
     return weight
 
 
-def dump_woq_stats(model, quantize_config):
+def dump_woq_stats(model, quantize_config, white_list=["MatMul"]):
     res = {}
 
     dtype_set = set()
     for node in model.graph.node:
-        if node.name.split("_Q")[0] not in quantize_config:
-            continue
         if node.op_type in ["MatMulFpQ4", "MatMulNBits"]:
             optype = "MatMul"
         else:
             optype = node.op_type
+
+        if optype not in white_list:
+            continue
 
         if optype not in res:
             res[optype] = {}
