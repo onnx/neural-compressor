@@ -802,9 +802,9 @@ class BaseWeightOnlyConfig(BaseConfig):
             global_config = config.get_params_dict()
             op_type_config_dict, op_name_config_dict = config._get_op_name_op_type_config()
             for op_name, op_type in model_info:
-                if op_name in self.nodes_to_exclude:
-                    continue
                 if op_type not in self.white_list:
+                    continue
+                if any([re.match(exclude_name, op_name) for exclude_name in self.nodes_to_exclude]):
                     continue
                 if op_type == "MatMul":
                     last_matmul = op_name
