@@ -155,6 +155,7 @@ class TestAWQQuantWithInternalAPI(TestAWQQuant):
             "weight_sym": [True, False],
             "act_dtype": ["fp32"],
             "accuracy_level": [0],
+            "quant_format": [0, 1],
             "enable_auto_scale": [True, False],
             "enable_mse_search": [True, False],
         }

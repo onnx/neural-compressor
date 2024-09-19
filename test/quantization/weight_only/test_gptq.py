@@ -153,6 +153,7 @@ class TestGPTQQuantWithInternalAPI(TestGPTQQuant):
             "weight_sym": [True, False],
             "act_dtype": ["fp32"],
             "accuracy_level": [0],
+            "quant_format": [0, 1],
             "percdamp": [0.01],
             "blocksize": [128],
             "actorder": [True, False],

@@ -212,8 +212,7 @@ class TestBaseConfig(unittest.TestCase):
         fake_config = FakeAlgoConfig(weight_bits=4, white_list=[OP1_NAME])
         fake1_config = FakeAlgoOneConfig(weight_bits=2, white_list=[OP2_NAME])
         mixed_config = fake_config + fake1_config
-        model_info = mixed_config.get_model_info(model)
-        config_mapping = mixed_config.to_config_mapping(model_info=model_info)
+        config_mapping = mixed_config.to_config_mapping(model=model)
         self.assertIn(OP1_NAME, config_mapping)
         self.assertIn(OP2_NAME, config_mapping)
 

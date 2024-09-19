@@ -637,7 +637,7 @@ class ComposableConfig(BaseConfig):
     def to_config_mapping(
         self, model: Union[onnx.ModelProto, str], config_list: List[BaseConfig] = None
     ) -> OrderedDict[str, BaseConfig]:
-        model_info = BaseConfig.get_model_info(model)
+        model_info = self.get_model_info(model)
         for config in self.config_list:
             op_type_config_dict, op_name_config_dict = config._get_op_name_op_type_config()
             single_config_model_info = model_info.get(config.name, None)

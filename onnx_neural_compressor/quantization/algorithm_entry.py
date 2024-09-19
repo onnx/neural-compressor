@@ -39,8 +39,8 @@ def rtn_quantize_entry(
 
     quant_kwargs = dict(
         zip(
-            config.RTNConfig.model_params_list,
-            [getattr(quant_config, key, None) for key in config.RTNConfig.model_params_list],
+            quant_config.model_params_list,
+            [getattr(quant_config, key, None) for key in quant_config.model_params_list],
         )
     )
     model = rtn.apply_rtn_on_model(model, config_mapping, **quant_kwargs)
@@ -65,8 +65,8 @@ def gptq_quantize_entry(
     config_mapping = quant_config.to_config_mapping(model=model)
     quant_kwargs = dict(
         zip(
-            config.GPTQConfig.model_params_list,
-            [getattr(quant_config, key, None) for key in config.RTNConfig.model_params_list],
+            quant_config.model_params_list,
+            [getattr(quant_config, key, None) for key in quant_config.model_params_list],
         )
     )
 
@@ -94,8 +94,8 @@ def awq_quantize_entry(
     config_mapping = quant_config.to_config_mapping(model=model)
     quant_kwargs = dict(
         zip(
-            config.AWQConfig.model_params_list,
-            [getattr(quant_config, key, None) for key in config.RTNConfig.model_params_list],
+            quant_config.model_params_list,
+            [getattr(quant_config, key, None) for key in quant_config.model_params_list],
         )
     )
 
