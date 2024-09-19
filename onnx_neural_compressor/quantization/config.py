@@ -1640,7 +1640,7 @@ class StaticQuantConfig(BaseConfig, ort_quant.StaticQuantConfig):
             model = onnx.load(model, load_external_data=False)
 
         model_info = BaseConfig.get_model_info(model)
- 
+
         if config_list is None:
             config_list = [self]
         for config in config_list:
@@ -2015,7 +2015,7 @@ class DynamicQuantConfig(BaseConfig, ort_quant.DynamicQuantConfig):
             model = onnx.load(model, load_external_data=False)
 
         model_info = BaseConfig.get_model_info(model)
- 
+
         if config_list is None:
             config_list = [self]
         for config in config_list:

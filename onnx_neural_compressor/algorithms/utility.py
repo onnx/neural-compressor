@@ -621,6 +621,7 @@ def quant_matmul_weight_only(
         new_inits.append(q_weight_tensor)
     return new_nodes, new_inits, remove_nodes
 
+
 def prepare_inputs(model, data_reader, providers):
     """Prepare inputs for weight only quantization.
 
