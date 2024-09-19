@@ -21,15 +21,12 @@ import pathlib
 import numpy as np
 import onnx
 import onnxruntime as ort
-from packaging import version
 
 from onnx_neural_compressor import constants, onnx_model, utility
 from onnx_neural_compressor.algorithms import utility as quant_utils
 from onnx_neural_compressor.algorithms.layer_wise import core
 
 from typing import List, Union  # isort: skip
-
-ort_version = version.Version(ort.__version__)
 
 
 def rtn_quantize(

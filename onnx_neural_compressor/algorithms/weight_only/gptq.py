@@ -22,7 +22,6 @@ import pathlib
 import numpy as np
 import onnx
 import onnxruntime as ort
-from packaging.version import Version
 
 from onnx_neural_compressor import constants, data_reader, onnx_model, utility
 from onnx_neural_compressor.algorithms import utility as quant_utils
@@ -31,8 +30,6 @@ from onnx_neural_compressor.algorithms.weight_only import rtn
 from onnx_neural_compressor.quantization import config
 
 from typing import List, Union  # isort: skip
-
-ort_version = Version(ort.__version__)
 
 
 def _gptq(

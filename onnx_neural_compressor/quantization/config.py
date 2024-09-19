@@ -569,7 +569,7 @@ class BaseConfig(ABC):
     ) -> OrderedDict[Tuple[str, str], OrderedDict[str, BaseConfig]]:
         if config_list is None:
             config_list = [self]
-        model_info = BaseConfig.get_model_info(model)
+        model_info = self.get_model_info(model)
         for config in config_list:
             op_type_config_dict, op_name_config_dict = config._get_op_name_op_type_config()
             for op_name, op_type in model_info:
@@ -802,7 +802,7 @@ class BaseWeightOnlyConfig(BaseConfig):
         if isinstance(model, str):
             model = onnx.load(model, load_external_data=False)
 
-        model_info = BaseConfig.get_model_info(model)
+        model_info = self.get_model_info(model)
         if config_list is None:
             config_list = [self]
         for config in config_list:
@@ -1639,7 +1639,7 @@ class StaticQuantConfig(BaseConfig, ort_quant.StaticQuantConfig):
         if isinstance(model, str):
             model = onnx.load(model, load_external_data=False)
 
-        model_info = BaseConfig.get_model_info(model)
+        model_info = self.get_model_info(model)
 
         if config_list is None:
             config_list = [self]
@@ -2014,7 +2014,7 @@ class DynamicQuantConfig(BaseConfig, ort_quant.DynamicQuantConfig):
         if isinstance(model, str):
             model = onnx.load(model, load_external_data=False)
 
-        model_info = BaseConfig.get_model_info(model)
+        model_info = self.get_model_info(model)
 
         if config_list is None:
             config_list = [self]
