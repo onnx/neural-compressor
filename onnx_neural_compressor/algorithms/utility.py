@@ -340,7 +340,7 @@ def make_weight_only_dequant_node(
     input_names = []
     kwargs = {"block_size": block_size, "axis": axis}
 
-    q_weight = q_weight.reshape((-1, weight_shape[-1])).T
+    q_weight = q_weight.reshape((weight_shape[-1], -1)).T
     if num_bits == 4:
         q_weight = ((q_weight[:, ::2] & 0xF | q_weight[:, 1::2] << 4) & 0xFF).astype("uint8")
 
@@ -536,6 +536,91 @@ def make_matmul_weight_only_node(
     return matmul_weight_only_node, new_inits
 
 
+def quant_matmul_weight_only(
+    node,
+    weight,
+    dtype,
+    num_bits,
+    sym,
+    group_size,
+    ratio=1,
+    quant_format=None,
+    accuracy_level=0,
+):
+    new_nodes = []
+    new_inits = []
+    remove_nodes = []
+
+    org_w_shape = weight.shape  # ic, oc
+    group_size = group_size if group_size != -1 else org_w_shape[0]
+    k_blocks = (org_w_shape[0] - 1) // group_size + 1
+    weight = pad_tensor(weight, group_size, k_blocks)
+
+    if quant_format == 1:
+        _, _, zp, scale, q_weight = quantize_data(
+            weight.T.reshape((-1, group_size)),
+            dtype + str(num_bits),
+            sym,
+            ratio=ratio,
+            axis=1,
+        )
+        dequant_node, inits = make_weight_only_dequant_node(
+            node=node,
+            weight_shape=org_w_shape,
+            num_bits=num_bits,
+            dtype=dtype,
+            q_weight=q_weight,
+            scale=scale.astype(weight.dtype),
+            axis=0,
+            block_size=group_size,
+            zero_point=zp,
+        )
+        new_nodes.append(dequant_node)
+        new_inits.extend(inits)
+    elif quant_format == 0:
+        _, _, zp, scale, q_weight = quantize_data(
+            weight.T.reshape((-1, group_size)),
+            dtype + str(num_bits),
+            sym,
+            ratio=ratio,
+            axis=1,
+        )
+        q_matmul_node, inits = make_matmul_weight_only_node(
+            node=node,
+            weight_shape=org_w_shape,
+            num_bits=num_bits,
+            group_size=group_size,
+            k_blocks=k_blocks,
+            q_weight=q_weight,
+            scale=scale.astype(weight.dtype),
+            zero_point=zp if not sym else None,
+            accuracy_level=accuracy_level,
+        )
+        new_nodes.append(q_matmul_node)
+        new_inits.extend(inits)
+        remove_nodes.append(node)
+    else:
+        q_weight = qdq_data(
+            weight.T.reshape((-1, group_size)),
+            dtype + str(num_bits),
+            sym,
+            ratio=ratio,
+            axis=1,
+        )
+        q_weight = np.reshape(q_weight, (org_w_shape[1], -1))
+        q_weight = np.transpose(q_weight)
+        q_weight = q_weight[: org_w_shape[0], :].astype(weight.dtype)
+        q_weight_tensor = onnx.helper.make_tensor(
+            name=node.input[1] + "_Q{}G{}".format(str(num_bits), str(group_size)),
+            data_type=onnx.helper.np_dtype_to_tensor_dtype(q_weight.dtype),
+            dims=weight.shape,
+            vals=q_weight.tobytes(),
+            raw=True,
+        )
+        node.input[1] = q_weight_tensor.name
+        new_inits.append(q_weight_tensor)
+    return new_nodes, new_inits, remove_nodes
+
 def prepare_inputs(model, data_reader, providers):
     """Prepare inputs for weight only quantization.
 
@@ -604,27 +689,25 @@ def dump_woq_stats(model, quantize_config, white_list=["MatMul"]):
         else:
             optype = node.op_type
 
-        if optype not in white_list:
+        if optype not in white_list and optype != "DequantizeLinear":
             continue
 
         if optype not in res:
             res[optype] = {}
 
-        if re.match("^.*_Q\d*G\d*", node.input[1]):
-            Q_position = re.search("_Q\d*", node.input[1])
-            full_position = re.search("_Q\d*G\d*", node.input[1])
-            dtype = "A32W{}G{}".format(
-                node.input[1][Q_position.start() + 2 : Q_position.end()],
-                node.input[1][Q_position.end() + 1 : full_position.end()],
-            )
-        else:
-            dtype = "FP32"
-        dtype_set.add(dtype)
+        dtype = "FP32"
+        for inp in node.input:
+            if re.match("^.*_Q\d*G\d*", inp):
+                Q_position = re.search("_Q\d*", inp)
+                full_position = re.search("_Q\d*G\d*", inp)
+                dtype = "A32W{}G{}".format(
+                    inp[Q_position.start() + 2 : Q_position.end()],
+                    inp[Q_position.end() + 1 : full_position.end()],
+                )
+                dtype_set.add(dtype)
+                break
 
-        if dtype in res[optype]:
-            res[optype][dtype] += 1
-        else:
-            res[optype][dtype] = 1
+        res[optype][dtype] = res[optype].get(dtype, 0) + 1
 
     dtype_list = list(dtype_set)
     for dtype in dtype_list:

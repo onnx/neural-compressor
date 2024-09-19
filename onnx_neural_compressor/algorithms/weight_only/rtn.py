@@ -37,7 +37,6 @@ def rtn_quantize(
     weight_config: dict = {},
     ratios: dict = {},
     providers: List[str] = ["CPUExecutionProvider"],
-    quant_format: int = 0,
     return_modelproto: bool = True,
 ):
     """Quantize the model with round to nearst method.
@@ -58,7 +57,6 @@ def rtn_quantize(
             }. Defaults to {}.
         ratios (dict, optional): percentile of clip. Defaults to {}.
         providers (list, optional): providers to use. Defaults to ["CPUExecutionProvider"].
-        quant_format (int): using QOperator or QDQ format. 0 means QOperator, 1 means QDQ. Default is 0.
         return_modelproto (bool, optionmal): whether to return onnx.Modelproto. set False for layer-wise quant.
             Default to True
     Returns:
@@ -67,8 +65,8 @@ def rtn_quantize(
     if not isinstance(model, onnx_model.ONNXModel):
         model = onnx_model.ONNXModel(model)
     base_dir = os.path.dirname(model.model_path) if model.model_path is not None else ""
-    new_nodes = []
-    remove_nodes = []
+    new_nodes_all = []
+    remove_nodes_all = []
     total_num = len([i for i in model.nodes() if i.op_type in ["MatMul"]])
     curr_id = 0
     for node in model.nodes():
@@ -94,99 +92,29 @@ def rtn_quantize(
             group_size = weight_config[node.name].get("weight_group_size", 32)
             sym = weight_config[node.name].get("weight_sym", True)
             accuracy_level = weight_config[node.name].get("accuracy_level", 0)
+            quant_format = getattr(weight_config[node.name].get("quant_format", None), "value", None)
 
-            org_w_shape = weight.shape  # ic, oc
-            group_size = group_size if group_size != -1 else org_w_shape[0]
-
-            k_blocks = (org_w_shape[0] - 1) // group_size + 1
             init_share_num = model.get_initializer_share_num(node.input[1])
 
-            weight = quant_utils.pad_tensor(weight, group_size, k_blocks)
-
-            satisfy_MatMulNBits_condition = ort_version > constants.ONNXRT1161_VERSION and num_bits == 4
-            satisfy_MatMulFpQ4_condition = (
-                ort_version >= constants.ONNXRT116_VERSION and num_bits == 4 and group_size == 32
+            new_nodes, new_inits, remove_nodes = quant_utils.quant_matmul_weight_only(
+                node=node,
+                weight=weight,
+                dtype=dtype,
+                num_bits=num_bits,
+                sym=sym,
+                group_size=group_size,
+                ratio=ratios.get(node.input[1], 1),
+                quant_format=quant_format,
+                accuracy_level=accuracy_level,
             )
-            if (
-                quant_format == 1  # QDQ format
-                and num_bits in [4, 8]
-                and ort_version >= constants.ONNXRT119_VERSION
-                and model.opset_import[0].version > 20
-            ):
-                _, _, zp, scale, q_weight = quant_utils.quantize_data(
-                    weight.T.reshape((-1, group_size)),
-                    dtype + str(num_bits),
-                    sym,
-                    ratio=ratios.get(node.input[1], 1),
-                    axis=1,
-                )
-                dequant_node, new_inits = quant_utils.make_weight_only_dequant_node(
-                    node=node,
-                    weight_shape=org_w_shape,
-                    num_bits=num_bits,
-                    dtype=dtype,
-                    q_weight=q_weight,
-                    scale=scale.astype(weight.dtype),
-                    axis=0,
-                    block_size=group_size,
-                    zero_point=zp,
-                )
-                model.add_initializers(new_inits)
-                new_nodes.append(dequant_node)
-                node.name += "_Q"
-            elif ("CUDAExecutionProvider" in providers and satisfy_MatMulNBits_condition) or (
-                "CUDAExecutionProvider" not in providers
-                and (satisfy_MatMulFpQ4_condition or satisfy_MatMulNBits_condition)
-            ):  # pragma: no cover
-                # MatMulFpQ4 support 4 bits and 32 group_size with ort 1.16.0 and 1.16.1 versions, supported by CPU EP
-                # MatMulNBits supports 4 bits and 2^n group_size with ort > 1.16.1, supported by CPU EP AND CUDA EP
-                _, _, zp, scale, q_weight = quant_utils.quantize_data(
-                    weight.T.reshape((-1, group_size)),
-                    dtype + str(num_bits),
-                    sym,
-                    ratio=ratios.get(node.input[1], 1),
-                    axis=1,
-                )
-                q_matmul_node, new_inits = quant_utils.make_matmul_weight_only_node(
-                    node=node,
-                    weight_shape=org_w_shape,
-                    num_bits=num_bits,
-                    group_size=group_size,
-                    k_blocks=k_blocks,
-                    q_weight=q_weight,
-                    scale=scale.astype(weight.dtype),
-                    zero_point=zp if not sym else None,
-                    accuracy_level=accuracy_level,
-                )
-
-                model.add_initializers(new_inits)
-                remove_nodes.append(node)
-                new_nodes.append(q_matmul_node)
-            else:  # fake quant
-                q_weight = quant_utils.qdq_data(
-                    weight.T.reshape((-1, group_size)),
-                    dtype + str(num_bits),
-                    sym,
-                    ratio=ratios.get(node.input[1], 1),
-                    axis=1,
-                )
-                q_weight = np.reshape(q_weight, (org_w_shape[1], -1))
-                q_weight = np.transpose(q_weight)
-                q_weight = q_weight[: org_w_shape[0], :].astype(weight.dtype)
-                q_weight_tensor = onnx.helper.make_tensor(
-                    name=node.input[1] + "_Q{}G{}".format(str(num_bits), str(group_size)),
-                    data_type=onnx.helper.np_dtype_to_tensor_dtype(q_weight.dtype),
-                    dims=weight.shape,
-                    vals=q_weight.tobytes(),
-                    raw=True,
-                )
-                model.add_initializer(q_weight_tensor)
-                node.input[1] = q_weight_tensor.name
+            model.add_initializers(new_inits)
+            new_nodes_all.extend(new_nodes)
+            remove_nodes_all.extend(remove_nodes)
             if init_share_num == 1:
                 model.remove_initializer(weight_tensor)
 
-    model.add_nodes(new_nodes)
-    model.remove_nodes(remove_nodes)
+    model.add_nodes(new_nodes_all)
+    model.remove_nodes(remove_nodes_all)
     model.topological_sort()
 
     # reload external data to prevent external data file path errors
@@ -206,14 +134,12 @@ def apply_rtn_on_model(
     ratios: dict = {},
     providers: List[str] = ["CPUExecutionProvider"],
     layer_wise_quant: bool = False,
-    quant_format: int = 0,
 ) -> onnx.ModelProto:
     """Apply RTN on onnx model.
 
     Args:
         model (Union[onnx.ModelProto, onnx_model.ONNXModel, pathlib.Path, str]): onnx model.
         quant_config (dict): quantization config.
-        quant_format (int): using QOperator or QDQ format. 0 means QOperator, 1 means QDQ. Default is 0.
 
     Returns:
         onnx.ModelProto: quantized onnx model.
@@ -221,7 +147,6 @@ def apply_rtn_on_model(
     quant_kwargs = {
         "ratios": ratios,
         "providers": providers,
-        "quant_format": quant_format,
     }
 
     if layer_wise_quant:

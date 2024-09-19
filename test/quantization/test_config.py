@@ -100,8 +100,7 @@ class TestQuantizationConfig(unittest.TestCase):
             )
             config_loader = tuning.ConfigLoader(config_set=tuning_config.config_set, sampler=tuning_config.sampler)
             for idx, quant_config in enumerate(config_loader):
-                model_info = quant_config.get_model_info(model=self.simple_onnx_model)
-                configs_mapping = quant_config.to_config_mapping(model_info=model_info)
+                configs_mapping = quant_config.to_config_mapping(model=self.simple_onnx_model)
                 if idx == 0:
                     self.assertTrue(configs_mapping["Matmul"]["per_channel"])
                 elif idx == 1:
@@ -125,8 +124,7 @@ class TestQuantizationConfig(unittest.TestCase):
             )
             config_loader = tuning.ConfigLoader(config_set=tuning_config.config_set, sampler=tuning_config.sampler)
             for idx, quant_config in enumerate(config_loader):
-                model_info = quant_config.get_model_info(model=self.simple_onnx_model)
-                configs_mapping = quant_config.to_config_mapping(model_info=model_info)
+                configs_mapping = quant_config.to_config_mapping(model=self.simple_onnx_model)
                 self.assertTrue("add" not in configs_mapping)
                 self.assertTrue("add2" not in configs_mapping)
                 self.assertTrue("Matmul" not in configs_mapping)
@@ -143,8 +141,7 @@ class TestQuantizationConfig(unittest.TestCase):
             )
             config_loader = tuning.ConfigLoader(config_set=tuning_config.config_set, sampler=tuning_config.sampler)
             for idx, quant_config in enumerate(config_loader):
-                model_info = quant_config.get_model_info(model=self.simple_onnx_model)
-                configs_mapping = quant_config.to_config_mapping(model_info=model_info)
+                configs_mapping = quant_config.to_config_mapping(model=self.simple_onnx_model)
                 if idx == 0:
                     self.assertTrue(configs_mapping["Matmul"]["per_channel"])
                 elif idx == 1:
@@ -161,8 +158,7 @@ class TestQuantizationConfig(unittest.TestCase):
             )
             config_loader = tuning.ConfigLoader(config_set=tuning_config.config_set, sampler=tuning_config.sampler)
             for idx, quant_config in enumerate(config_loader):
-                model_info = quant_config.get_model_info(model=self.simple_onnx_model)
-                configs_mapping = quant_config.to_config_mapping(model_info=model_info)
+                configs_mapping = quant_config.to_config_mapping(model=self.simple_onnx_model)
                 self.assertTrue("add" not in configs_mapping)
                 self.assertTrue("add2" not in configs_mapping)
                 self.assertTrue("Matmul" not in configs_mapping)
@@ -179,8 +175,7 @@ class TestQuantizationConfig(unittest.TestCase):
             )
             config_loader = tuning.ConfigLoader(config_set=tuning_config.config_set, sampler=tuning_config.sampler)
             for idx, quant_config in enumerate(config_loader):
-                model_info = quant_config.get_model_info(model=self.simple_onnx_model)
-                configs_mapping = quant_config.to_config_mapping(model_info=model_info)
+                configs_mapping = quant_config.to_config_mapping(model=self.simple_onnx_model)
                 if idx in [0, 4]:
                     self.assertTrue(configs_mapping["Matmul"]["per_channel"])
                 elif idx in [1, 5]:
@@ -202,8 +197,7 @@ class TestQuantizationConfig(unittest.TestCase):
             )
             config_loader = tuning.ConfigLoader(config_set=tuning_config.config_set, sampler=tuning_config.sampler)
             for idx, quant_config in enumerate(config_loader):
-                model_info = quant_config.get_model_info(model=self.simple_onnx_model)
-                configs_mapping = quant_config.to_config_mapping(model_info=model_info)
+                configs_mapping = quant_config.to_config_mapping(model=self.simple_onnx_model)
                 self.assertTrue("add" not in configs_mapping)
                 self.assertTrue("add2" not in configs_mapping)
                 self.assertTrue("Matmul" not in configs_mapping)
@@ -218,8 +212,7 @@ class TestQuantizationConfig(unittest.TestCase):
             )
             config_loader = tuning.ConfigLoader(config_set=tuning_config.config_set, sampler=tuning_config.sampler)
             for idx, quant_config in enumerate(config_loader):
-                model_info = quant_config.get_model_info(model=self.simple_onnx_model)
-                configs_mapping = quant_config.to_config_mapping(model_info=model_info)
+                configs_mapping = quant_config.to_config_mapping(model=self.simple_onnx_model)
                 if "Matmul" in configs_mapping:
                     self.assertFalse(configs_mapping["Matmul"]["per_channel"])
                     self.assertEqual(configs_mapping["Matmul"]["calibrate_method"], "MinMax")
@@ -236,8 +229,7 @@ class TestQuantizationConfig(unittest.TestCase):
             )
             config_loader = tuning.ConfigLoader(config_set=tuning_config.config_set, sampler=tuning_config.sampler)
             for idx, quant_config in enumerate(config_loader):
-                model_info = quant_config.get_model_info(model=self.simple_onnx_model)
-                configs_mapping = quant_config.to_config_mapping(model_info=model_info)
+                configs_mapping = quant_config.to_config_mapping(model=self.simple_onnx_model)
                 if idx in [0, 4]:
                     self.assertTrue(configs_mapping["Matmul"]["per_channel"])
                 elif idx in [1, 5]:
@@ -262,8 +254,7 @@ class TestQuantizationConfig(unittest.TestCase):
             )
             config_loader = tuning.ConfigLoader(config_set=tuning_config.config_set, sampler=tuning_config.sampler)
             for idx, quant_config in enumerate(config_loader):
-                model_info = quant_config.get_model_info(model=self.simple_onnx_model)
-                configs_mapping = quant_config.to_config_mapping(model_info=model_info)
+                configs_mapping = quant_config.to_config_mapping(model=self.simple_onnx_model)
                 if idx == 0:
                     self.assertTrue(configs_mapping["Matmul"]["per_channel"])
                 elif idx == 1:
@@ -281,8 +272,7 @@ class TestQuantizationConfig(unittest.TestCase):
             )
             config_loader = tuning.ConfigLoader(config_set=tuning_config.config_set, sampler=tuning_config.sampler)
             for idx, quant_config in enumerate(config_loader):
-                model_info = quant_config.get_model_info(model=self.simple_onnx_model)
-                configs_mapping = quant_config.to_config_mapping(model_info=model_info)
+                configs_mapping = quant_config.to_config_mapping(model=self.simple_onnx_model)
                 self.assertTrue("add" not in configs_mapping)
                 self.assertTrue("add2" not in configs_mapping)
                 self.assertTrue("Matmul" not in configs_mapping)
@@ -299,8 +289,7 @@ class TestQuantizationConfig(unittest.TestCase):
             )
             config_loader = tuning.ConfigLoader(config_set=tuning_config.config_set, sampler=tuning_config.sampler)
             for idx, quant_config in enumerate(config_loader):
-                model_info = quant_config.get_model_info(model=self.simple_onnx_model)
-                configs_mapping = quant_config.to_config_mapping(model_info=model_info)
+                configs_mapping = quant_config.to_config_mapping(model=self.simple_onnx_model)
                 self.assertFalse(configs_mapping["Matmul"]["per_channel"])
                 self.assertEqual(configs_mapping["add"]["calibrate_method"], "MinMax")
                 self.assertLess(idx, 4)
@@ -315,8 +304,7 @@ class TestQuantizationConfig(unittest.TestCase):
             )
             config_loader = tuning.ConfigLoader(config_set=tuning_config.config_set, sampler=tuning_config.sampler)
             for idx, quant_config in enumerate(config_loader):
-                model_info = quant_config.get_model_info(model=self.simple_onnx_model)
-                configs_mapping = quant_config.to_config_mapping(model_info=model_info)
+                configs_mapping = quant_config.to_config_mapping(model=self.simple_onnx_model)
                 if idx == 0:
                     self.assertTrue(configs_mapping["Matmul"]["per_channel"])
                 elif idx == 1:
@@ -338,7 +326,7 @@ class TestQuantizationConfig(unittest.TestCase):
         fp32_model = self.gptj
         model_info = config.RTNConfig.get_model_info(fp32_model)
         logger.info(quant_config)
-        configs_mapping = quant_config.to_config_mapping(model_info=model_info)
+        configs_mapping = quant_config.to_config_mapping(model=fp32_model)
         logger.info(configs_mapping)
         self.assertTrue(configs_mapping["/h.4/mlp/fc_out/MatMul"]["weight_bits"] == 8)
         self.assertTrue(configs_mapping["/h.4/mlp/fc_in/MatMul"]["weight_bits"] == 4)
@@ -411,14 +399,14 @@ class TestQuantizationConfig(unittest.TestCase):
         fp32_model = self.gptj
         model_info = config.RTNConfig.get_model_info(fp32_model)
         logger.info(quant_config)
-        configs_mapping = quant_config.to_config_mapping(model_info=model_info)
+        configs_mapping = quant_config.to_config_mapping(model=fp32_model)
         logger.info(configs_mapping)
         self.assertTrue(configs_mapping["/h.4/mlp/fc_out/MatMul"]["weight_bits"] == 8)
         self.assertTrue(configs_mapping["/h.4/mlp/fc_in/MatMul"]["weight_bits"] == 4)
         # test regular matching
         fc_config = config.RTNConfig(weight_bits=3)
         quant_config.set_local("/h.[1-4]/mlp/fc_out/MatMul", fc_config)
-        configs_mapping = quant_config.to_config_mapping(model_info=model_info)
+        configs_mapping = quant_config.to_config_mapping(model=fp32_model)
         logger.info(configs_mapping)
         self.assertTrue(configs_mapping["/h.4/mlp/fc_out/MatMul"]["weight_bits"] == 3)
         self.assertTrue(configs_mapping["/h.3/mlp/fc_out/MatMul"]["weight_bits"] == 3)

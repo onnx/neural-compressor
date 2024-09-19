@@ -18,6 +18,15 @@
         "batch_size": 1,
         "algorithm": "RTN"
       },
+      "llama-2-7b-rtn-with-past-qdq": {
+        "model_name": "meta-llama/Llama-2-7b-hf",
+        "model_src_dir": "nlp/huggingface_model/text_generation/quantization/weight_only",
+        "dataset_location": "",
+        "input_model": "/tf_dataset2/models/onnx/Llama-2-7b-hf-with-past-opset-21",
+        "main_script": "main.py",
+        "batch_size": 1,
+        "algorithm": "RTN"
+      },
       "llama-2-7b-awq": {
         "model_name": "meta-llama/Llama-2-7b-hf",
         "model_src_dir": "nlp/huggingface_model/text_generation/quantization/weight_only",
@@ -36,6 +45,15 @@
         "batch_size": 1,
         "algorithm": "AWQ"
       },
+      "llama-2-7b-awq-with-past-qdq": {
+        "model_name": "meta-llama/Llama-2-7b-hf",
+        "model_src_dir": "nlp/huggingface_model/text_generation/quantization/weight_only",
+        "dataset_location": "",
+        "input_model": "/tf_dataset2/models/onnx/Llama-2-7b-hf-with-past-opset-21",
+        "main_script": "main.py",
+        "batch_size": 1,
+        "algorithm": "AWQ"
+      },
       "llama-2-7b-gptq": {
         "model_name": "meta-llama/Llama-2-7b-hf",
         "model_src_dir": "nlp/huggingface_model/text_generation/quantization/weight_only",
@@ -50,6 +68,15 @@
         "model_src_dir": "nlp/huggingface_model/text_generation/quantization/weight_only",
         "dataset_location": "",
         "input_model": "/tf_dataset2/models/onnx/Llama-2-7b-hf-with-past",
+        "main_script": "main.py",
+        "batch_size": 1,
+        "algorithm": "GPTQ"
+      },
+      "llama-2-7b-gptq-with-past-qdq": {
+        "model_name": "meta-llama/Llama-2-7b-hf",
+        "model_src_dir": "nlp/huggingface_model/text_generation/quantization/weight_only",
+        "dataset_location": "",
+        "input_model": "/tf_dataset2/models/onnx/Llama-2-7b-hf-with-past-opset-21",
         "main_script": "main.py",
         "batch_size": 1,
         "algorithm": "GPTQ"

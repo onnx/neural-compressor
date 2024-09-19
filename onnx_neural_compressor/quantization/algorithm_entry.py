@@ -18,12 +18,15 @@ from typing import Union
 
 import onnx
 import onnxruntime as ort
+from packaging import version
 
 from onnx_neural_compressor import constants, data_reader, logger, utility
 from onnx_neural_compressor.algorithms.post_training_quant import calibrate, quantizer
 from onnx_neural_compressor.algorithms.smoother import core
 from onnx_neural_compressor.algorithms.weight_only import awq, gptq, rtn
-from onnx_neural_compressor.quantization import config
+from onnx_neural_compressor.quantization import QuantFormat, config
+
+ort_version = version.Version(ort.__version__)
 
 
 ###################### RTN Algo Entry ##################################
@@ -32,17 +35,14 @@ def rtn_quantize_entry(
     model: Union[pathlib.Path, str], quant_config: config.RTNConfig, *args, **kwargs
 ) -> onnx.ModelProto:
     """The main entry to apply rtn quantization."""
-    if len(quant_config.config_mapping) == 0:
-        # map config to each op
-        model_info = config.RTNConfig.get_model_info(model=model)
-        config_mapping = quant_config.to_config_mapping(model_info=model_info)
-        logger.debug(config_mapping)
-    else:
-        config_mapping = quant_config.config_mapping
-    quant_kwargs = {}
-    for key in config.RTNConfig.model_params_list:
-        val = getattr(quant_config, key)
-        quant_kwargs[key] = getattr(val, "value", val)
+    config_mapping = quant_config.to_config_mapping(model=model)
+
+    quant_kwargs = dict(
+        zip(
+            config.RTNConfig.model_params_list,
+            [getattr(quant_config, key, None) for key in config.RTNConfig.model_params_list],
+        )
+    )
     model = rtn.apply_rtn_on_model(model, config_mapping, **quant_kwargs)
     return model
 
@@ -62,18 +62,13 @@ def gptq_quantize_entry(
         calibration_data_reader, data_reader.CalibrationDataReader
     ), "Please follow onnx_neural_compressor/data_reader.py to implement calibration_data_reader"
 
-    if len(quant_config.config_mapping) == 0:
-        # map config to each op
-        model_info = config.GPTQConfig.get_model_info(model=model)
-        config_mapping = quant_config.to_config_mapping(model_info=model_info)
-        logger.debug(config_mapping)
-    else:
-        config_mapping = quant_config.config_mapping
-
-    quant_kwargs = {}
-    for key in config.GPTQConfig.model_params_list:
-        val = getattr(quant_config, key)
-        quant_kwargs[key] = getattr(val, "value", val)
+    config_mapping = quant_config.to_config_mapping(model=model)
+    quant_kwargs = dict(
+        zip(
+            config.GPTQConfig.model_params_list,
+            [getattr(quant_config, key, None) for key in config.RTNConfig.model_params_list],
+        )
+    )
 
     # regenerate to ensure data exists
     calibration_data_reader.rewind()
@@ -96,18 +91,13 @@ def awq_quantize_entry(
         calibration_data_reader, data_reader.CalibrationDataReader
     ), "Please follow onnx_neural_compressor/data_reader.py to implement calibration_data_reader"
 
-    if len(quant_config.config_mapping) == 0:
-        # map config to each op
-        model_info = config.AWQConfig.get_model_info(model=model)
-        config_mapping = quant_config.to_config_mapping(model_info=model_info)
-        logger.debug(config_mapping)
-    else:
-        config_mapping = quant_config.config_mapping
-
-    quant_kwargs = {}
-    for key in config.AWQConfig.model_params_list:
-        val = getattr(quant_config, key)
-        quant_kwargs[key] = getattr(val, "value", val)
+    config_mapping = quant_config.to_config_mapping(model=model)
+    quant_kwargs = dict(
+        zip(
+            config.AWQConfig.model_params_list,
+            [getattr(quant_config, key, None) for key in config.RTNConfig.model_params_list],
+        )
+    )
 
     # regenerate to ensure data exists
     calibration_data_reader.rewind()
@@ -134,13 +124,7 @@ def static_quantize_entry(
         calibration_data_reader, data_reader.CalibrationDataReader
     ), "Please follow onnx_neural_compressor/quantization/calibrate.py to implement calibration_data_reader"
 
-    if len(quant_config.config_mapping) == 0:
-        # map config to each op
-        model_info = config.StaticQuantConfig.get_model_info(model=model)
-        config_mapping = quant_config.to_config_mapping(model_info=model_info)
-        logger.debug(config_mapping)
-    else:
-        config_mapping = quant_config.config_mapping
+    config_mapping = quant_config.to_config_mapping(model=model)
 
     calibration_data_reader.rewind()
     augment = calibrate.ONNXRTAugment(
@@ -235,13 +219,7 @@ def dynamic_quantize_entry(
         logger.warning("No candidate op type to do quantization, exit.")
         exit(0)
 
-    if len(quant_config.config_mapping) == 0:
-        # map config to each op
-        model_info = config.DynamicQuantConfig.get_model_info(model=model)
-        config_mapping = quant_config.to_config_mapping(model_info=model_info)
-        logger.debug(config_mapping)
-    else:
-        config_mapping = quant_config.config_mapping
+    config_mapping = quant_config.to_config_mapping(model=model)
 
     _quantizer = quantizer.DynamicQuantizer(
         model,

@@ -270,7 +270,6 @@ def awq_quantize(
     enable_auto_scale: bool = True,
     enable_mse_search: bool = True,
     providers: List[str] = ["CPUExecutionProvider"],
-    quant_format: int = 0,
 ) -> onnx.ModelProto:
     """Quant the model with Activation-aware Weight quantization(AWQ) method.
 
@@ -294,7 +293,6 @@ def awq_quantize(
         enable_mse_search (bool, optional): whether to search for the best clip range from range
             [0.91, 1.0, 0.01]. Defaults to True.
         providers (list, optional): providers to use. Defaults to ["CPUExecutionProvider"].
-        quant_format (int, optional): use Qoperator or QDQ format. 0 means Qoperator, 1 means QDQ. Default is 0.
 
     Returns:
         onnx.ModelProto: quantized onnx model.
@@ -391,7 +389,6 @@ def awq_quantize(
         weight_config=weight_config,
         ratios=full_ratio,
         providers=providers,
-        quant_format=quant_format,
     )
     return model
 
@@ -403,7 +400,6 @@ def apply_awq_on_model(
     enable_auto_scale: bool = True,
     enable_mse_search: bool = True,
     providers: List[str] = ["CPUExecutionProvider"],
-    quant_format: int = 0,
 ) -> onnx.ModelProto:
     """Apply Activation-aware Weight quantization(AWQ) on onnx model.
 
@@ -411,7 +407,6 @@ def apply_awq_on_model(
         model (Union[onnx.ModelProto, onnx_model.ONNXModel, pathlib.Path, str]): nnx model.
         quant_config (dict): quantization config.
         calibration_data_reader (data_reader.CalibrationDataReader): data_reader for calibration.
-        quant_format (int): using QOperator or QDQ format. 0 means QOperator, 1 meansQDQ. Default is 0.
 
     Returns:
         onnx.ModelProto: quantized onnx model.
@@ -421,7 +416,6 @@ def apply_awq_on_model(
         "enable_auto_scale": enable_auto_scale,
         "enable_mse_search": enable_mse_search,
         "providers": providers,
-        "quant_format": quant_format,
     }
     q_model = awq_quantize(model, data_reader=calibration_data_reader, weight_config=quant_config, **kwargs)
     quant_utils.dump_woq_stats(q_model, quant_config)

@@ -55,7 +55,7 @@ bash run_quant.sh --input_model=/path/to/model \ # folder path of onnx model
                   --dataset=NeelNanda/pile-10k \
                   --tokenizer=meta-llama/Llama-2-7b-hf \ # model name or folder path containing all relevant files for model's tokenizer
                   --algorithm=WOQ_TUNE # support WOQ_TUNE, RTN, AWQ, GPTQ \
-                  --quant_format=QOperator # support QOperator and QDQ
+                  --quant_format=QDQ # support QOperator and QDQ
 ```
 
 ## 2. Benchmark

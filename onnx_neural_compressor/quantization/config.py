@@ -27,14 +27,18 @@ from abc import ABC, abstractmethod
 
 import numpy as np
 import onnx
+import onnxruntime as ort
 import pydantic
 from onnxruntime import quantization as ort_quant
+from packaging import version
 from typing_extensions import Self
 
 from onnx_neural_compressor import constants, data_reader, logger, quantization, utility
 
 from collections import OrderedDict  # isort: skip
 from typing import Any, Callable, Dict, List, NamedTuple, Optional, Tuple, Type, Union, _GenericAlias  # isort: skip
+
+ort_version = version.Version(ort.__version__)
 
 
 class ParamLevel(enum.Enum):
@@ -559,10 +563,13 @@ class BaseConfig(ABC):
         return op_type_config_dict, op_name_config_dict
 
     def to_config_mapping(
-        self, config_list: Optional[List[BaseConfig]] = None, model_info: List[Tuple[str, str]] = None
+        self,
+        model: Union[onnx.ModelProto, str],
+        config_list: Optional[List[BaseConfig]] = None,
     ) -> OrderedDict[Tuple[str, str], OrderedDict[str, BaseConfig]]:
         if config_list is None:
             config_list = [self]
+        model_info = BaseConfig.get_model_info(model)
         for config in config_list:
             op_type_config_dict, op_name_config_dict = config._get_op_name_op_type_config()
             for op_name, op_type in model_info:
@@ -628,8 +635,9 @@ class ComposableConfig(BaseConfig):
         return f"{self.__class__.__name__} {self.to_json_string()}"
 
     def to_config_mapping(
-        self, config_list: List[BaseConfig] = None, model_info: Dict[str, Any] = None
+        self, model: Union[onnx.ModelProto, str], config_list: List[BaseConfig] = None
     ) -> OrderedDict[str, BaseConfig]:
+        model_info = BaseConfig.get_model_info(model)
         for config in self.config_list:
             op_type_config_dict, op_name_config_dict = config._get_op_name_op_type_config()
             single_config_model_info = model_info.get(config.name, None)
@@ -790,7 +798,11 @@ class BaseWeightOnlyConfig(BaseConfig):
             result[param] = getattr(self, param)
         return result
 
-    def to_config_mapping(self, config_list: List[BaseConfig] = None, model_info: list = None):
+    def to_config_mapping(self, model: Union[onnx.ModelProto, str], config_list: List[BaseConfig] = None):
+        if isinstance(model, str):
+            model = onnx.load(model, load_external_data=False)
+
+        model_info = BaseConfig.get_model_info(model)
         if config_list is None:
             config_list = [self]
         for config in config_list:
@@ -804,19 +816,46 @@ class BaseWeightOnlyConfig(BaseConfig):
             for op_name, op_type in model_info:
                 if op_type not in self.white_list:
                     continue
+
+                # skip excluded op
                 if any([re.match(exclude_name, op_name) for exclude_name in self.nodes_to_exclude]):
                     continue
+
                 if op_type == "MatMul":
                     last_matmul = op_name
+
                 if global_config is not None:
                     self._config_mapping[op_name] = global_config
+
                 if op_type in op_type_config_dict:
                     self._config_mapping[op_name] = op_type_config_dict[op_type]
+
                 for op_name_pattern in op_name_config_dict:
                     if re.match(op_name_pattern, op_name):
                         self._config_mapping[op_name] = op_name_config_dict[op_name_pattern]
+
+                # convert config to dict
                 if op_name in self._config_mapping and hasattr(self._config_mapping[op_name], "to_dict"):
                     self._config_mapping[op_name] = self._config_mapping[op_name].to_dict()
+
+                # update quant_format
+                if (
+                    ort_version < constants.ONNXRT119_VERSION
+                    or model.opset_import[0].version < 21
+                    or self._config_mapping[op_name].get("weight_bits", 4) not in [4, 8]
+                ):
+                    self._config_mapping[op_name].update({"quant_format": quantization.QuantFormat.QOperator})
+                if (
+                    self._config_mapping[op_name].get("weight_bits", 4) != 4
+                    or ort_version < constants.ONNXRT116_VERSION
+                    or (
+                        ort_version <= constants.ONNXRT1161_VERSION
+                        and self._config_mapping[op_name].get("weight_group_size", 32) != 32
+                    )
+                ):
+                    # MatMulFpQ4 support 4 bits and 32 group_size with ort 1.16.0 and 1.16.1 versions
+                    # MatMulNBits supports 4 bits and 2^n group_size with ort > 1.16.1
+                    del self._config_mapping[op_name]["quant_format"]
         if not self.quant_last_matmul and last_matmul is not None and last_matmul in self._config_mapping:
             del self._config_mapping[last_matmul]
         return self._config_mapping
@@ -838,11 +877,11 @@ class RTNConfig(BaseWeightOnlyConfig):
         "act_dtype",
         "accuracy_level",
         "ratios",
+        "quant_format",
     ]
     model_params_list: List[str] = [
         "providers",
         "layer_wise_quant",
-        "quant_format",
     ]
     name: str = constants.RTN
 
@@ -945,6 +984,7 @@ class GPTQConfig(BaseWeightOnlyConfig):
         "weight_sym",
         "act_dtype",
         "accuracy_level",
+        "quant_format",
     ]
     model_params_list: List[Union[str, TuningParam]] = [
         "percdamp",
@@ -954,7 +994,6 @@ class GPTQConfig(BaseWeightOnlyConfig):
         "perchannel",
         "providers",
         "layer_wise_quant",
-        "quant_format",
     ]
     name: str = constants.GPTQ
 
@@ -1080,12 +1119,12 @@ class AWQConfig(BaseWeightOnlyConfig):
         "weight_sym",
         "act_dtype",
         "accuracy_level",
+        "quant_format",
     ]
     model_params_list: List[str] = [
         "enable_auto_scale",
         "enable_mse_search",
         "providers",
-        "quant_format",
     ]
     name: str = constants.AWQ
 
@@ -1596,7 +1635,12 @@ class StaticQuantConfig(BaseConfig, ort_quant.StaticQuantConfig):
                 op_config = valid_func(op_config, op_name_or_type, self.execution_provider, self.quant_format)
             self.set_local(op_name_or_type, op_config)
 
-    def to_config_mapping(self, config_list: list = None, model_info: list = None) -> OrderedDict:
+    def to_config_mapping(self, model: Union[onnx.ModelProto, str], config_list: List[BaseConfig] = None):
+        if isinstance(model, str):
+            model = onnx.load(model, load_external_data=False)
+
+        model_info = BaseConfig.get_model_info(model)
+ 
         if config_list is None:
             config_list = [self]
         for config in config_list:
@@ -1966,7 +2010,12 @@ class DynamicQuantConfig(BaseConfig, ort_quant.DynamicQuantConfig):
                 op_config = valid_func(op_config, op_name_or_type, self.execution_provider)
             self.set_local(op_name_or_type, op_config)
 
-    def to_config_mapping(self, config_list: list = None, model_info: list = None) -> OrderedDict:
+    def to_config_mapping(self, model: Union[onnx.ModelProto, str], config_list: List[BaseConfig] = None):
+        if isinstance(model, str):
+            model = onnx.load(model, load_external_data=False)
+
+        model_info = BaseConfig.get_model_info(model)
+ 
         if config_list is None:
             config_list = [self]
         for config in config_list:

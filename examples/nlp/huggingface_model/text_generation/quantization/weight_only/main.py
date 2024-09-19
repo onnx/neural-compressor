@@ -106,7 +106,7 @@ parser.add_argument(
     default=[],
     help="nodes that will not be quantized. Doesn't take effect when 'algorithm' is 'WOQ_TUNE'",
 )
-parser.add_argument("--quant_format", type=str, default="QOperator", choices=["QOperator", "QDQ"])
+parser.add_argument("--quant_format", type=str, default="QDQ", choices=["QOperator", "QDQ"])
 args = parser.parse_args()
 
 if args.tune and not os.path.exists(args.output_model):
