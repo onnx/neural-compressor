@@ -472,16 +472,6 @@ class ONNXModel:
                 if node.op_type not in black_optype:
                     ONNXModel.replace_node_output(node, old_output_name, new_output_name)
 
-    def remove_duplicate_nodes(self):
-        """remove duplicate nodes"""
-        new_nodes = []
-        for node in self.nodes():
-            if node not in new_nodes:
-                new_nodes.append(node)
-        self.model.graph.ClearField("node")
-        self.model.graph.node.extend(new_nodes)
-        self.update()
-
     def remove_unused_nodes(self):
         """Remove unused nodes."""
         unused_nodes = []

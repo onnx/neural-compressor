@@ -571,8 +571,11 @@ class BaseConfig(ABC):
             config_list = [self]
         model_info = self.get_model_info(model)
         for config in config_list:
+            global_config = config.get_params_dict()
             op_type_config_dict, op_name_config_dict = config._get_op_name_op_type_config()
             for op_name, op_type in model_info:
+                if global_config is not None:
+                    self._config_mapping[op_name] = global_config
                 if op_type in op_type_config_dict:
                     self._config_mapping[op_name] = op_name_config_dict[op_type]
                 for op_name_pattern in op_name_config_dict:

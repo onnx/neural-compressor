@@ -197,6 +197,12 @@ class TestBaseConfig(unittest.TestCase):
             DEFAULT_WEIGHT_BITS,
         )
 
+        model = FakeModel()
+        fake_default_config.set_local("OP1_NAME", FakeAlgoConfig(weight_dtype="uint"))
+        config_mapping = fake_default_config.to_config_mapping(model)
+        self.assertEqual(config_mapping["OP1_NAME"]["weight_dtype"], "uint")
+        self.assertEqual(config_mapping["OP2_NAME"]["weight_dtype"], "int")
+
     def test_config_expand_complex_tunable_type(self):
         target_op_type_list_options = [["Conv", "Gemm"], ["Conv", "Matmul"]]
         configs = FakeAlgoConfig(target_op_type_list=target_op_type_list_options)
