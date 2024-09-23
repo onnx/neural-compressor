@@ -12,22 +12,25 @@ function init_params {
   do
     case $var in
       --input_model=*)
-          input_model=$(echo $var |cut -f2 -d=)
+          input_model=$(echo "$var" |cut -f2 -d=)
       ;;
       --output_model=*)
-          output_model=$(echo $var |cut -f2 -d=)
+          output_model=$(echo "$var" |cut -f2 -d=)
       ;;
       --batch_size=*)
-          batch_size=$(echo $var |cut -f2 -d=)
+          batch_size=$(echo "$var" |cut -f2 -d=)
       ;;
       --dataset=*)
-          dataset=$(echo $var |cut -f2 -d=)
+          dataset=$(echo "$var" |cut -f2 -d=)
       ;;
       --tokenizer=*)
-          tokenizer=$(echo $var |cut -f2 -d=)
+          tokenizer=$(echo "$var" |cut -f2 -d=)
       ;;
       --algorithm=*)
-          algorithm=$(echo $var |cut -f2 -d=)
+          algorithm=$(echo "$var" |cut -f2 -d=)
+      ;;
+      --quant_format=*)
+          quant_format=$(echo "$var" |cut -f2 -d=)
       ;;
     esac
   done
@@ -56,30 +59,42 @@ function run_tuning {
 	echo "Created directory $output_model"
     fi
 
+    extra_cmd=""
+
     if [[ "${tokenizer}" =~ "Phi-3-mini" ]]; then
         nodes_to_exclude="/model/layers.*/self_attn/qkv_proj/MatMul /model/layers.*/mlp/down_proj/MatMul"
-        extra_cmd="--nodes_to_exclude ${nodes_to_exclude} --trust_remote_code True"
+        extra_cmd=$extra_cmd"--nodes_to_exclude ${nodes_to_exclude} --trust_remote_code True "
     fi
     if [[ "${tokenizer}" =~ "Llama-3-8B" ]]; then
         nodes_to_exclude="/model/layers.*/mlp/down_proj/MatMul"
-        extra_cmd="--nodes_to_exclude ${nodes_to_exclude}"
+        extra_cmd=$extra_cmd"--nodes_to_exclude ${nodes_to_exclude} "
     fi
     if [[ "${tokenizer}" =~ "Qwen2-7B" ]]; then
         nodes_to_exclude="/model/layers.*/mlp/down_proj/MatMul /model/layers.*/mlp/up_proj/MatMul"
-        extra_cmd="--nodes_to_exclude ${nodes_to_exclude}"
+        extra_cmd=$extra_cmd"--nodes_to_exclude ${nodes_to_exclude} "
     fi
 
-    eval "python main.py \
-            --model_path ${input_model} \
-	        --tokenizer ${tokenizer-meta-llama/Llama-2-7b-hf} \
-            --output_model ${output_model} \
-            --batch_size ${batch_size-1} \
-            --dataset ${dataset-NeelNanda/pile-10k} \
-	        --algorithm ${algorithm-WOQ_TUNE} \
-	        --tasks ${tasks-lambada_openai} \
-            --layer_wise \
-            --tune \
-            ${extra_cmd}"
+    if [ "${tokenizer}" ]; then
+	extra_cmd=$extra_cmd"--tokenizer ${tokenizer} "
+    fi
+    if [ "${batch_size}" ]; then
+	extra_cmd=$extra_cmd"--batch_size ${batch_size} "
+    fi
+    if [ "${dataset}" ]; then
+	extra_cmd=$extra_cmd"--dataset ${dataset} "
+    fi
+    if [ "${algorithm}" ]; then
+	extra_cmd=$extra_cmd"--algorithm ${algorithm} "
+    fi
+    if [ "${tasks}" ]; then
+	extra_cmd=$extra_cmd"--tasks ${tasks} "
+    fi
+    if [ "${quant_format}" ]; then
+	extra_cmd=$extra_cmd"--quant_format ${quant_format} "
+    fi
+
+    extra_cmd=$extra_cmd"--layer_wise --tune"
+    eval "python main.py --model_path ${input_model} --output_model ${output_model} ${extra_cmd}"
 }
 
 main "$@"

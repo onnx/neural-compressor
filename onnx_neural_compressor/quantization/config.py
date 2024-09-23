@@ -27,14 +27,18 @@ from abc import ABC, abstractmethod
 
 import numpy as np
 import onnx
+import onnxruntime as ort
 import pydantic
 from onnxruntime import quantization as ort_quant
+from packaging import version
 from typing_extensions import Self
 
 from onnx_neural_compressor import constants, data_reader, logger, quantization, utility
 
 from collections import OrderedDict  # isort: skip
 from typing import Any, Callable, Dict, List, NamedTuple, Optional, Tuple, Type, Union, _GenericAlias  # isort: skip
+
+ort_version = version.Version(ort.__version__)
 
 
 class ParamLevel(enum.Enum):
@@ -201,6 +205,17 @@ def register_config(algo_name: str, priority: Union[float, int] = 0):
     return config_registry.register_config_impl(algo_name=algo_name, priority=priority)
 
 
+class Encoder(json.JSONEncoder):
+    def default(self, o):
+        if isinstance(o, quantization.QuantType):
+            return getattr(o, "tensor_type")
+        if isinstance(o, quantization.QuantFormat):
+            return getattr(o, "value")
+        if isinstance(o, quantization.CalibrationMethod):
+            return getattr(o, "name")
+        return super().default(o)
+
+
 class BaseConfig(ABC):
     """The base config for all algorithm configs."""
 
@@ -210,22 +225,23 @@ class BaseConfig(ABC):
 
     def __init__(
         self,
-        white_list: Optional[Union[Union[str, Callable], List[Union[str, Callable]]]] = constants.DEFAULT_WHITE_LIST,
+        white_list: Optional[List[str]] = constants.DEFAULT_WHITE_LIST,
     ) -> None:
         self._global_config: Optional[BaseConfig] = None
         # local config is the collections of operator_type configs and operator configs
         self._local_config: Dict[str, Optional[BaseConfig]] = {}
         self._white_list = white_list
         self._config_mapping = OrderedDict()
+        self._post_init()
 
     def _post_init(self):
         if self.white_list == constants.DEFAULT_WHITE_LIST:
             global_config = self.get_init_args()
-            self._global_config = self.__class__(**global_config, white_list=None)
+            self._global_config = self.__class__(**global_config, white_list=constants.EMPTY_WHITE_LIST)
         elif isinstance(self.white_list, list) and len(self.white_list) > 0:
             for op_name_or_type in self.white_list:
                 global_config = self.get_init_args()
-                tmp_config = self.__class__(**global_config, white_list=None)
+                tmp_config = self.__class__(**global_config, white_list=constants.EMPTY_WHITE_LIST)
                 self.set_local(op_name_or_type, tmp_config)
         elif self.white_list == constants.EMPTY_WHITE_LIST:
             return
@@ -296,6 +312,19 @@ class BaseConfig(ABC):
                 result[param] = value
         return result
 
+    @staticmethod
+    def get_model_info(model) -> list:
+        """Get (node_name, optype) pairs of the model."""
+        if not isinstance(model, onnx.ModelProto):
+            model = onnx.load(model, load_external_data=False)
+
+        ops = []
+        for node in model.graph.node:
+            pair = (node.name, node.op_type)
+            ops.append(pair)
+        logger.debug(f"Get model info: {ops}")
+        return ops
+
     def __getitem__(self, key):
         if hasattr(self, key):
             return getattr(self, key)
@@ -323,7 +352,7 @@ class BaseConfig(ABC):
             operator_config = config_dict.get(constants.LOCAL, {})
             if operator_config:
                 for op_name, op_config in operator_config.items():
-                    config.set_local(op_name, cls(**op_config, white_list=None))
+                    config.set_local(op_name, cls(**op_config, white_list=constants.EMPTY_WHITE_LIST))
             return config
 
     def get_diff_dict(self, config) -> Dict[str, Any]:
@@ -348,7 +377,7 @@ class BaseConfig(ABC):
     def to_json_file(self, filename):
         config_dict = self.to_dict()
         with open(filename, "w", encoding="utf-8") as file:
-            json.dump(config_dict, file, indent=4)
+            json.dump(config_dict, file, indent=4, cls=Encoder)
         logger.info("Dump the config into %s.", filename)
 
     def to_json_string(self, use_diff: bool = False) -> Union[str, Dict]:
@@ -367,7 +396,7 @@ class BaseConfig(ABC):
         else:
             config_dict = self.to_dict()
         try:
-            return json.dumps(config_dict, indent=2) + "\n"
+            return json.dumps(config_dict, indent=2, cls=Encoder) + "\n"
         except Exception as e:
             logger.error("Failed to serialize the config to JSON string: %s", e)
             return config_dict
@@ -534,13 +563,19 @@ class BaseConfig(ABC):
         return op_type_config_dict, op_name_config_dict
 
     def to_config_mapping(
-        self, config_list: Optional[List[BaseConfig]] = None, model_info: List[Tuple[str, str]] = None
+        self,
+        model: Union[onnx.ModelProto, str],
+        config_list: Optional[List[BaseConfig]] = None,
     ) -> OrderedDict[Tuple[str, str], OrderedDict[str, BaseConfig]]:
         if config_list is None:
             config_list = [self]
+        model_info = self.get_model_info(model)
         for config in config_list:
+            global_config = config.get_params_dict()
             op_type_config_dict, op_name_config_dict = config._get_op_name_op_type_config()
             for op_name, op_type in model_info:
+                if global_config is not None:
+                    self._config_mapping[op_name] = global_config
                 if op_type in op_type_config_dict:
                     self._config_mapping[op_name] = op_name_config_dict[op_type]
                 for op_name_pattern in op_name_config_dict:
@@ -597,14 +632,15 @@ class ComposableConfig(BaseConfig):
         return config
 
     def to_json_string(self, use_diff: bool = False) -> str:
-        return json.dumps(self.to_dict(), indent=2) + "\n"
+        return json.dumps(self.to_dict(), indent=2, cls=Encoder) + "\n"
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__} {self.to_json_string()}"
 
     def to_config_mapping(
-        self, config_list: List[BaseConfig] = None, model_info: Dict[str, Any] = None
+        self, model: Union[onnx.ModelProto, str], config_list: List[BaseConfig] = None
     ) -> OrderedDict[str, BaseConfig]:
+        model_info = self.get_model_info(model)
         for config in self.config_list:
             op_type_config_dict, op_name_config_dict = config._get_op_name_op_type_config()
             single_config_model_info = model_info.get(config.name, None)
@@ -711,11 +747,128 @@ class _OperatorConfig(NamedTuple):
     valid_func_list: List[Callable] = []
 
 
+class BaseWeightOnlyConfig(BaseConfig):
+    """Base config class for weight-only quantization."""
+
+    def __init__(
+        self,
+        weight_dtype: bool = "int",
+        weight_bits: int = 4,
+        weight_group_size: int = 32,
+        weight_sym: bool = True,
+        act_dtype: str = "fp32",
+        accuracy_level: int = 0,
+        providers: List[str] = ["CPUExecutionProvider"],
+        quant_last_matmul: bool = True,
+        quant_format: quantization.QuantFormat = quantization.QuantFormat.QOperator,
+        nodes_to_exclude: list = [],
+        white_list: List[Union[str, Callable]] = constants.DEFAULT_WHITE_LIST,
+    ):
+        """Initialize weight-only quantization config.
+
+        Args:
+            weight_dtype (str, optional): Data type for weights, support "uint" and "int", default is "int".
+            weight_bits (int, optional): Number of bits used to represent weights, default is 4.
+            weight_group_size (int, optional): Size of weight groups, default is 32.
+            weight_sym (bool, optional): Indicates whether weights are symmetric, default is True.
+            act_dtype (str, optional): Data type for activations, default is "fp32".
+            accuracy_level (int, optional): accuracy level. Support 0 (unset), 1(fp32 compute type of jblas kernel),
+                2 (fp16 compute type of jblas kernel), 3 (bf16 compute type of jblas kernel),
+                4 (int8 compute type of jblas kernel). Defaults to 0.
+            ratios (dict, optional): percentile of clip. Defaults to {}.
+            providers (list, optional): execution providers to use. Defaults to ["CPUExecutionProvider"].
+            quant_last_matmul (bool, optional): whether to quantize the last matmul of the model, default is True.
+            quant_format (QuantFormat, optional): use QOperator or QDQ format, default is QOperator.
+            nodes_to_exclude (list, optional): nodes in nodes_to_exclude list will be skipped during quantization.
+            white_list (list, optional): op in white_list will be applied current config.
+                Defaults to constants.DEFAULT_WHITE_LIST.
+        """
+        self.weight_bits = weight_bits
+        self.weight_dtype = weight_dtype
+        self.weight_group_size = weight_group_size
+        self.weight_sym = weight_sym
+        self.act_dtype = act_dtype
+        self.accuracy_level = accuracy_level
+        self.providers = providers
+        self.quant_last_matmul = quant_last_matmul
+        self.quant_format = quant_format
+        self.nodes_to_exclude = nodes_to_exclude
+        super().__init__(white_list=white_list)
+
+    def get_model_params_dict(self):
+        result = dict()
+        for param in self.model_params_list:
+            result[param] = getattr(self, param)
+        return result
+
+    def to_config_mapping(self, model: Union[onnx.ModelProto, str], config_list: List[BaseConfig] = None):
+        if isinstance(model, str):
+            model = onnx.load(model, load_external_data=False)
+
+        model_info = self.get_model_info(model)
+        if config_list is None:
+            config_list = [self]
+        for config in config_list:
+            # update model level setting
+            self._config_mapping.update(config.get_model_params_dict())
+
+            # update node level setting
+            last_matmul = None
+            global_config = config.get_params_dict()
+            op_type_config_dict, op_name_config_dict = config._get_op_name_op_type_config()
+            for op_name, op_type in model_info:
+                if op_type not in self.white_list:
+                    continue
+
+                # skip excluded op
+                if any([re.match(exclude_name, op_name) for exclude_name in self.nodes_to_exclude]):
+                    continue
+
+                if op_type == "MatMul":
+                    last_matmul = op_name
+
+                if global_config is not None:
+                    self._config_mapping[op_name] = global_config
+
+                if op_type in op_type_config_dict:
+                    self._config_mapping[op_name] = op_type_config_dict[op_type]
+
+                for op_name_pattern in op_name_config_dict:
+                    if re.match(op_name_pattern, op_name):
+                        self._config_mapping[op_name] = op_name_config_dict[op_name_pattern]
+
+                # convert config to dict
+                if op_name in self._config_mapping and hasattr(self._config_mapping[op_name], "to_dict"):
+                    self._config_mapping[op_name] = self._config_mapping[op_name].to_dict()
+
+                # update quant_format
+                if (
+                    ort_version < constants.ONNXRT119_VERSION
+                    or model.opset_import[0].version < 21
+                    or self._config_mapping[op_name].get("weight_bits", 4) not in [4, 8]
+                ):
+                    self._config_mapping[op_name].update({"quant_format": quantization.QuantFormat.QOperator})
+                if (
+                    self._config_mapping[op_name].get("weight_bits", 4) != 4
+                    or ort_version < constants.ONNXRT116_VERSION
+                    or (
+                        ort_version <= constants.ONNXRT1161_VERSION
+                        and self._config_mapping[op_name].get("weight_group_size", 32) != 32
+                    )
+                ):
+                    # MatMulFpQ4 support 4 bits and 32 group_size with ort 1.16.0 and 1.16.1 versions
+                    # MatMulNBits supports 4 bits and 2^n group_size with ort > 1.16.1
+                    del self._config_mapping[op_name]["quant_format"]
+        if not self.quant_last_matmul and last_matmul is not None and last_matmul in self._config_mapping:
+            del self._config_mapping[last_matmul]
+        return self._config_mapping
+
+
 ######################## RNT Config ###############################
 
 
 @register_config(algo_name=constants.RTN, priority=constants.PRIORITY_RTN)
-class RTNConfig(BaseConfig):
+class RTNConfig(BaseWeightOnlyConfig):
     """Config class for round-to-nearest weight-only quantization."""
 
     supported_configs: List[_OperatorConfig] = []
@@ -727,6 +880,7 @@ class RTNConfig(BaseConfig):
         "act_dtype",
         "accuracy_level",
         "ratios",
+        "quant_format",
     ]
     model_params_list: List[str] = [
         "providers",
@@ -746,12 +900,14 @@ class RTNConfig(BaseConfig):
         providers: List[str] = ["CPUExecutionProvider"],
         layer_wise_quant: bool = False,
         quant_last_matmul: bool = True,
-        white_list: List[Union[str, Callable]] = constants.RTN_OP_LIST,
+        quant_format: quantization.QuantFormat = quantization.QuantFormat.QOperator,
+        nodes_to_exclude: List[str] = [],
+        white_list: List[str] = constants.RTN_OP_LIST,
     ):
         """Init RTN weight-only quantization config.
 
         Args:
-            weight_dtype (str, optional): Data type for weights, default is "int".
+            weight_dtype (str, optional): Data type for weights, support "uint" and "int", default is "int".
             weight_bits (int, optional): Number of bits used to represent weights, default is 4.
             weight_group_size (int, optional): Size of weight groups, default is 32.
             weight_sym (bool, optional): Indicates whether weights are symmetric, default is True.
@@ -766,39 +922,27 @@ class RTNConfig(BaseConfig):
                 https://github.com/intel/neural-compressor/blob/master/docs/source/quantization_layer_wise.md,
                 default is False.
             quant_last_matmul (bool, optional): whether to quantize the last matmul of the model, default is True.
+            quant_format (QuantFormat, optional): use QOperator or QDQ format, default is QOperator.
+            nodes_to_exclude (list, optional): nodes in nodes_to_exclude list will be skipped during quantization.
             white_list (list, optional): op in white_list will be applied current config.
-                Defaults to constants.DEFAULT_WHITE_LIST.
         """
-        super().__init__(white_list=white_list)
-        self.weight_bits = weight_bits
-        self.weight_dtype = weight_dtype
-        self.weight_group_size = weight_group_size
-        self.weight_sym = weight_sym
-        self.act_dtype = act_dtype
-        self.accuracy_level = accuracy_level
-        self.ratios = ratios
-        self.providers = providers
         self.layer_wise_quant = layer_wise_quant
-        self.quant_last_matmul = quant_last_matmul
-        self._post_init()
+        self.ratios = ratios
 
-    def _post_init(self):
-        if self.white_list == constants.RTN_OP_LIST:
-            global_config = self.get_init_args()
-            self._global_config = self.__class__(**global_config, white_list=None)
-        elif isinstance(self.white_list, list) and len(self.white_list) > 0:
-            for op_name_or_type in self.white_list:
-                global_config = self.get_init_args()
-                tmp_config = self.__class__(**global_config, white_list=None)
-                self.set_local(op_name_or_type, tmp_config)
-        elif self.white_list == constants.EMPTY_WHITE_LIST:
-            return
-
-    def get_model_params_dict(self):
-        result = dict()
-        for param in self.model_params_list:
-            result[param] = getattr(self, param)
-        return result
+        super().__init__(
+            weight_bits=weight_bits,
+            weight_dtype=weight_dtype,
+            weight_group_size=weight_group_size,
+            weight_sym=weight_sym,
+            act_dtype=act_dtype,
+            accuracy_level=accuracy_level,
+            providers=providers,
+            quant_last_matmul=quant_last_matmul,
+            quant_format=quant_format,
+            nodes_to_exclude=nodes_to_exclude,
+            white_list=white_list if white_list != constants.RTN_OP_LIST else constants.DEFAULT_WHITE_LIST,
+        )
+        self.white_list = white_list
 
     @classmethod
     def register_supported_configs(cls) -> None:
@@ -813,46 +957,6 @@ class RTNConfig(BaseConfig):
         operators = constants.RTN_OP_LIST
         supported_configs.append(_OperatorConfig(config=linear_rtn_config, operators=operators))
         cls.supported_configs = supported_configs
-
-    def to_config_mapping(self, config_list: List[BaseConfig] = None, model_info: list = None):
-        if config_list is None:
-            config_list = [self]
-        for config in config_list:
-            # update model level setting
-            self._config_mapping.update(config.get_model_params_dict())
-
-            # update node level setting
-            last_matmul = None
-            global_config = config.get_params_dict()
-            op_type_config_dict, op_name_config_dict = config._get_op_name_op_type_config()
-            for op_name, op_type in model_info:
-                if op_type == "MatMul":
-                    last_matmul = op_name
-                if global_config is not None:
-                    self._config_mapping[op_name] = global_config
-                if op_type in op_type_config_dict:
-                    self._config_mapping[op_name] = op_type_config_dict[op_type]
-                for op_name_pattern in op_name_config_dict:
-                    if re.match(op_name_pattern, op_name):
-                        self._config_mapping[op_name] = op_name_config_dict[op_name_pattern]
-                if op_name in self._config_mapping and hasattr(self._config_mapping[op_name], "to_dict"):
-                    self._config_mapping[op_name] = self._config_mapping[op_name].to_dict()
-        if not self.quant_last_matmul and last_matmul is not None and last_matmul in self._config_mapping:
-            del self._config_mapping[last_matmul]
-        return self._config_mapping
-
-    @staticmethod
-    def get_model_info(model: Union[onnx.ModelProto, pathlib.Path, str], white_list=constants.RTN_OP_LIST) -> list:
-        if not isinstance(model, onnx.ModelProto):
-            model = onnx.load(model, load_external_data=False)
-
-        filter_result = []
-        for node in model.graph.node:
-            if node.op_type in white_list:
-                pair = (node.name, node.op_type)
-                filter_result.append(pair)
-        logger.debug(f"Get model info: {filter_result}")
-        return filter_result
 
     @classmethod
     def get_config_set_for_tuning(cls) -> Union[None, "RTNConfig", List["RTNConfig"]]:  # pragma: no cover
@@ -872,7 +976,7 @@ def get_default_rtn_config() -> RTNConfig:
 
 
 @register_config(algo_name=constants.GPTQ, priority=constants.PRIORITY_GPTQ)
-class GPTQConfig(BaseConfig):
+class GPTQConfig(BaseWeightOnlyConfig):
     """Config class for gptq weight-only quantization."""
 
     supported_configs: List[_OperatorConfig] = []
@@ -883,6 +987,7 @@ class GPTQConfig(BaseConfig):
         "weight_sym",
         "act_dtype",
         "accuracy_level",
+        "quant_format",
     ]
     model_params_list: List[Union[str, TuningParam]] = [
         "percdamp",
@@ -911,7 +1016,9 @@ class GPTQConfig(BaseConfig):
         providers: List[str] = ["CPUExecutionProvider"],
         layer_wise_quant: bool = False,
         quant_last_matmul: bool = True,
-        white_list: List[Union[str, Callable]] = constants.GPTQ_OP_LIST,
+        quant_format: quantization.QuantFormat = quantization.QuantFormat.QOperator,
+        nodes_to_exclude: List[str] = [],
+        white_list: List[str] = constants.GPTQ_OP_LIST,
     ):
         """Init GPTQ weight-only quantization config.
 
@@ -937,43 +1044,31 @@ class GPTQConfig(BaseConfig):
                 https://github.com/intel/neural-compressor/blob/master/docs/source/quantization_layer_wise.md,
                 default is False.
             quant_last_matmul (bool, optional): whether to quantize the last matmul of the model, default is True.
+            quant_format (QuantFormat, optional): use QOperator or QDQ format, default is QOperator.
+            nodes_to_exclude (list, optional): nodes in nodes_to_exclude list will be skipped during quantization.
             white_list (list, optional): op in white_list will be applied current config.
-                Defaults to constants.DEFAULT_WHITE_LIST.
         """
-        super().__init__(white_list=white_list)
-        self.weight_bits = weight_bits
-        self.weight_dtype = weight_dtype
-        self.weight_group_size = weight_group_size
-        self.weight_sym = weight_sym
-        self.act_dtype = act_dtype
-        self.accuracy_level = accuracy_level
         self.percdamp = percdamp
         self.block_size = block_size
         self.actorder = actorder
         self.mse = mse
         self.perchannel = perchannel
-        self.providers = providers
         self.layer_wise_quant = layer_wise_quant
-        self.quant_last_matmul = quant_last_matmul
-        self._post_init()
 
-    def _post_init(self):
-        if self.white_list == constants.GPTQ_OP_LIST:
-            global_config = self.get_init_args()
-            self._global_config = self.__class__(**global_config, white_list=None)
-        elif isinstance(self.white_list, list) and len(self.white_list) > 0:
-            for op_name_or_type in self.white_list:
-                global_config = self.get_init_args()
-                tmp_config = self.__class__(**global_config, white_list=None)
-                self.set_local(op_name_or_type, tmp_config)
-        elif self.white_list == constants.EMPTY_WHITE_LIST:
-            return
-
-    def get_model_params_dict(self):
-        result = dict()
-        for param in self.model_params_list:
-            result[param] = getattr(self, param)
-        return result
+        super().__init__(
+            weight_bits=weight_bits,
+            weight_dtype=weight_dtype,
+            weight_group_size=weight_group_size,
+            weight_sym=weight_sym,
+            act_dtype=act_dtype,
+            accuracy_level=accuracy_level,
+            providers=providers,
+            quant_last_matmul=quant_last_matmul,
+            quant_format=quant_format,
+            nodes_to_exclude=nodes_to_exclude,
+            white_list=white_list if white_list != constants.GPTQ_OP_LIST else constants.DEFAULT_WHITE_LIST,
+        )
+        self.white_list = white_list
 
     @classmethod
     def register_supported_configs(cls) -> None:
@@ -991,46 +1086,6 @@ class GPTQConfig(BaseConfig):
         operators = constants.GPTQ_OP_LIST
         supported_configs.append(_OperatorConfig(config=linear_gptq_config, operators=operators))
         cls.supported_configs = supported_configs
-
-    def to_config_mapping(self, config_list: list = None, model_info: list = None) -> OrderedDict:
-        if config_list is None:
-            config_list = [self]
-        for config in config_list:
-            # update model level setting
-            self._config_mapping.update(config.get_model_params_dict())
-
-            # update node level setting
-            last_matmul = None
-            global_config = config.get_params_dict()
-            op_type_config_dict, op_name_config_dict = config._get_op_name_op_type_config()
-            for op_name, op_type in model_info:
-                if op_type == "MatMul":
-                    last_matmul = op_name
-                if global_config is not None:
-                    self._config_mapping[op_name] = global_config
-                if op_type in op_type_config_dict:
-                    self._config_mapping[op_name] = op_type_config_dict[op_type]
-                for op_name_pattern in op_name_config_dict:
-                    if re.match(op_name_pattern, op_name):
-                        self._config_mapping[op_name] = op_name_config_dict[op_name_pattern]
-                if op_name in self._config_mapping and hasattr(self._config_mapping[op_name], "to_dict"):
-                    self._config_mapping[op_name] = self._config_mapping[op_name].to_dict()
-        if not self.quant_last_matmul and last_matmul is not None and last_matmul in self._config_mapping:
-            del self._config_mapping[last_matmul]
-        return self._config_mapping
-
-    @staticmethod
-    def get_model_info(model: Union[onnx.ModelProto, pathlib.Path, str], white_list=constants.GPTQ_OP_LIST) -> list:
-        if not isinstance(model, onnx.ModelProto):
-            model = onnx.load(model, load_external_data=False)
-
-        filter_result = []
-        for node in model.graph.node:
-            if node.op_type in white_list:
-                pair = (node.name, node.op_type)
-                filter_result.append(pair)
-        logger.debug(f"Get model info: {filter_result}")
-        return filter_result
 
     @classmethod
     def get_config_set_for_tuning(cls) -> Union[None, "GPTQConfig", List["GPTQConfig"]]:  # pragma: no cover
@@ -1056,7 +1111,7 @@ def get_default_gptq_config() -> GPTQConfig:
 
 
 @register_config(algo_name=constants.AWQ, priority=constants.PRIORITY_AWQ)
-class AWQConfig(BaseConfig):
+class AWQConfig(BaseWeightOnlyConfig):
     """Config class for awq weight-only quantization."""
 
     supported_configs: List[_OperatorConfig] = []
@@ -1067,6 +1122,7 @@ class AWQConfig(BaseConfig):
         "weight_sym",
         "act_dtype",
         "accuracy_level",
+        "quant_format",
     ]
     model_params_list: List[str] = [
         "enable_auto_scale",
@@ -1087,7 +1143,9 @@ class AWQConfig(BaseConfig):
         enable_mse_search: bool = True,
         providers: List[str] = ["CPUExecutionProvider"],
         quant_last_matmul: bool = True,
-        white_list: List[Union[str, Callable]] = constants.AWQ_OP_LIST,
+        quant_format: quantization.QuantFormat = quantization.QuantFormat.QOperator,
+        nodes_to_exclude: List[str] = [],
+        white_list: List[str] = constants.AWQ_OP_LIST,
     ):
         """Init AWQ weight-only quantization config.
 
@@ -1106,39 +1164,27 @@ class AWQConfig(BaseConfig):
                 [0.91, 1.0, 0.01]. Defaults to True.
             providers (list, optional): execution providers to use. Defaults to ["CPUExecutionProvider"].
             quant_last_matmul (bool, optional): whether to quantize the last matmul of the model, default is True.
+            quant_format (QuantFormat, optional): use QOperator or QDQ format, default is QOperator.
+            nodes_to_exclude (list, optional): nodes in nodes_to_exclude list will be skipped during quantization.
             white_list (list, optional): op in white_list will be applied current config.
-                Defaults to constants.DEFAULT_WHITE_LIST.
         """
-        super().__init__(white_list=white_list)
-        self.weight_bits = weight_bits
-        self.weight_dtype = weight_dtype
-        self.weight_group_size = weight_group_size
-        self.weight_sym = weight_sym
-        self.act_dtype = act_dtype
-        self.accuracy_level = accuracy_level
         self.enable_auto_scale = enable_auto_scale
         self.enable_mse_search = enable_mse_search
-        self.providers = providers
-        self.quant_last_matmul = quant_last_matmul
-        self._post_init()
 
-    def _post_init(self):
-        if self.white_list == constants.GPTQ_OP_LIST:
-            global_config = self.get_init_args()
-            self._global_config = self.__class__(**global_config, white_list=None)
-        elif isinstance(self.white_list, list) and len(self.white_list) > 0:
-            for op_name_or_type in self.white_list:
-                global_config = self.get_init_args()
-                tmp_config = self.__class__(**global_config, white_list=None)
-                self.set_local(op_name_or_type, tmp_config)
-        elif self.white_list == constants.EMPTY_WHITE_LIST:
-            return
-
-    def get_model_params_dict(self):
-        result = dict()
-        for param in self.model_params_list:
-            result[param] = getattr(self, param)
-        return result
+        super().__init__(
+            weight_bits=weight_bits,
+            weight_dtype=weight_dtype,
+            weight_group_size=weight_group_size,
+            weight_sym=weight_sym,
+            act_dtype=act_dtype,
+            accuracy_level=accuracy_level,
+            providers=providers,
+            quant_last_matmul=quant_last_matmul,
+            quant_format=quant_format,
+            nodes_to_exclude=nodes_to_exclude,
+            white_list=white_list if white_list != constants.AWQ_OP_LIST else constants.DEFAULT_WHITE_LIST,
+        )
+        self.white_list = white_list
 
     @classmethod
     def register_supported_configs(cls) -> List[_OperatorConfig]:
@@ -1155,46 +1201,6 @@ class AWQConfig(BaseConfig):
         operators = constants.AWQ_OP_LIST
         supported_configs.append(_OperatorConfig(config=linear_awq_config, operators=operators))
         cls.supported_configs = supported_configs
-
-    def to_config_mapping(self, config_list: list = None, model_info: list = None) -> OrderedDict:
-        if config_list is None:
-            config_list = [self]
-        for config in config_list:
-            # update model level setting
-            self._config_mapping.update(config.get_model_params_dict())
-
-            # update node level setting
-            last_matmul = None
-            global_config = config.get_params_dict()
-            op_type_config_dict, op_name_config_dict = config._get_op_name_op_type_config()
-            for op_name, op_type in model_info:
-                if op_type == "MatMul":
-                    last_matmul = op_name
-                if global_config is not None:
-                    self._config_mapping[op_name] = global_config
-                if op_type in op_type_config_dict:
-                    self._config_mapping[op_name] = op_type_config_dict[op_type]
-                for op_name_pattern in op_name_config_dict:
-                    if re.match(op_name_pattern, op_name):
-                        self._config_mapping[op_name] = op_name_config_dict[op_name_pattern]
-                if op_name in self._config_mapping and hasattr(self._config_mapping[op_name], "to_dict"):
-                    self._config_mapping[op_name] = self._config_mapping[op_name].to_dict()
-        if not self.quant_last_matmul and last_matmul is not None and last_matmul in self._config_mapping:
-            del self._config_mapping[last_matmul]
-        return self._config_mapping
-
-    @staticmethod
-    def get_model_info(model: Union[onnx.ModelProto, pathlib.Path, str], white_list=constants.AWQ_OP_LIST) -> list:
-        if not isinstance(model, onnx.ModelProto):
-            model = onnx.load(model, load_external_data=False)
-
-        filter_result = []
-        for node in model.graph.node:
-            if node.op_type in white_list:
-                pair = (node.name, node.op_type)
-                filter_result.append(pair)
-        logger.debug(f"Get model info: {filter_result}")
-        return filter_result
 
     @classmethod
     def get_config_set_for_tuning(cls) -> Union[None, "AWQConfig", List["AWQConfig"]]:  # pragma: no cover
@@ -1218,17 +1224,17 @@ def get_default_awq_config() -> AWQConfig:
 ######################## WOQ Tuning Config ###############################
 
 
-def get_woq_tuning_config() -> list:
+def get_woq_tuning_config(quant_format=quantization.QuantFormat.QOperator) -> list:
     """Generate the config set for WOQ tuning.
 
     Returns:
         the list of WOQ quant config.
     """
-    RTN_G32ASYM = RTNConfig(weight_sym=False)
-    GPTQ_G32ASYM = GPTQConfig(weight_sym=False)
-    GPTQ_G32ASYM_DISABLE_LAST_MATMUL = GPTQConfig(weight_sym=False, quant_last_matmul=False)
-    GPTQ_G128ASYM = GPTQConfig(weight_group_size=128, weight_sym=False)
-    AWQ_G32ASYM = AWQConfig(weight_sym=False)
+    RTN_G32ASYM = RTNConfig(weight_sym=False, quant_format=quant_format)
+    GPTQ_G32ASYM = GPTQConfig(weight_sym=False, quant_format=quant_format)
+    GPTQ_G32ASYM_DISABLE_LAST_MATMUL = GPTQConfig(weight_sym=False, quant_last_matmul=False, quant_format=quant_format)
+    GPTQ_G128ASYM = GPTQConfig(weight_group_size=128, weight_sym=False, quant_format=quant_format)
+    AWQ_G32ASYM = AWQConfig(weight_sym=False, quant_format=quant_format)
     return [RTN_G32ASYM, GPTQ_G32ASYM, GPTQ_G32ASYM_DISABLE_LAST_MATMUL, GPTQ_G128ASYM, AWQ_G32ASYM]
 
 
@@ -1537,7 +1543,6 @@ class StaticQuantConfig(BaseConfig, ort_quant.StaticQuantConfig):
         calibration_sampling_size=100,
         quant_last_matmul=True,
         execution_provider=None,
-        white_list: list = constants.DEFAULT_WHITE_LIST,
         **kwargs,
     ):
         """This is a class for static Quant Configuration.
@@ -1607,7 +1612,6 @@ class StaticQuantConfig(BaseConfig, ort_quant.StaticQuantConfig):
         else:
             os.environ["ORT_TENSORRT_UNAVAILABLE"] = "1"
 
-        BaseConfig.__init__(self, white_list=self.op_types_to_quantize)
         self.execution_provider = execution_provider
         self.quant_last_matmul = quant_last_matmul
         self.calibration_sampling_size = calibration_sampling_size
@@ -1617,21 +1621,7 @@ class StaticQuantConfig(BaseConfig, ort_quant.StaticQuantConfig):
         self.optypes_to_exclude_output_quant = _extra_options.OpTypesToExcludeOutputQuantization
         self.dedicated_qdq_pair = _extra_options.DedicatedQDQPair
         self.add_qdq_pair_to_weight = _extra_options.AddQDQPairToWeight
-        self.white_list = white_list
-        self._post_init()
-
-    @staticmethod
-    def get_model_info(model, white_list=constants.STATIC_QOPERATOR_CPU_OP_LIST) -> list:
-        if not isinstance(model, onnx.ModelProto):
-            model = onnx.load(model, load_external_data=False)
-
-        filter_result = []
-        for node in model.graph.node:
-            if node.op_type in white_list:
-                pair = (node.name, node.op_type)
-                filter_result.append(pair)
-        logger.debug(f"Get model info: {filter_result}")
-        return filter_result
+        BaseConfig.__init__(self, white_list=self.op_types_to_quantize)
 
     def get_model_params_dict(self):
         result = dict()
@@ -1647,13 +1637,13 @@ class StaticQuantConfig(BaseConfig, ort_quant.StaticQuantConfig):
             for valid_func in STATIC_CHECK_FUNC_LIST:
                 op_config = valid_func(op_config, op_name_or_type, self.execution_provider, self.quant_format)
             self.set_local(op_name_or_type, op_config)
-        if isinstance(self.white_list, list) and len(self.white_list) > 0:
-            for op_name_or_type in self.white_list:
-                global_config = self.get_init_args()
-                tmp_config = self.__class__(**global_config, white_list=None)
-                self.set_local(op_name_or_type, tmp_config)
 
-    def to_config_mapping(self, config_list: list = None, model_info: list = None) -> OrderedDict:
+    def to_config_mapping(self, model: Union[onnx.ModelProto, str], config_list: List[BaseConfig] = None):
+        if isinstance(model, str):
+            model = onnx.load(model, load_external_data=False)
+
+        model_info = self.get_model_info(model)
+
         if config_list is None:
             config_list = [self]
         for config in config_list:
@@ -1859,34 +1849,6 @@ class StaticQuantConfig(BaseConfig, ort_quant.StaticQuantConfig):
         )
         cls.supported_configs = supported_configs
 
-    def to_dict(self):
-        result = {}
-        for key, val in self.__dict__.items():
-            if key in ["_global_config", "_config_mapping"]:
-                continue
-            if key == "_local_config":
-                local_result = {}
-                for name, cfg in val.items():
-                    local_result[name] = cfg.to_dict()
-                result[key] = local_result
-                continue
-            if not isinstance(val, list):
-                result[key] = (
-                    getattr(val, "tensor_type", val)
-                    if isinstance(val, quantization.QuantType)
-                    else getattr(val, "value", val)
-                )
-            else:
-                result[key] = [
-                    (
-                        getattr(item, "tensor_type", item)
-                        if isinstance(item, quantization.QuantType)
-                        else getattr(item, "value", item)
-                    )
-                    for item in val
-                ]
-        return result
-
 
 ######################## SmoohQuant Config ###############################
 
@@ -1922,7 +1884,6 @@ class SmoothQuantConfig(StaticQuantConfig):
         calib_iter: int = 100,
         scales_per_op: bool = True,
         auto_alpha_args: dict = {"alpha_min": 0.3, "alpha_max": 0.7, "alpha_step": 0.05, "attn_method": "min"},
-        white_list: list = None,
         **kwargs,
     ):
         """Init smooth quant config.
@@ -1942,7 +1903,7 @@ class SmoothQuantConfig(StaticQuantConfig):
             kwargs (dict): kwargs in below link are supported except calibration_data_reader:
                 https://github.com/microsoft/onnxruntime/blob/main/onnxruntime/python/tools/quantization/quantize.py#L78
         """
-        super().__init__(white_list=white_list, **kwargs)
+        super().__init__(**kwargs)
         self.alpha = alpha
         self.folding = folding
         self.op_types = op_types
@@ -1957,19 +1918,6 @@ class SmoothQuantConfig(StaticQuantConfig):
         operators = ["Gemm", "Conv", "MatMul", "FusedConv"]
         supported_configs.append(_OperatorConfig(config=smooth_quant_config, operators=operators))
         cls.supported_configs = supported_configs
-
-    @staticmethod
-    def get_model_info(model, white_list=["Gemm", "Conv", "MatMul", "FusedConv"]) -> list:
-        if not isinstance(model, onnx.ModelProto):
-            model = onnx.load(model, load_external_data=False)
-
-        filter_result = []
-        for node in model.graph.node:
-            if node.op_type in white_list:
-                pair = (node.name, node.op_type)
-                filter_result.append(pair)
-        logger.debug(f"Get model info: {filter_result}")
-        return filter_result
 
     @classmethod
     def get_config_set_for_tuning(
@@ -2022,7 +1970,6 @@ class DynamicQuantConfig(BaseConfig, ort_quant.DynamicQuantConfig):
         extra_options: dict = None,
         quant_last_matmul: bool = True,
         execution_provider: str = None,
-        white_list: list = constants.DEFAULT_WHITE_LIST,
         **kwargs,
     ):
         if execution_provider is None:
@@ -2044,28 +1991,13 @@ class DynamicQuantConfig(BaseConfig, ort_quant.DynamicQuantConfig):
             use_external_data_format=use_external_data_format,
             extra_options=extra_options,
         )
-        BaseConfig.__init__(self, white_list=op_types_to_quantize)
         self.execution_provider = execution_provider
         self.quant_last_matmul = quant_last_matmul
         self.activation_type = quantization.QuantType.QUInt8
         _extra_options = ExtraOptions(**self.extra_options)
         self.weight_sym = _extra_options.WeightSymmetric
         self.activation_sym = _extra_options.ActivationSymmetric
-        self.white_list = white_list
-        self._post_init()
-
-    @staticmethod
-    def get_model_info(model, white_list=constants.DYNAMIC_CPU_OP_LIST) -> list:
-        if not isinstance(model, onnx.ModelProto):
-            model = onnx.load(model, load_external_data=False)
-
-        filter_result = []
-        for node in model.graph.node:
-            if node.op_type in white_list:
-                pair = (node.name, node.op_type)
-                filter_result.append(pair)
-        logger.debug(f"Get model info: {filter_result}")
-        return filter_result
+        BaseConfig.__init__(self, white_list=op_types_to_quantize)
 
     def get_model_params_dict(self):
         result = dict()
@@ -2080,13 +2012,13 @@ class DynamicQuantConfig(BaseConfig, ort_quant.DynamicQuantConfig):
             for valid_func in DYNAMIC_CHECK_FUNC_LIST:
                 op_config = valid_func(op_config, op_name_or_type, self.execution_provider)
             self.set_local(op_name_or_type, op_config)
-        if isinstance(self.white_list, list) and len(self.white_list) > 0:
-            for op_name_or_type in self.white_list:
-                global_config = self.get_init_args()
-                tmp_config = self.__class__(**global_config, white_list=None)
-                self.set_local(op_name_or_type, tmp_config)
 
-    def to_config_mapping(self, config_list: list = None, model_info: list = None) -> OrderedDict:
+    def to_config_mapping(self, model: Union[onnx.ModelProto, str], config_list: List[BaseConfig] = None):
+        if isinstance(model, str):
+            model = onnx.load(model, load_external_data=False)
+
+        model_info = self.get_model_info(model)
+
         if config_list is None:
             config_list = [self]
         for config in config_list:
@@ -2220,34 +2152,6 @@ class DynamicQuantConfig(BaseConfig, ort_quant.DynamicQuantConfig):
             )
         )
         cls.supported_configs = supported_configs
-
-    def to_dict(self):
-        result = {}
-        for key, val in self.__dict__.items():
-            if key in ["_global_config", "_config_mapping"]:
-                continue
-            if key == "_local_config":
-                local_result = {}
-                for name, cfg in val.items():
-                    local_result[name] = cfg.to_dict()
-                result[key] = local_result
-                continue
-            if not isinstance(val, list):
-                result[key] = (
-                    getattr(val, "tensor_type", val)
-                    if isinstance(val, quantization.QuantType)
-                    else getattr(val, "value", val)
-                )
-            else:
-                result[key] = [
-                    (
-                        getattr(item, "tensor_type", item)
-                        if isinstance(item, quantization.QuantType)
-                        else getattr(item, "value", item)
-                    )
-                    for item in val
-                ]
-        return result
 
 
 ##################### NC Algo Configs End ###################################

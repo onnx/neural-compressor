@@ -529,8 +529,7 @@ def autotune(
     tuning_logger.tuning_start()
     for trial_index, quant_config in enumerate(config_loader):
         # check whether config_mapping is verified
-        model_info = quant_config.__class__.get_model_info(model=model_input)
-        config_mapping = quant_config.to_config_mapping(model_info=model_info)
+        config_mapping = quant_config.to_config_mapping(model=model_input)
         if tuning_monitor.need_skip(config_mapping):
             continue
 

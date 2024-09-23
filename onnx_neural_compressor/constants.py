@@ -38,6 +38,7 @@ DEFAULT_WORKSPACE = "./nc_workspace/{}/".format(datetime.datetime.now().strftime
 
 ONNXRT116_VERSION = version.Version("1.16.0")
 ONNXRT1161_VERSION = version.Version("1.16.1")
+ONNXRT119_VERSION = version.Version("1.19.0")
 
 PRIORITY_RTN = 60
 PRIORITY_GPTQ = 70

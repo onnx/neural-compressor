@@ -136,6 +136,7 @@ class ONNXModel:
         """Check the onnx model is over 2GB."""
         return self._is_large_model
 
+    @property
     def framework(self):
         """Return framework."""
         return "onnxruntime"
@@ -201,10 +202,12 @@ class ONNXModel:
         """Return model graph."""
         return self._model.graph
 
+    @property
     def ir_version(self):
         """Return model ir_version."""
         return self._model.ir_version
 
+    @property
     def opset_import(self):
         """Return model opset_import."""
         return self._model.opset_import
@@ -468,16 +471,6 @@ class ONNXModel:
             for node in self.model.graph.node:
                 if node.op_type not in black_optype:
                     ONNXModel.replace_node_output(node, old_output_name, new_output_name)
-
-    def remove_duplicate_nodes(self):
-        """remove duplicate nodes"""
-        new_nodes = []
-        for node in self.nodes():
-            if node not in new_nodes:
-                new_nodes.append(node)
-        self.model.graph.ClearField("node")
-        self.model.graph.node.extend(new_nodes)
-        self.update()
 
     def remove_unused_nodes(self):
         """Remove unused nodes."""
@@ -870,7 +863,9 @@ class ONNXModel:
         tensor_type = value_info.get(tensor_name, onnx.TensorProto.FLOAT)
         return onnx.helper.make_tensor_value_info(tensor_name, tensor_type, None)
 
-    def split_model_with_node(self, split_node_name, path_of_model_to_split, save_both_split_models=True):
+    def split_model_with_node(
+        self, split_node_name, path_of_model_to_split, save_both_split_models=True, save_path=None
+    ):
         """Split model into two parts at a given node.
 
         Args:
@@ -880,6 +875,7 @@ class ONNXModel:
                 False means only save the first split model.
                 True means save both the two split models.
                 Default id True.
+            save_path (str): path to save split models. None means using self.model_path
 
         Returns:
             tuple: the first split model, the second split model
@@ -971,7 +967,11 @@ class ONNXModel:
         dir_of_model_to_split = os.path.dirname(path_of_model_to_split)
 
         split_model_part_1.load_model_initializer_by_tensor(dir_of_model_to_split)
-        split_model_part_1_path = os.path.join(dir_of_model_to_split, "split_model_part_1.onnx")
+        split_model_part_1_path = (
+            os.path.join(save_path, "split_model_part_1.onnx")
+            if save_path is not None
+            else os.path.join(dir_of_model_to_split, "split_model_part_1.onnx")
+        )
         split_model_part_1.model_path = split_model_part_1_path
         split_model_part_1._save_split_model(split_model_part_1_path)
         split_model_part_1.check_is_large_model()
@@ -979,7 +979,11 @@ class ONNXModel:
 
         if save_both_split_models:
             split_model_part_2.load_model_initializer_by_tensor(dir_of_model_to_split)
-            split_model_part_2_path = os.path.join(dir_of_model_to_split, "split_model_part_2.onnx")
+            split_model_part_2_path = (
+                os.path.join(save_path, "split_model_part_2.onnx")
+                if save_path is not None
+                else os.path.join(dir_of_model_to_split, "split_model_part_2.onnx")
+            )
             split_model_part_2.model_path = split_model_part_2_path
             split_model_part_2._save_split_model(split_model_part_2_path)
             split_model_part_2.check_is_large_model()
@@ -996,6 +1000,7 @@ class ONNXModel:
         """
         if os.path.exists(save_path + "_data"):
             os.remove(save_path + "_data")
+        self._model_path = save_path
         onnx.save_model(
             self.model,
             save_path,

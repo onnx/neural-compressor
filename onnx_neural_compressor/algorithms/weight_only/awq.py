@@ -63,6 +63,7 @@ def _apply_awq_scale(model, weight_config, absorb_pairs, output_dicts):
         weight = []
         org_out = []
 
+        weight_dtype = weight_config[nodes[0].name].get("weight_dtype", "int")
         num_bits = weight_config[nodes[0].name].get("weight_bits", 4)
         group_size = weight_config[nodes[0].name].get("weight_group_size", 32)
         sym = weight_config[nodes[0].name].get("weight_sym", True)
@@ -70,6 +71,7 @@ def _apply_awq_scale(model, weight_config, absorb_pairs, output_dicts):
 
         # use same params for all children of one parent
         for node in nodes:
+            weight_config.setdefault(node.name, {}).update({"weight_dtype": weight_dtype})
             weight_config.setdefault(node.name, {}).update({"weight_bits": num_bits})
             weight_config.setdefault(node.name, {}).update({"weight_group_size": group_size})
             weight_config.setdefault(node.name, {}).update({"weight_sym": sym})
@@ -98,24 +100,11 @@ def _apply_awq_scale(model, weight_config, absorb_pairs, output_dicts):
                 weight = weight.T * scales
                 weight = quant_utils.pad_tensor(weight.T, group_size, (org_w_shape[0] + group_size - 1) // group_size)
 
-                if (version.Version(ort.__version__) > constants.ONNXRT1161_VERSION and num_bits == 4) or (
-                    version.Version(ort.__version__) >= constants.ONNXRT116_VERSION
-                    and num_bits == 4
-                    and group_size == 32
-                ):
-                    # MatMulFpQ4 support 4 bits and 32 group_size with ort 1.16.0 and 1.16.1 versions
-                    # MatMulNBits supports 4 bits and 2^n group_size with ort > 1.16.1
-                    q_weight = quant_utils.qdq_data(
-                        weight.reshape((-1, group_size)),
-                        "uint" + str(num_bits),
-                        sym,
-                    ).reshape(weight.shape)
-                else:
-                    q_weight = quant_utils.qdq_data(
-                        weight.reshape((-1, group_size)),
-                        "int" + str(num_bits),
-                        sym,
-                    ).reshape(weight.shape)
+                q_weight = quant_utils.qdq_data(
+                    weight.reshape((-1, group_size)),
+                    weight_dtype + str(num_bits),
+                    sym,
+                ).reshape(weight.shape)
 
                 q_weight = q_weight[: org_w_shape[0], :] / np.expand_dims(scales, axis=-1)
                 out = np.matmul(inp, q_weight)
@@ -237,6 +226,7 @@ def _apply_awq_clip(model, weight_config, absorb_pairs, output_dicts):
         inp = np.concatenate(output_dicts[nodes[0].input[0]], axis=0)
 
         for node in nodes:
+            weight_dtype = weight_config[node.name].get("weight_dtype", "int")
             num_bits = weight_config[node.name].get("weight_bits", 4)
             group_size = weight_config[node.name].get("weight_group_size", 32)
             sym = weight_config[node.name].get("weight_sym", True)
@@ -256,26 +246,12 @@ def _apply_awq_clip(model, weight_config, absorb_pairs, output_dicts):
             for i_s in range(10):
                 ratio = 1 - i_s / 100
                 weight = copy.deepcopy(org_weight)
-                if (version.Version(ort.__version__) > constants.ONNXRT1161_VERSION and num_bits == 4) or (
-                    version.Version(ort.__version__) >= constants.ONNXRT116_VERSION
-                    and num_bits == 4
-                    and group_size == 32
-                ):
-                    # MatMulFpQ4 support 4 bits and 32 group_size with ort 1.16.0 and 1.16.1 versions
-                    # MatMulNBits supports 4 bits and 2^n group_size with ort > 1.16.1
-                    weight = quant_utils.qdq_data(
-                        weight.reshape((-1, group_size)),
-                        "uint" + str(num_bits),
-                        sym,
-                        ratio=ratio,
-                    ).reshape(org_weight.shape)
-                else:
-                    weight = quant_utils.qdq_data(
-                        weight.reshape((-1, group_size)),
-                        "int" + str(num_bits),
-                        sym,
-                        ratio=ratio,
-                    ).reshape(org_weight.shape)
+                weight = quant_utils.qdq_data(
+                    weight.reshape((-1, group_size)),
+                    weight_dtype + str(num_bits),
+                    sym,
+                    ratio=ratio,
+                ).reshape(org_weight.shape)
 
                 cur_out = np.matmul(inp, weight[:, : org_w_shape[0]].T)
                 loss = np.mean(np.power((org_out - cur_out), 2))
@@ -336,12 +312,12 @@ def awq_quantize(
         output_names = []
         for node in model.nodes():
             # check op_type of node is MatMul
+            # check op_name in quantization config
             # check dim 1 of input is weight tensor
-            # check weight_type is not "fp32"
             if (
                 node.op_type in ["MatMul"]
+                and node.name in weight_config
                 and model.get_initializer(node.input[1]) is not None
-                and weight_config.get(node.name, {}).get("weight_dtype", "fp32") != "fp32"
             ):
                 output_names.append(node.input[0])
         output_names = list(set(output_names))
@@ -371,12 +347,12 @@ def awq_quantize(
 
             for node in input_name_to_nodes[input_name]:
                 # check op_type of node is MatMul
+                # check op_name in quantization config
                 # check dim 1 of input is weight tensor
-                # check weight_type is not "fp32"
                 if (
                     node.op_type in ["MatMul"]
+                    and node.name in weight_config
                     and model.get_initializer(node.input[1]) is not None
-                    and weight_config.get(node.name, {}).get("weight_dtype", "fp32") != "fp32"
                 ):
                     dump_pairs[parent].append(model.get_node(node.name))
 
@@ -408,7 +384,12 @@ def awq_quantize(
 
         model.remove_tensors_from_outputs(output_names)
         model.model.graph.output.MergeFrom(org_output)
-    model = rtn.rtn_quantize(model, weight_config, full_ratio, providers)
+    model = rtn.rtn_quantize(
+        model=model,
+        weight_config=weight_config,
+        ratios=full_ratio,
+        providers=providers,
+    )
     return model
 
 

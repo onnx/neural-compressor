@@ -22,11 +22,11 @@ import pathlib
 import numpy as np
 import onnx
 import onnxruntime as ort
-from packaging.version import Version
 
 from onnx_neural_compressor import constants, data_reader, onnx_model, utility
 from onnx_neural_compressor.algorithms import utility as quant_utils
 from onnx_neural_compressor.algorithms.layer_wise import core
+from onnx_neural_compressor.algorithms.weight_only import rtn
 from onnx_neural_compressor.quantization import config
 
 from typing import List, Union  # isort: skip
@@ -228,12 +228,12 @@ def gptq_quantize(
     output_names = []
     for node in model.nodes():
         # check op_type of node is MatMul
+        # check op_name in quantization config
         # check dim 1 of input is weight tensor
-        # check weight_type is not "fp32"
         if (
             node.op_type in ["MatMul"]
+            and node.name in weight_config
             and model.get_initializer(node.input[1]) is not None
-            and weight_config.get(node.name, {}).get("weight_dtype", "fp32") != "fp32"
         ):
             output_names.append(node.input[0])
     output_names = list(set(output_names))
@@ -262,12 +262,12 @@ def gptq_quantize(
 
         for node in input_name_to_nodes[input_name]:
             # check op_type of node is MatMul
+            # check op_name in quantization config
             # check dim 1 of input is weight tensor
-            # check weight_type is not "fp32"
             if (
                 node.op_type in ["MatMul"]
+                and node.name in weight_config
                 and model.get_initializer(node.input[1]) is not None
-                and weight_config.get(node.name, {}).get("weight_dtype", "fp32") != "fp32"
             ):
                 weight = onnx.numpy_helper.to_array(
                     model.get_initializer(model.get_node(node.name).input[1]), base_dir
@@ -300,10 +300,14 @@ def gptq_quantize(
             num_bits = weight_config[node.name].get("weight_bits", 4)
             group_size = weight_config[node.name].get("weight_group_size", 32)
             sym = weight_config[node.name].get("weight_sym", True)
+            dtype = weight_config[node.name].get("weight_dtype", "int")
             accuracy_level = weight_config[node.name].get("accuracy_level", 0)
-            group_size = group_size if group_size != -1 else weight.shape[0]
-            dtype = weight.dtype
+            quant_format = getattr(weight_config[node.name].get("quant_format", None), "value", None)
 
+            weight_tensor = model.get_initializer(node.input[1])
+            init_share_num = model.get_initializer_share_num(node.input[1])
+
+            # weight -> quant -> dequant -> q_weight
             q_weight = _gptq(
                 weight,
                 H,
@@ -316,60 +320,25 @@ def gptq_quantize(
                 mse=mse,
                 perchannel=perchannel,
             )
-
-            weight_tensor = model.get_initializer(node.input[1])
-            init_share_num = model.get_initializer_share_num(node.input[1])
-
-            satisfy_MatMulNBits_condition = Version(ort.__version__) > constants.ONNXRT1161_VERSION and num_bits == 4
-            satisfy_MatMulFpQ4_condition = (
-                Version(ort.__version__) >= constants.ONNXRT116_VERSION and num_bits == 4 and group_size == 32
+            new_nodes, new_inits, remove_nodes = quant_utils.quant_matmul_weight_only(
+                node=node,
+                weight=weight,
+                dtype=dtype,
+                num_bits=num_bits,
+                sym=sym,
+                group_size=group_size,
+                quant_format=quant_format,
+                accuracy_level=accuracy_level,
             )
-            if ("CUDAExecutionProvider" in providers and satisfy_MatMulNBits_condition) or (
-                "CUDAExecutionProvider" not in providers
-                and (satisfy_MatMulFpQ4_condition or satisfy_MatMulNBits_condition)
-            ):
-                # MatMulFpQ4 support 4 bits and 32 group_size with ort 1.16.0 and 1.16.1 versions, supported by CPU EP
-                # MatMulNBits supports 4 bits and 2^n group_size with ort > 1.16.1, supported by CPU EP AND CUDA EP
-                org_shape = weight.shape
-                k_blocks = (org_shape[0] + group_size - 1) // group_size
-                q_weight = quant_utils.pad_tensor(q_weight, group_size, k_blocks)
-                _, _, zp, scale, q_weight = quant_utils.quantize_data(
-                    q_weight.T.reshape((-1, group_size)),
-                    "uint" + str(num_bits),
-                    sym,
-                    axis=1,
-                )
-                q_matmul_node, new_inits = quant_utils.make_matmul_weight_only_node(
-                    node=node,
-                    weight_shape=org_shape,
-                    num_bits=num_bits,
-                    group_size=group_size,
-                    k_blocks=k_blocks,
-                    q_weight=q_weight,
-                    scale=scale.astype(dtype),
-                    zero_point=zp if not sym else None,
-                    accuracy_level=accuracy_level,
-                )
+            model.add_initializers(new_inits)
+            model.add_nodes(new_nodes)
+            model.remove_nodes(remove_nodes)
 
-                model.add_initializers(new_inits)
-                model.remove_node(node)
-                model.add_node(q_matmul_node)
-            else:
-                q_weight_tensor = onnx.helper.make_tensor(
-                    name=node.input[1] + "_Q{}G{}".format(str(num_bits), str(group_size)),
-                    data_type=onnx.helper.np_dtype_to_tensor_dtype(dtype),
-                    dims=q_weight.shape,
-                    vals=q_weight.astype(dtype).tobytes(),
-                    raw=True,
-                )
-                model.add_initializer(q_weight_tensor)
-                node.input[1] = q_weight_tensor.name
             if init_share_num == 1:
                 model.remove_initializer(weight_tensor)
 
     model.remove_tensors_from_outputs(output_names)
     model.model.graph.output.MergeFrom(org_output)
-
     model.topological_sort()
 
     # reload external data to prevent external data file path errors

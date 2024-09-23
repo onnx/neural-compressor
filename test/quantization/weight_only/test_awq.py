@@ -10,8 +10,10 @@ import onnxruntime as ort
 import torch
 import transformers
 from optimum.exporters.onnx import main_export
+from packaging import version
 
 from onnx_neural_compressor import data_reader, logger
+from onnx_neural_compressor.quantization import QuantFormat
 from onnx_neural_compressor.quantization import algorithm_entry as algos
 from onnx_neural_compressor.quantization import config, matmul_4bits_quantizer, matmul_nbits_quantizer
 
@@ -153,6 +155,7 @@ class TestAWQQuantWithInternalAPI(TestAWQQuant):
             "weight_sym": [True, False],
             "act_dtype": ["fp32"],
             "accuracy_level": [0],
+            "quant_format": [0, 1],
             "enable_auto_scale": [True, False],
             "enable_mse_search": [True, False],
         }
@@ -191,13 +194,12 @@ class TestAWQQuantWithInternalAPI(TestAWQQuant):
 
     def test_quantize_awq_fallback(self):
 
-        fp32_config = config.AWQConfig(weight_dtype="fp32")
         quant_config = config.AWQConfig(
             weight_dtype="int",
             weight_sym=False,
             weight_group_size=32,
+            nodes_to_exclude=["/h.4/mlp/fc_out/MatMul"],
         )
-        quant_config.set_local("/h.4/mlp/fc_out/MatMul", fp32_config)
         qmodel = self._apply_awq(quant_config)
         self.assertIsNotNone(qmodel)
         self.assertEqual(self._count_woq_matmul(qmodel), 29)
@@ -214,6 +216,28 @@ class TestAWQQuantWithInternalAPI(TestAWQQuant):
         self.assertIsNotNone(qmodel)
         self.assertEqual(self._count_woq_matmul(qmodel), 29)
         self.assertFalse(self._check_node_is_quantized(qmodel, "/h.4/mlp/fc_out/MatMul"))
+
+    @unittest.skipIf(
+        version.Version(ort.__version__) < version.Version("1.19.0"),
+        "Please use onnxruntime >= 1.19.0 for QDQ format test",
+    )
+    def test_awq_with_QDQ_format(self):
+
+        quant_config = config.AWQConfig(
+            weight_dtype="int",
+            weight_sym=False,
+            weight_group_size=32,
+            weight_bits=4,
+            quant_format=QuantFormat.QDQ,
+        )
+
+        op21_model = copy.deepcopy(self.matmul_model)
+        op21_model.opset_import[0].version = 21
+        qmodel = algos.awq_quantize_entry(op21_model, quant_config, calibration_data_reader=self.matmul_data_reader)
+
+        self.assertIsNotNone(qmodel)
+        self.assertTrue("MatMul" in [i.op_type for i in qmodel.graph.node])
+        self.assertTrue("DequantizeLinear" in [i.op_type for i in qmodel.graph.node])
 
 
 class TestAWQQuantWithORTLikeAPI(TestAWQQuant):
@@ -325,6 +349,32 @@ class TestAWQQuantWithORTLikeAPI(TestAWQQuant):
         quant.process()
         self.assertIsNotNone(quant.model)
         self.assertEqual(self._count_woq_matmul(quant.model, bits=4, group_size=32), 1)
+
+    @unittest.skipIf(
+        version.Version(ort.__version__) < version.Version("1.19.0"),
+        "Please use onnxruntime >= 1.19.0 for QDQ format test",
+    )
+    def test_awq_with_QDQ_format(self):
+
+        algo_config = matmul_nbits_quantizer.AWQWeightOnlyQuantConfig(
+            calibration_data_reader=self.matmul_data_reader, quant_format=QuantFormat.QDQ
+        )
+
+        op21_model = copy.deepcopy(self.matmul_model)
+        op21_model.opset_import[0].version = 21
+
+        quant = matmul_nbits_quantizer.MatMulNBitsQuantizer(
+            op21_model,
+            n_bits=4,
+            block_size=32,
+            is_symmetric=False,
+            algo_config=algo_config,
+            optimization_level=ort.GraphOptimizationLevel.ORT_DISABLE_ALL,
+        )
+        quant.process()
+        self.assertIsNotNone(quant.model)
+        self.assertTrue("MatMul" in [i.op_type for i in quant.model.graph.node])
+        self.assertTrue("DequantizeLinear" in [i.op_type for i in quant.model.graph.node])
 
 
 if __name__ == "__main__":
