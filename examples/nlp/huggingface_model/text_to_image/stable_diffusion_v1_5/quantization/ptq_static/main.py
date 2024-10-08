@@ -45,7 +45,7 @@ parser.add_argument("--quantized_unet_path", type=str, default=None, help="Path 
 parser.add_argument("--benchmark", action="store_true", default=False)
 parser.add_argument("--tune", action="store_true", default=False, help="whether quantize the model")
 parser.add_argument("--output_model", type=str, default=None, help="output model path")
-parser.add_argument("--image_path", type=str, default="imgae.png", help="generated image path")
+parser.add_argument("--image_path", type=str, default="image.png", help="generated image path")
 parser.add_argument(
     "--batch_size",
     default=1,
@@ -72,6 +72,7 @@ ORT_TO_NP_TYPE = {
     "tensor(double)": np.float64,
 }
 
+np.random.seed(args.seed)
 
 def benchmark(model):
     generator = None if args.seed is None else np.random.RandomState(args.seed)

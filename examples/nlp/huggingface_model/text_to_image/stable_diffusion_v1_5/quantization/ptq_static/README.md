@@ -34,7 +34,7 @@ bash run_quant.sh --input_model=/path/to/stable-diffusion \ # folder path of sta
 
 ```bash
 bash run_benchmark.sh --input_model=/path/to/stable-diffusion \ # folder path of stable-diffusion
-                      --quantized_unet_path=/path/to/quantized/unet \ # optional, run fp32 model if not provided
+                      --quantized_unet_path=/path/to/quantized/unet.onnx \ # optional, run fp32 model if not provided
                       --prompt="a photo of an astronaut riding a horse on mars" \ # optional
                       --image_path=image.png # optional
 ```
