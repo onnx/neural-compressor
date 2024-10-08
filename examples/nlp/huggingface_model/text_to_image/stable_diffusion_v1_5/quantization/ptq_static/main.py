@@ -74,6 +74,7 @@ ORT_TO_NP_TYPE = {
 
 np.random.seed(args.seed)
 
+
 def benchmark(model):
     generator = None if args.seed is None else np.random.RandomState(args.seed)
 
