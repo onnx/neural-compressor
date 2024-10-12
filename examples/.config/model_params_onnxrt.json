@@ -153,6 +153,13 @@
          "input_model": "/tf_dataset2/models/onnx/resnet50-v1-12/resnet50-v1-12.onnx",
          "main_script": "main.py",
          "batch_size": 1
+      },
+      "sd-v1-5-sq": {
+         "model_src_dir": "nlp/huggingface_model/text_to_image/stable_diffusion_v1_5/quantization/ptq_static",
+         "dataset_location": "",
+         "input_model": "/tf_dataset2/models/onnx/sd_v1_5",
+         "main_script": "main.py",
+         "batch_size": 1
       }
     }
   }

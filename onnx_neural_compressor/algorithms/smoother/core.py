@@ -272,7 +272,14 @@ class Smoother:
                         if self.model.model_path is not None
                         else onnx.numpy_helper.to_array(tensor) * scale
                     )
-                    self.model.set_initializer(inp, new_tensor)
+                    # set_initializer requires the dims of old & new initializers are same
+                    # Mul operator has broadcast mechanism
+                    self.model.remove_initializer(tensor)
+                    self.model.add_initializer(
+                        onnx.helper.make_tensor(
+                            inp, tensor.data_type, list(new_tensor.shape), new_tensor.flatten().tolist()
+                        )
+                    )
                     self.tensor_scales_info[key] = (
                         1.0 / scale
                         if key not in self.tensor_scales_info
