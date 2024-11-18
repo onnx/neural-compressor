@@ -306,7 +306,7 @@ def auto_detect_ep():
     if "DnnlExecutionProvider" in eps:
         return "DnnlExecutionProvider"
     elif "DmlExecutionProvider" in eps:
-        return "DnnlExecutionProvider"
+        return "DmlExecutionProvider"
     elif "CUDAExecutionProvider" in eps:
         return "CUDAExecutionProvider"
     else:
