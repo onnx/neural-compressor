@@ -64,6 +64,31 @@ def _qdq_loss(session, input_name, input_data, output_data):
     return np.sum(np.abs(output_data - preds) ** 2)
 
 
+def _format_alpha_summary(rows):
+    """Render the per-layer alpha the auto-search settled on, grouped by op type.
+
+    rows: list of (node_name, op_type, alpha). Returns a list of log lines: a per-op-type
+    value histogram (how many layers picked each alpha, answering "did everything just
+    land on the default, or did the search actually move layers?") followed by the full
+    per-layer list so a diverging layer is identifiable by name. Pure (no logger) so it is
+    unit-testable. Alphas are formatted with %g so 0.5 reads "0.5", 0.55 reads "0.55".
+    """
+    lines = ["auto-alpha: per-layer alpha chosen ({} smoothed node(s))".format(len(rows))]
+    by_type = {}
+    for name, op_type, alpha in rows:
+        by_type.setdefault(op_type, []).append((name, float(alpha)))
+    for op_type in sorted(by_type):
+        items = by_type[op_type]
+        hist = {}
+        for _, alpha in items:
+            hist[round(alpha, 4)] = hist.get(round(alpha, 4), 0) + 1
+        summary = ", ".join("{:g}x{}".format(a, hist[a]) for a in sorted(hist))
+        lines.append("  {} ({} node(s)): {}".format(op_type, len(items), summary))
+        for name, alpha in items:
+            lines.append("    {} -> {:g}".format(name, alpha))
+    return lines
+
+
 def _make_sub_graph(node, inits, input_data, output_data, opset, ir_version):
     """Build a model with the specific node.
 
@@ -660,6 +685,7 @@ class Smoother:
             self._sq_out_cache = {"node": None, "outputs": None}
 
         logger.info("auto tuning alpha done")
+        self._log_alpha_summary(optimal_alphas)
         if self.model.is_large_model:
 
             onnx.external_data_helper.load_external_data_for_model(
@@ -668,6 +694,27 @@ class Smoother:
             os.remove(self.model.model_path + "_augment.onnx")
             os.remove(os.path.join(os.path.dirname(self.model.model_path), "weights.pb"))
         return optimal_alphas
+
+    def _log_alpha_summary(self, optimal_alphas):
+        """Log which alpha the search actually picked for every smoothed layer.
+
+        Tells you at a glance whether the default just won everywhere or whether the
+        per-layer search genuinely moved layers. optimal_alphas is keyed by node name
+        when scales_per_op, else by the shared input tensor feeding several nodes; both
+        are expanded to one (node, op_type, alpha) row so the report is always per layer.
+        """
+        rows = []
+        for tensor_name, node_infos in self.tensors_to_node.items():
+            for node_info in node_infos:
+                key = node_info[0] if self.scales_per_op else tensor_name
+                if key not in optimal_alphas:
+                    continue
+                node = self.model.get_node(node_info[0])
+                rows.append((node_info[0], node.op_type, optimal_alphas[key]))
+        if not rows:
+            return
+        for line in _format_alpha_summary(rows):
+            logger.info(line)
 
     def _get_smooth_scales(self, alpha, target_list=[]):
         """Get the smooth scales for.
