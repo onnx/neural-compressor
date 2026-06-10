@@ -22,6 +22,7 @@ from typing import List
 import numpy as np
 import onnx
 import onnxruntime
+import tqdm
 
 from onnx_neural_compressor import data_reader, logger, onnx_model, utility
 
@@ -182,6 +183,11 @@ class Calibrator:
             for output_idx, output in enumerate(session.run(None, ort_inputs)):
                 output_dicts.setdefault(node_output_names[output_idx], []).append(output)
 
+        # This per-sample forward pass over the calibration set is the slow, otherwise
+        # silent phase logged as "Start smooth model calibration"; show its progress.
+        total = (max(self.iterations) + 1) if self.iterations else None
+        pbar = tqdm.tqdm(total=total, desc="SmoothQuant: collecting calibration activations",
+                         unit="sample", leave=False)
         idx = 0
         while True:
             inputs = self.dataloader.get_next()
@@ -195,6 +201,8 @@ class Calibrator:
             else:
                 _collect_data(inputs)
             idx += 1
+            pbar.update(1)
+        pbar.close()
         return output_dicts
 
     def calib_smooth(self, op_types, percentile: float = 99.999):
