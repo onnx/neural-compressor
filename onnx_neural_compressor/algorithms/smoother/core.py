@@ -487,6 +487,35 @@ class Smoother:
             scale = np.reshape(self.tensor_scales_info[key], (1, self.tensor_scales_info[key].shape[0]))
         return scale
 
+    def _alpha_grid(self, alpha_min, alpha_max, alpha_step):
+        """Inclusive-of-both-endpoints alpha search grid.
+
+        A request to search alpha_min..alpha_max should try alpha_max itself (np.arange
+        stops just short of its stop value). The +alpha_step/2 nudge pulls alpha_max inside
+        the half-open range without risking a spurious extra step from floating-point
+        rounding. A degenerate grid (alpha_min == alpha_max) collapses to a single value.
+        """
+        return np.arange(alpha_min, alpha_max + alpha_step / 2, alpha_step).tolist()
+
+    def _node_alpha_space(self, node, default_space, op_alpha, alpha_min, alpha_max, alpha_step):
+        """The alpha grid to search for one node, honouring per-op-type overrides.
+
+        op_alpha maps an op type to either a fixed float (pin the alpha, no search: a
+        single-point grid) or a dict of {alpha_min, alpha_max, alpha_step} (a custom grid,
+        each key defaulting to the global value). An op type absent from op_alpha uses the
+        global default_space.
+        """
+        override = (op_alpha or {}).get(node.op_type)
+        if override is None:
+            return default_space
+        if isinstance(override, dict):
+            return self._alpha_grid(
+                override.get("alpha_min", alpha_min),
+                override.get("alpha_max", alpha_max),
+                override.get("alpha_step", alpha_step),
+            )
+        return [float(override)]  # pinned: a single-point grid, evaluated for free below
+
     def _auto_tune_alpha(
         self,
         calib_iter,
@@ -494,6 +523,7 @@ class Smoother:
         alpha_max: float = 0.7,
         alpha_step: float = 0.05,
         attn_method: str = "min",
+        op_alpha: dict = None,
     ):
         """Perform alpha-tuning to obtain layer-wise optimal alpha values and adjust parameters accordingly.
 
@@ -503,25 +533,47 @@ class Smoother:
             alpha_max (float): max value of alpha search space.
             alpha_step (float): step size of alpha search space.
             attn_method (str): criterion method used on attention ops; currently min, max and mean are supported.
+            op_alpha (dict): optional per-op-type alpha override, {op_type: float | {alpha_min, alpha_max, alpha_step}}.
+                A float pins that op type's alpha (no search, one forward pass saved per node);
+                a dict gives it its own search grid; op types absent here use the global grid.
         """
         logger.info("auto tuning alpha")
 
-        # Inclusive of BOTH endpoints: a request to search alpha_min..alpha_max should try
-        # alpha_max itself (np.arange stops just short of its stop value). The +alpha_step/2
-        # nudge pulls alpha_max inside the half-open range without risking a spurious extra
-        # step from floating-point rounding.
-        alpha_space = np.arange(alpha_min, alpha_max + alpha_step / 2, alpha_step).tolist()
+        default_space = self._alpha_grid(alpha_min, alpha_max, alpha_step)
 
         optimal_alphas = {}
 
-        # The (node, alpha) QDQ-loss evaluation is the unit of work and by far the slowest
-        # phase, so drive a tqdm bar over it (live count, rate and ETA). _adjust_weights is
-        # called once per evaluation here, so silence its own bar for the duration.
-        n_nodes = sum(len(infos) for infos in self.tensors_to_node.values())
-        total = n_nodes * len(alpha_space)
+        # Warn for op_alpha keys that match no smoothed node: setting an alpha for an op
+        # type that is not in op_types, or that has no weight to migrate outliers into
+        # (e.g. Slice), is a silent no-op otherwise.
+        smoothed_types = {
+            self.model.get_node(ni[0]).op_type
+            for infos in self.tensors_to_node.values()
+            for ni in infos
+        }
+        for op_type in (op_alpha or {}):
+            if op_type not in smoothed_types:
+                logger.warning(
+                    "op_alpha set for {!r} but no smoothed node has that op type "
+                    "(not in op_types, or it has no weight to smooth); ignored".format(op_type)
+                )
+
+        # Per-node alpha grid (a pinned op collapses to a 1-point grid). The (node, alpha)
+        # QDQ-loss evaluation is the unit of work and by far the slowest phase, so drive a
+        # tqdm bar over it (live count, rate and ETA). _adjust_weights is called once per
+        # evaluation here, so silence its own bar for the duration.
+        node_spaces = {
+            ni[0]: self._node_alpha_space(
+                self.model.get_node(ni[0]), default_space, op_alpha, alpha_min, alpha_max, alpha_step
+            )
+            for infos in self.tensors_to_node.values()
+            for ni in infos
+        }
+        n_nodes = len(node_spaces)
+        total = sum(len(s) for s in node_spaces.values())
         logger.info(
-            "auto-alpha: {} alpha(s) x {} node(s) = {} QDQ-loss evaluation(s)".format(
-                len(alpha_space), n_nodes, total
+            "auto-alpha: {} node(s), {} QDQ-loss evaluation(s) over the per-node alpha grids".format(
+                n_nodes, total
             )
         )
         self._quiet_adjust = True
@@ -562,7 +614,15 @@ class Smoother:
                     loss_alpha = {}
                     key = node_info[0] if self.scales_per_op else tensor_name
                     node = self.model.get_node(node_info[0])
-                    for alpha in alpha_space:
+                    space = node_spaces[node_info[0]]
+                    if len(space) == 1:
+                        # Pinned alpha (or a degenerate grid): nothing to compare, so record
+                        # it and skip the QDQ loss evaluation entirely. This is the whole cost
+                        # saving of pinning an op you already trust (e.g. MatMul=0.5).
+                        optimal_alphas[key] = space[0]
+                        pbar.update(1)
+                        continue
+                    for alpha in space:
                         scale = self._get_smooth_scales(alpha, [key])
                         self._adjust_weights(scale)
                         input_scale = (
