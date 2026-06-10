@@ -43,22 +43,25 @@ def _quiet_session_options():
     return so
 
 
-def _get_quant_dequant_output(model, input_data, output_data, providers):
-    """Get loss between fp32 output and QDQ output.
+def _build_qdq_session(model, providers):
+    """Build the single-node QDQ sub-graph session used to score one (node, alpha).
 
-    Args:
-        model (object): model
-        input_data (numpy.ndarray): fp32 input
-        output_data (numpy.ndarray): fp32 output
-        providers (list): execution provider
+    For a fixed (node, alpha) this sub-graph is identical across every calibration sample,
+    so the session is built ONCE here and reused by _qdq_loss for all samples, instead of
+    rebuilt per sample (the old _get_quant_dequant_output did the latter, which on the large
+    path was the dominant remaining cost once activations were cached).
     """
-    input_data = quant_utils.qdq_data(input_data, 2, False)
-    sess = ort.InferenceSession(
+    return ort.InferenceSession(
         model.SerializeToString(), sess_options=_quiet_session_options(), providers=providers
     )
-    preds = sess.run(None, {model.graph.input[0].name: input_data})
-    loss = np.sum(np.abs(output_data - preds) ** 2)
-    return loss
+
+
+def _qdq_loss(session, input_name, input_data, output_data):
+    """Sum-of-squares loss between the fp32 reference output and the QDQ sub-graph output
+    for one calibration sample, against a prebuilt session (see _build_qdq_session)."""
+    input_data = quant_utils.qdq_data(input_data, 2, False)
+    preds = session.run(None, {input_name: input_data})
+    return np.sum(np.abs(output_data - preds) ** 2)
 
 
 def _make_sub_graph(node, inits, input_data, output_data, opset, ir_version):
@@ -418,18 +421,21 @@ class Smoother:
             inits = [self.model.get_initializer(i) for i in node.input if self.model.get_initializer(i) is not None]
 
             self.dataloader.rewind()
-            model = None
+            sub_sess = None
+            sub_input = None
             while True:
                 inputs = self.dataloader.get_next()
                 if not inputs:
                     break
                 outputs = session.run(added_tensors, inputs)
-                if model is None:
+                if sub_sess is None:
                     model = _make_sub_graph(
                         node, inits, outputs[0], outputs[1],
                         self.model.model.opset_import, self.model.model.ir_version,
                     )
-                loss += _get_quant_dequant_output(model, outputs[0] * scale, outputs[1], self.providers)
+                    sub_sess = _build_qdq_session(model, self.providers)
+                    sub_input = model.graph.input[0].name
+                loss += _qdq_loss(sub_sess, sub_input, outputs[0] * scale, outputs[1])
             self.model.remove_tensors_from_outputs([i for i in added_tensors if i not in orig_outputs])
             self.model.set_initializer(node.input[1], weight)
             return loss
@@ -463,14 +469,17 @@ class Smoother:
                 collected.append((out0, out1))
             self._sq_out_cache = {"node": node_name, "outputs": collected}
 
-        model = None
+        sub_sess = None
+        sub_input = None
         for out0, out1 in self._sq_out_cache["outputs"]:
-            if model is None:
+            if sub_sess is None:
                 model = _make_sub_graph(
                     node, inits, out0, out1,
                     self.model.model.opset_import, self.model.model.ir_version,
                 )
-            loss += _get_quant_dequant_output(model, out0 * scale, out1, self.providers)
+                sub_sess = _build_qdq_session(model, self.providers)
+                sub_input = model.graph.input[0].name
+            loss += _qdq_loss(sub_sess, sub_input, out0 * scale, out1)
         self.model.set_initializer(node.input[1], weight)
         return loss
 
