@@ -506,7 +506,11 @@ class Smoother:
         """
         logger.info("auto tuning alpha")
 
-        alpha_space = np.arange(alpha_min, alpha_max, alpha_step).tolist()
+        # Inclusive of BOTH endpoints: a request to search alpha_min..alpha_max should try
+        # alpha_max itself (np.arange stops just short of its stop value). The +alpha_step/2
+        # nudge pulls alpha_max inside the half-open range without risking a spurious extra
+        # step from floating-point rounding.
+        alpha_space = np.arange(alpha_min, alpha_max + alpha_step / 2, alpha_step).tolist()
 
         optimal_alphas = {}
 
