@@ -154,6 +154,36 @@ def static_quantize_entry(
 
 
 ###################### SmoothQuant Entry ##################################
+def _smoothquant_transform_params(quant_config):
+    """Translate the SmoothQuant* keys in a StaticQuantConfig's extra_options into the
+    keyword arguments Smoother.transform expects.
+
+    quantize() routes a StaticQuantConfig (with extra_options["SmoothQuant"] == True)
+    here, but StaticQuantConfig.get_model_params_dict() only surfaces the static-quant
+    knobs. Passing that to Smoother.transform forwards NONE of the smooth knobs, so the
+    smoother silently runs with its hard-coded defaults (alpha=0.5, the [0.3, 0.7] auto
+    grid, op_types Conv+Gemm+MatMul+FusedConv) no matter what the caller set. This maps
+    the documented extra_options names to the transform() argument names so they take
+    effect.
+    """
+    eo = dict(getattr(quant_config, "extra_options", None) or {})
+    mapping = {
+        "SmoothQuantAlpha": "alpha",
+        "SmoothQuantFolding": "folding",
+        "SmoothQuantOpTypes": "op_types",
+        "SmoothQuantCalibIter": "calib_iter",
+        "SmoothQuantScalesPerOp": "scales_per_op",
+        "SmoothQuantPercentile": "percentile",
+        # Not in the StaticQuantConfig docstring but read by transform() when alpha=="auto".
+        "AutoAlphaArgs": "auto_alpha_args",
+    }
+    params = {}
+    for src, dst in mapping.items():
+        if src in eo and eo[src] is not None:
+            params[dst] = eo[src]
+    return params
+
+
 @utility.register_algo(name=constants.SMOOTH_QUANT)
 def smooth_quant_entry(
     model: Union[pathlib.Path, str],
@@ -176,7 +206,7 @@ def smooth_quant_entry(
         calibration_data_reader,
         execution_provider=getattr(quant_config, "execution_provider", "CPUExecutionProvider"),
     )
-    smoothed_model = smoother.transform(**quant_config.get_model_params_dict())
+    smoothed_model = smoother.transform(**_smoothquant_transform_params(quant_config))
     with tempfile.TemporaryDirectory(prefix="ort.quant.") as tmp_dir:
         # ORT quant API requires str input
         onnx.save_model(

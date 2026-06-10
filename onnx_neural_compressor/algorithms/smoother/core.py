@@ -16,6 +16,7 @@
 import copy
 import os
 import pathlib
+import time
 
 import numpy as np
 import onnx
@@ -26,6 +27,18 @@ from onnx_neural_compressor.algorithms import utility as quant_utils
 from onnx_neural_compressor.algorithms.smoother import calibrator
 
 from typing import List, Union  # isort: skip
+
+
+def _format_duration(seconds):
+    """Format a (possibly fractional) number of seconds as a compact Hh MMm / Mm SSs string."""
+    seconds = int(max(0, seconds))
+    h, rem = divmod(seconds, 3600)
+    m, s = divmod(rem, 60)
+    if h:
+        return "{}h{:02d}m".format(h, m)
+    if m:
+        return "{}m{:02d}s".format(m, s)
+    return "{}s".format(s)
 
 
 def _get_quant_dequant_output(model, input_data, output_data, providers):
@@ -107,6 +120,16 @@ class Smoother:
         self.max_vals_per_channel = None
         self.shape_info = None
         self.tensors_to_node = None
+        # Tensors whose per-channel layout the smoother cannot resolve (the activation
+        # max axis and the weight in-channel length disagree, e.g. FastConformer's
+        # relative-position attention MatMuls). They are skipped (left unsmoothed)
+        # rather than crashing _get_smooth_scale on a mismatched broadcast.
+        self.skipped_smooth_tensors = set()
+        # Large-model auto-alpha state: one shared ORIGINAL-weight session exposing
+        # every per-node tensor, plus a per-node activation cache reused across the
+        # alpha grid (the activations are alpha-independent on the large path).
+        self._sq_shared_session = None
+        self._sq_out_cache = {"node": None, "outputs": None}
         self._build_absorb_function()
 
     def transform(
@@ -357,50 +380,84 @@ class Smoother:
             node_name (str): node name
             scale (float): scale of the specific node
             calib_iter (int): iterations
+
+        The calibration ``dataloader`` is rewound before every evaluation: the alpha
+        search drains it once in ``_dump_op_info`` and never rewinds before searching,
+        so without this each evaluation would see an exhausted reader (loss 0) and the
+        per-layer optimal alpha would collapse to ``alpha_min`` for every node.
         """
         node = [i for i in self.model.nodes() if i.name == node_name]
         loss = 0
-        if len(node) > 0:
-            node = node[0]
+        if len(node) == 0:
+            return loss
+        node = node[0]
+
+        if not self.model.is_large_model:
+            # Small model: the session is cheap to rebuild and must be rebuilt every
+            # call (the weight was just scaled for this alpha), so keep doing that and
+            # only add the missing rewind.
             orig_outputs = self.model.output()
             added_tensors = [node.input[0], node.output[0]]
             self.model.add_tensors_to_outputs(added_tensors)
-
-            session = (
-                ort.InferenceSession(self.model.model_path + "_augment.onnx", providers=self.providers)
-                if self.model.is_large_model
-                else ort.InferenceSession(self.model.model.SerializeToString(), providers=self.providers)
-            )
-            base_dir = "" if not self.model.is_large_model else os.path.dirname(self.model.model_path)
-            weight = onnx.numpy_helper.to_array(self.model.get_initializer(node.input[1]), base_dir)
+            session = ort.InferenceSession(self.model.model.SerializeToString(), providers=self.providers)
+            weight = onnx.numpy_helper.to_array(self.model.get_initializer(node.input[1]), "")
             weight_q = quant_utils.qdq_data(weight, 3, True)
-
             self.model.set_initializer(node.input[1], weight_q)
             inits = [self.model.get_initializer(i) for i in node.input if self.model.get_initializer(i) is not None]
 
+            self.dataloader.rewind()
             model = None
-            idx = 1
             while True:
                 inputs = self.dataloader.get_next()
                 if not inputs:
                     break
-                if idx > calib_iter:
-                    break
-
                 outputs = session.run(added_tensors, inputs)
                 if model is None:
                     model = _make_sub_graph(
-                        node,
-                        inits,
-                        outputs[0],
-                        outputs[1],
-                        self.model.model.opset_import,
-                        self.model.model.ir_version,
+                        node, inits, outputs[0], outputs[1],
+                        self.model.model.opset_import, self.model.model.ir_version,
                     )
                 loss += _get_quant_dequant_output(model, outputs[0] * scale, outputs[1], self.providers)
-
             self.model.remove_tensors_from_outputs([i for i in added_tensors if i not in orig_outputs])
             self.model.set_initializer(node.input[1], weight)
+            return loss
+
+        # Large model: the augment file (saved once in _auto_tune_alpha with the
+        # ORIGINAL weights and every per-node in/out tensor exposed as a graph output)
+        # backs ONE shared session whose harvested activations are alpha-independent.
+        # Harvest each node's activations once and cache them across the whole alpha
+        # grid; only the cheap per-alpha QDQ sub-graph depends on the scaled weight.
+        base_dir = os.path.dirname(self.model.model_path)
+        weight = onnx.numpy_helper.to_array(self.model.get_initializer(node.input[1]), base_dir)
+        weight_q = quant_utils.qdq_data(weight, 3, True)
+        self.model.set_initializer(node.input[1], weight_q)
+        inits = [self.model.get_initializer(i) for i in node.input if self.model.get_initializer(i) is not None]
+
+        if self._sq_out_cache.get("node") != node_name:
+            if self._sq_shared_session is None:
+                self._sq_shared_session = ort.InferenceSession(
+                    self.model.model_path + "_augment.onnx", providers=self.providers
+                )
+            fetch = [node.input[0], node.output[0]]
+            self.dataloader.rewind()
+            collected = []
+            while True:
+                inputs = self.dataloader.get_next()
+                if not inputs:
+                    break
+                out0, out1 = self._sq_shared_session.run(fetch, inputs)
+                collected.append((out0, out1))
+            self._sq_out_cache = {"node": node_name, "outputs": collected}
+
+        model = None
+        for out0, out1 in self._sq_out_cache["outputs"]:
+            if model is None:
+                model = _make_sub_graph(
+                    node, inits, out0, out1,
+                    self.model.model.opset_import, self.model.model.ir_version,
+                )
+            loss += _get_quant_dequant_output(model, out0 * scale, out1, self.providers)
+        self.model.set_initializer(node.input[1], weight)
         return loss
 
     def _reshape_scale_for_input(self, tensor, key):
@@ -438,7 +495,39 @@ class Smoother:
         alpha_space = np.arange(alpha_min, alpha_max, alpha_step).tolist()
 
         optimal_alphas = {}
+
+        # Progress / ETA bookkeeping: the (node, alpha) evaluation is the unit of work
+        # and by far the slowest phase, so report a throttled ETA after the first ticks.
+        n_nodes = sum(len(infos) for infos in self.tensors_to_node.values())
+        total = n_nodes * len(alpha_space)
+        done = 0
+        t0 = time.time()
+        last_log = 0.0
+        logger.info(
+            "auto-alpha: {} alpha(s) x {} node(s) = {} QDQ-loss evaluation(s)".format(
+                len(alpha_space), n_nodes, total
+            )
+        )
+
+        # Large-model path: expose every per-node in/out tensor as a graph output
+        # BEFORE saving the augment file, so a single shared original-weight session
+        # can fetch them (the stock augment file lacks them and session.run raises
+        # "Invalid output name"). Those activations are alpha-independent, which is what
+        # makes the per-node cache in _get_output_loss valid.
+        self._sq_shared_session = None
+        self._sq_out_cache = {"node": None, "outputs": None}
+        added_outputs = []
         if self.model.is_large_model:
+            needed, seen = [], set()
+            for node_infos in self.tensors_to_node.values():
+                for node_info in node_infos:
+                    n = self.model.get_node(node_info[0])
+                    for t in (n.input[0], n.output[0]):
+                        if t and t not in seen:
+                            seen.add(t)
+                            needed.append(t)
+            added_outputs = [t for t in needed if t not in set(self.model.output())]
+            self.model.add_tensors_to_outputs(added_outputs)
             onnx.save_model(
                 self.model.model,
                 self.model.model_path + "_augment.onnx",
@@ -449,30 +538,50 @@ class Smoother:
             )
 
         ## Searching optimal alphas
-        for tensor_name, node_infos in self.tensors_to_node.items():
-            for node_info in node_infos:
-                loss_alpha = {}
-                key = node_info[0] if self.scales_per_op else tensor_name
-                node = self.model.get_node(node_info[0])
-                for alpha in alpha_space:
-                    scale = self._get_smooth_scales(alpha, [key])
-                    self._adjust_weights(scale)
-                    input_scale = (
-                        self._reshape_scale_for_input(tensor_name, key)
-                        if not (node.op_type == "Gemm" and quant_utils.is_B_transposed(node))
-                        else self.tensor_scales_info[key]
-                    )
-                    loss = self._get_output_loss(node_info[0], input_scale, calib_iter)
-                    loss_alpha[alpha] = loss
-                    if key not in optimal_alphas:  # Update alpha results
-                        optimal_alphas[key] = alpha
-                    else:
-                        optimal_alphas[key] = (
-                            alpha
-                            if optimal_alphas[key] in loss_alpha and loss < loss_alpha[optimal_alphas[key]]
-                            else optimal_alphas[key]
+        try:
+            for tensor_name, node_infos in self.tensors_to_node.items():
+                for node_info in node_infos:
+                    loss_alpha = {}
+                    key = node_info[0] if self.scales_per_op else tensor_name
+                    node = self.model.get_node(node_info[0])
+                    for alpha in alpha_space:
+                        scale = self._get_smooth_scales(alpha, [key])
+                        self._adjust_weights(scale)
+                        input_scale = (
+                            self._reshape_scale_for_input(tensor_name, key)
+                            if not (node.op_type == "Gemm" and quant_utils.is_B_transposed(node))
+                            else self.tensor_scales_info[key]
                         )
-                    self.recover()
+                        loss = self._get_output_loss(node_info[0], input_scale, calib_iter)
+                        loss_alpha[alpha] = loss
+                        if key not in optimal_alphas:  # Update alpha results
+                            optimal_alphas[key] = alpha
+                        else:
+                            optimal_alphas[key] = (
+                                alpha
+                                if optimal_alphas[key] in loss_alpha and loss < loss_alpha[optimal_alphas[key]]
+                                else optimal_alphas[key]
+                            )
+                        self.recover()
+
+                        done += 1
+                        now = time.time()
+                        if total and (now - last_log >= 15 or done >= total):
+                            last_log = now
+                            elapsed = now - t0
+                            frac = done / total
+                            eta = elapsed / frac - elapsed if frac else 0.0
+                            logger.info(
+                                "auto-alpha: {}/{} ({:.0f}%) elapsed {} ETA ~{}".format(
+                                    done, total, frac * 100, _format_duration(elapsed), _format_duration(eta)
+                                )
+                            )
+        finally:
+            if self.model.is_large_model:
+                self.model.remove_tensors_from_outputs(added_outputs)
+            self._sq_shared_session = None
+            self._sq_out_cache = {"node": None, "outputs": None}
+
         logger.info("auto tuning alpha done")
         if self.model.is_large_model:
 
@@ -535,6 +644,14 @@ class Smoother:
                 specific_alpha = alpha[tensor] if isinstance(alpha, dict) else alpha
                 scales[tensor] = self._get_smooth_scale(weights_stack, specific_alpha, tensor)
 
+        # Drop nodes _get_smooth_scale could not resolve (returned None); downstream
+        # consumers (_insert_smooth_mul_op / _adjust_weights) iterate scales.keys().
+        scales = {k: v for k, v in scales.items() if v is not None}
+        if not target_list and self.skipped_smooth_tensors:
+            logger.info(
+                "SmoothQuant left {} node(s) unsmoothed (unresolvable per-channel layout); "
+                "they fall through to plain static quantization".format(len(self.skipped_smooth_tensors))
+            )
         return scales
 
     def _get_smooth_scale(self, weights, specific_alpha, tensor):
@@ -547,6 +664,16 @@ class Smoother:
         """
         weights = np.abs(weights.reshape(weights.shape[0], -1))
         weights_max = np.amax(weights, axis=-1)
+        if self.max_vals_per_channel[tensor].shape != weights_max.shape:
+            # The per-channel activation max and the weight in-channel length disagree
+            # (the smoother assumes a 3D activation is (batch, seq, in_channel) with the
+            # in-channel LAST, which does not hold for e.g. FastConformer's relative-
+            # position attention MatMuls). The smooth scale could not be broadcast, so
+            # skip this node (it falls through to plain static quantization) instead of
+            # crashing. _insert_smooth_mul_op / _adjust_weights both guard on the key,
+            # so a missing scale is safe.
+            self.skipped_smooth_tensors.add(tensor)
+            return None
         input_power = np.power(self.max_vals_per_channel[tensor], specific_alpha)
         weight_power = np.power(weights_max, 1 - specific_alpha)
         weight_power = np.clip(weight_power, a_min=1e-5, a_max=None)
