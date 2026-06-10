@@ -16,29 +16,31 @@
 import copy
 import os
 import pathlib
-import time
 
 import numpy as np
 import onnx
 import onnxruntime as ort
+import tqdm
 
-from onnx_neural_compressor import data_reader, logger, onnx_model, utility
+from onnx_neural_compressor import data_reader, logger, onnx_model
 from onnx_neural_compressor.algorithms import utility as quant_utils
 from onnx_neural_compressor.algorithms.smoother import calibrator
 
 from typing import List, Union  # isort: skip
 
 
-def _format_duration(seconds):
-    """Format a (possibly fractional) number of seconds as a compact Hh MMm / Mm SSs string."""
-    seconds = int(max(0, seconds))
-    h, rem = divmod(seconds, 3600)
-    m, s = divmod(rem, 60)
-    if h:
-        return "{}h{:02d}m".format(h, m)
-    if m:
-        return "{}m{:02d}s".format(m, s)
-    return "{}s".format(s)
+def _quiet_session_options():
+    """ORT SessionOptions that silence the per-build 'Removing initializer' warnings.
+
+    The smoother rebuilds an InferenceSession for every (node, alpha) evaluation in the
+    auto-alpha search; each build logs a WARNING for every pruned ``*_smooth_scale``
+    initializer (graph.cc CleanUnusedInitializersAndNodeArgs), flooding the console with
+    thousands of identical lines. Severity 3 keeps errors and fatals, drops the warnings;
+    the tqdm progress bar then stays the single readable signal of what is happening.
+    """
+    so = ort.SessionOptions()
+    so.log_severity_level = 3
+    return so
 
 
 def _get_quant_dequant_output(model, input_data, output_data, providers):
@@ -51,7 +53,9 @@ def _get_quant_dequant_output(model, input_data, output_data, providers):
         providers (list): execution provider
     """
     input_data = quant_utils.qdq_data(input_data, 2, False)
-    sess = ort.InferenceSession(model.SerializeToString(), providers=providers)
+    sess = ort.InferenceSession(
+        model.SerializeToString(), sess_options=_quiet_session_options(), providers=providers
+    )
     preds = sess.run(None, {model.graph.input[0].name: input_data})
     loss = np.sum(np.abs(output_data - preds) ** 2)
     return loss
@@ -130,6 +134,10 @@ class Smoother:
         # alpha grid (the activations are alpha-independent on the large path).
         self._sq_shared_session = None
         self._sq_out_cache = {"node": None, "outputs": None}
+        # Quiets _adjust_weights' own tqdm bar while it is called once per (node, alpha)
+        # inside the auto-alpha search (where the single auto-alpha bar is the real signal);
+        # the final single full-model apply in transform() re-enables it.
+        self._quiet_adjust = False
         self._build_absorb_function()
 
     def transform(
@@ -399,7 +407,11 @@ class Smoother:
             orig_outputs = self.model.output()
             added_tensors = [node.input[0], node.output[0]]
             self.model.add_tensors_to_outputs(added_tensors)
-            session = ort.InferenceSession(self.model.model.SerializeToString(), providers=self.providers)
+            session = ort.InferenceSession(
+                self.model.model.SerializeToString(),
+                sess_options=_quiet_session_options(),
+                providers=self.providers,
+            )
             weight = onnx.numpy_helper.to_array(self.model.get_initializer(node.input[1]), "")
             weight_q = quant_utils.qdq_data(weight, 3, True)
             self.model.set_initializer(node.input[1], weight_q)
@@ -436,7 +448,9 @@ class Smoother:
         if self._sq_out_cache.get("node") != node_name:
             if self._sq_shared_session is None:
                 self._sq_shared_session = ort.InferenceSession(
-                    self.model.model_path + "_augment.onnx", providers=self.providers
+                    self.model.model_path + "_augment.onnx",
+                    sess_options=_quiet_session_options(),
+                    providers=self.providers,
                 )
             fetch = [node.input[0], node.output[0]]
             self.dataloader.rewind()
@@ -496,18 +510,18 @@ class Smoother:
 
         optimal_alphas = {}
 
-        # Progress / ETA bookkeeping: the (node, alpha) evaluation is the unit of work
-        # and by far the slowest phase, so report a throttled ETA after the first ticks.
+        # The (node, alpha) QDQ-loss evaluation is the unit of work and by far the slowest
+        # phase, so drive a tqdm bar over it (live count, rate and ETA). _adjust_weights is
+        # called once per evaluation here, so silence its own bar for the duration.
         n_nodes = sum(len(infos) for infos in self.tensors_to_node.values())
         total = n_nodes * len(alpha_space)
-        done = 0
-        t0 = time.time()
-        last_log = 0.0
         logger.info(
             "auto-alpha: {} alpha(s) x {} node(s) = {} QDQ-loss evaluation(s)".format(
                 len(alpha_space), n_nodes, total
             )
         )
+        self._quiet_adjust = True
+        pbar = tqdm.tqdm(total=total, desc="SmoothQuant auto-alpha", unit="eval", leave=True)
 
         # Large-model path: expose every per-node in/out tensor as a graph output
         # BEFORE saving the augment file, so a single shared original-weight session
@@ -563,20 +577,10 @@ class Smoother:
                                 else optimal_alphas[key]
                             )
                         self.recover()
-
-                        done += 1
-                        now = time.time()
-                        if total and (now - last_log >= 15 or done >= total):
-                            last_log = now
-                            elapsed = now - t0
-                            frac = done / total
-                            eta = elapsed / frac - elapsed if frac else 0.0
-                            logger.info(
-                                "auto-alpha: {}/{} ({:.0f}%) elapsed {} ETA ~{}".format(
-                                    done, total, frac * 100, _format_duration(elapsed), _format_duration(eta)
-                                )
-                            )
+                        pbar.update(1)
         finally:
+            pbar.close()
+            self._quiet_adjust = False
             if self.model.is_large_model:
                 self.model.remove_tensors_from_outputs(added_outputs)
             self._sq_shared_session = None
@@ -734,8 +738,13 @@ class Smoother:
         Args:
             scales (dict): The input scales
         """
-        for idx, (tensor_name, nodes) in enumerate(self.tensors_to_node.items()):
-            utility.simple_progress_bar(len(self.tensors_to_node), idx + 1)
+        for tensor_name, nodes in tqdm.tqdm(
+            self.tensors_to_node.items(),
+            desc="SmoothQuant: folding scales into weights",
+            unit="tensor",
+            disable=self._quiet_adjust,
+            leave=False,
+        ):
             for node_info in nodes:
                 key = node_info[0] if self.scales_per_op else tensor_name
                 if key not in scales:
