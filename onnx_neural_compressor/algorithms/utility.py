@@ -847,13 +847,44 @@ class QuantizedInitializer:
         self.qType = qType
 
 
-def dump_model_op_stats(model, quantize_config, fp32_op_list):
+# Census buckets for dump_model_op_stats. A weight-bearing op is directly
+# quantizable on its own (given calibration data) only when its weight (input[1])
+# is an initializer: a weightless MatMul (e.g. attention Q@K^T, probs@V) is only
+# converted when an int8 region already reaches its inputs. The pass-through ops
+# carry no weights at all and only ever BECOME int8 when they sit inside an int8
+# region (the quantizer routes the int8 tensor through them); an fp32 one is not
+# directly actionable either.
+WEIGHT_BEARING_OPS = ("Conv", "FusedConv", "Gemm", "MatMul")
+PASS_THROUGH_OPS = (
+    "Reshape", "Transpose", "Squeeze", "Unsqueeze", "Flatten", "Expand", "Slice",
+    "SpaceToDepth", "DepthToSpace", "Upsample", "Tile", "CenterCropPad",
+    "Concat", "Split", "Pad", "MaxPool", "AveragePool", "GlobalAveragePool", "Resize",
+)
+# Always shown in the census even when not requested for quantization: these glue
+# ops decide whether an int8 region can reach the weightless attention MatMuls, so
+# their counts matter when reading the MatMul row.
+ALWAYS_DUMP_OP_TYPES = ("Reshape", "Transpose")
+
+INT8_COL = "INT8"
+FP32_QUANTIZABLE_COL = "FP32 quantizable"
+FP32_BLOCKED_COL = "FP32 needs-int8-input"
+
+
+def collect_op_quant_stats(model, op_types):
+    """Per-op-type census of a quantized model, splitting fp32 leftovers by cause.
+
+    Returns an ordered dict op_type -> {INT8, FP32 quantizable, FP32 needs-int8-input}
+    counts over op_types (plus ALWAYS_DUMP_OP_TYPES and the Q/DQ ops). "FP32
+    quantizable" nodes could be quantized directly on a re-run (they were excluded or
+    fell back); "FP32 needs-int8-input" nodes cannot: they are weightless (a dynamic
+    MatMul) or pass-through ops, which only turn int8 when the surrounding region does.
+    """
     qdq_ops = ["QuantizeLinear", "DequantizeLinear", "DynamicQuantizeLinear"]
+    cols = (INT8_COL, FP32_QUANTIZABLE_COL, FP32_BLOCKED_COL)
     res = {}
-    for op_type in fp32_op_list:
-        res[op_type] = {"INT8": 0, "FP32": 0}
-    for op_type in qdq_ops:
-        res[op_type] = {"INT8": 0, "FP32": 0}
+    for op_type in [*op_types, *(t for t in ALWAYS_DUMP_OP_TYPES if t not in op_types), *qdq_ops]:
+        res[op_type] = dict.fromkeys(cols, 0)
+    initializers = {init.name for init in model.graph.initializer}
 
     for node in model.graph.node:
         if node.name.endswith("_quant"):
@@ -868,21 +899,35 @@ def dump_model_op_stats(model, quantize_config, fp32_op_list):
                 origin_op_type = "LSTM"
             elif origin_op_type == "QEmbedLayerNormalization":
                 origin_op_type = "EmbedLayerNormalization"
-            res[origin_op_type]["INT8"] += 1
+            if origin_op_type in res:
+                res[origin_op_type][INT8_COL] += 1
 
         elif node.op_type in qdq_ops:
-            res[node.op_type]["INT8"] += 1
+            res[node.op_type][INT8_COL] += 1
 
         elif node.op_type in res:
-            res[node.op_type]["FP32"] += 1
+            if node.op_type in PASS_THROUGH_OPS:
+                res[node.op_type][FP32_BLOCKED_COL] += 1
+            elif node.op_type in WEIGHT_BEARING_OPS and (
+                len(node.input) < 2 or node.input[1] not in initializers
+            ):
+                res[node.op_type][FP32_BLOCKED_COL] += 1
+            else:
+                res[node.op_type][FP32_QUANTIZABLE_COL] += 1
+    return res
 
-    field_names = ["Op Type", "Total", "INT8", "FP32"]
+
+def dump_model_op_stats(model, quantize_config, fp32_op_list):
+    res = collect_op_quant_stats(model, fp32_op_list)
+
+    field_names = ["Op Type", "Total", INT8_COL, FP32_QUANTIZABLE_COL, FP32_BLOCKED_COL]
     output_data = [
         [
             op_type,
             sum(res[op_type].values()),
-            res[op_type]["INT8"],
-            res[op_type]["FP32"],
+            res[op_type][INT8_COL],
+            res[op_type][FP32_QUANTIZABLE_COL],
+            res[op_type][FP32_BLOCKED_COL],
         ]
         for op_type in res.keys()
     ]
