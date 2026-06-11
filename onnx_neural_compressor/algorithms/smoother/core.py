@@ -44,23 +44,27 @@ def _quiet_session_options():
 
 
 def _build_qdq_session(model, providers):
-    """Build the single-node QDQ sub-graph session used to score one (node, alpha).
+    """Build the single-node QDQ sub-graph session used to score a node across the alpha grid.
 
-    For a fixed (node, alpha) this sub-graph is identical across every calibration sample,
-    so the session is built ONCE here and reused by _qdq_loss for all samples, instead of
-    rebuilt per sample (the old _get_quant_dequant_output did the latter, which on the large
-    path was the dominant remaining cost once activations were cached).
+    The sub-graph feeds BOTH the activation and the (alpha-dependent) quant-dequant weight
+    as runtime inputs (see _make_sub_graph), so for a fixed node it is identical across every
+    calibration sample AND every alpha. The session is therefore built ONCE per node and
+    reused by _qdq_loss for all samples and all alphas, instead of rebuilt per (node, alpha)
+    -- which was n_alphas sessions per node and made a wide alpha grid balloon native memory
+    (each ort.InferenceSession arena is never handed back to the OS) until it OOM'd.
     """
     return ort.InferenceSession(
         model.SerializeToString(), sess_options=_quiet_session_options(), providers=providers
     )
 
 
-def _qdq_loss(session, input_name, input_data, output_data):
+def _qdq_loss(session, input_name, input_data, output_data, weight_name, weight_data):
     """Sum-of-squares loss between the fp32 reference output and the QDQ sub-graph output
-    for one calibration sample, against a prebuilt session (see _build_qdq_session)."""
+    for one calibration sample, against a prebuilt session (see _build_qdq_session). Both the
+    quant-dequant activation and the (alpha-dependent) quant-dequant weight are fed per call,
+    so one session serves the whole alpha grid."""
     input_data = quant_utils.qdq_data(input_data, 2, False)
-    preds = session.run(None, {input_name: input_data})
+    preds = session.run(None, {input_name: input_data, weight_name: weight_data})
     return np.sum(np.abs(output_data - preds) ** 2)
 
 
@@ -89,14 +93,23 @@ def _format_alpha_summary(rows):
     return lines
 
 
-def _make_sub_graph(node, inits, input_data, output_data, opset, ir_version):
-    """Build a model with the specific node.
+def _make_sub_graph(node, inits, input_data, output_data, weight_name, weight_data, opset, ir_version):
+    """Build a single-node model whose weight is a runtime INPUT, not a baked initializer.
+
+    The QDQ-loss sub-graph is structurally identical for every alpha at a given node (same
+    node, same activation/weight shapes); only the quant-dequant weight VALUES change with
+    alpha. Feeding the weight as a graph input (instead of baking the alpha-dependent weight
+    as an initializer) makes the built session reusable across the whole alpha grid, so it is
+    built once per node rather than once per (node, alpha). bias / other non-weight
+    initializers are alpha-independent and stay baked in ``inits``.
 
     Args:
         node (object): node
-        inits (list): initializer inputs of this node
-        input_data (numpy.ndarray): fp32 input
-        output_data (numpy.ndarray): fp32 output
+        inits (list): non-weight initializer inputs of this node (e.g. bias), kept baked
+        input_data (numpy.ndarray): fp32 activation input (used for its dtype/shape)
+        output_data (numpy.ndarray): fp32 output (used for its dtype/shape)
+        weight_name (str): name of the weight input fed at run time (node.input[1])
+        weight_data (numpy.ndarray): quant-dequant weight (used for its dtype/shape)
         opset (object): opset of the model
         ir_version (object): ir_version of the model
     """
@@ -105,12 +118,17 @@ def _make_sub_graph(node, inits, input_data, output_data, opset, ir_version):
         onnx.helper.np_dtype_to_tensor_dtype(input_data.dtype),
         input_data.shape,
     )
+    weight = onnx.helper.make_tensor_value_info(
+        weight_name,
+        onnx.helper.np_dtype_to_tensor_dtype(weight_data.dtype),
+        weight_data.shape,
+    )
     output = onnx.helper.make_tensor_value_info(
         node.output[0],
         onnx.helper.np_dtype_to_tensor_dtype(output_data.dtype),
         output_data.shape,
     )
-    graph = onnx.helper.make_graph([node], "sub_graph", [input], [output], inits)
+    graph = onnx.helper.make_graph([node], "sub_graph", [input, weight], [output], inits)
     model = onnx.helper.make_model(graph, opset_imports=opset)
     model.ir_version = ir_version
     return model
@@ -162,6 +180,10 @@ class Smoother:
         # alpha grid (the activations are alpha-independent on the large path).
         self._sq_shared_session = None
         self._sq_out_cache = {"node": None, "outputs": None}
+        # Per-node QDQ sub-graph session, reused across the whole alpha grid (the weight is
+        # fed as a runtime input, so the session is alpha-independent). Built once per node
+        # instead of once per (node, alpha) -- see _make_sub_graph / _get_output_loss.
+        self._sq_subgraph = {"node": None, "session": None, "input": None, "weight": None}
         # Quiets _adjust_weights' own tqdm bar while it is called once per (node, alpha)
         # inside the auto-alpha search (where the single auto-alpha bar is the real signal);
         # the final single full-model apply in transform() re-enables it.
@@ -409,29 +431,21 @@ class Smoother:
                                         child.input[idx] = node.input[0]
         self.model.remove_nodes(remove_nodes)
 
-    def _get_output_loss(self, node_name, scale, calib_iter):
-        """Get output loss of specific node after inserting QDQ pair.
+    def _reference_activations(self, node, node_name):
+        """Return the per-sample (node-input, node-output) reference activations the QDQ loss
+        scores against, as a list of (np.ndarray, np.ndarray).
 
-        Args:
-            node_name (str): node name
-            scale (float): scale of the specific node
-            calib_iter (int): iterations
+        Small model: recomputed every call from a fresh full-model session (the activations
+        depend on the just-smoothed weights, so they are not cacheable across the alpha grid).
+        Large model: harvested ONCE per node from the shared ORIGINAL-weight augment session
+        (alpha-independent) and cached across the whole grid.
 
-        The calibration ``dataloader`` is rewound before every evaluation: the alpha
-        search drains it once in ``_dump_op_info`` and never rewinds before searching,
-        so without this each evaluation would see an exhausted reader (loss 0) and the
-        per-layer optimal alpha would collapse to ``alpha_min`` for every node.
+        The calibration ``dataloader`` is rewound before every harvest: the alpha search
+        drains it once in ``_dump_op_info`` and never rewinds before searching, so without
+        this each evaluation would see an exhausted reader (loss 0) and the per-layer optimal
+        alpha would collapse to ``alpha_min`` for every node.
         """
-        node = [i for i in self.model.nodes() if i.name == node_name]
-        loss = 0
-        if len(node) == 0:
-            return loss
-        node = node[0]
-
         if not self.model.is_large_model:
-            # Small model: the session is cheap to rebuild and must be rebuilt every
-            # call (the weight was just scaled for this alpha), so keep doing that and
-            # only add the missing rewind.
             orig_outputs = self.model.output()
             added_tensors = [node.input[0], node.output[0]]
             self.model.add_tensors_to_outputs(added_tensors)
@@ -440,42 +454,21 @@ class Smoother:
                 sess_options=_quiet_session_options(),
                 providers=self.providers,
             )
-            weight = onnx.numpy_helper.to_array(self.model.get_initializer(node.input[1]), "")
-            weight_q = quant_utils.qdq_data(weight, 3, True)
-            self.model.set_initializer(node.input[1], weight_q)
-            inits = [self.model.get_initializer(i) for i in node.input if self.model.get_initializer(i) is not None]
-
+            self.model.remove_tensors_from_outputs([i for i in added_tensors if i not in orig_outputs])
             self.dataloader.rewind()
-            sub_sess = None
-            sub_input = None
+            samples = []
             while True:
                 inputs = self.dataloader.get_next()
                 if not inputs:
                     break
-                outputs = session.run(added_tensors, inputs)
-                if sub_sess is None:
-                    model = _make_sub_graph(
-                        node, inits, outputs[0], outputs[1],
-                        self.model.model.opset_import, self.model.model.ir_version,
-                    )
-                    sub_sess = _build_qdq_session(model, self.providers)
-                    sub_input = model.graph.input[0].name
-                loss += _qdq_loss(sub_sess, sub_input, outputs[0] * scale, outputs[1])
-            self.model.remove_tensors_from_outputs([i for i in added_tensors if i not in orig_outputs])
-            self.model.set_initializer(node.input[1], weight)
-            return loss
+                out0, out1 = session.run(added_tensors, inputs)
+                samples.append((out0, out1))
+            return samples
 
-        # Large model: the augment file (saved once in _auto_tune_alpha with the
-        # ORIGINAL weights and every per-node in/out tensor exposed as a graph output)
-        # backs ONE shared session whose harvested activations are alpha-independent.
-        # Harvest each node's activations once and cache them across the whole alpha
-        # grid; only the cheap per-alpha QDQ sub-graph depends on the scaled weight.
-        base_dir = os.path.dirname(self.model.model_path)
-        weight = onnx.numpy_helper.to_array(self.model.get_initializer(node.input[1]), base_dir)
-        weight_q = quant_utils.qdq_data(weight, 3, True)
-        self.model.set_initializer(node.input[1], weight_q)
-        inits = [self.model.get_initializer(i) for i in node.input if self.model.get_initializer(i) is not None]
-
+        # Large model: the augment file (saved once in _auto_tune_alpha with the ORIGINAL
+        # weights and every per-node in/out tensor exposed as a graph output) backs ONE
+        # shared session whose harvested activations are alpha-independent, so cache them
+        # per node across the whole alpha grid.
         if self._sq_out_cache.get("node") != node_name:
             if self._sq_shared_session is None:
                 self._sq_shared_session = ort.InferenceSession(
@@ -493,19 +486,63 @@ class Smoother:
                 out0, out1 = self._sq_shared_session.run(fetch, inputs)
                 collected.append((out0, out1))
             self._sq_out_cache = {"node": node_name, "outputs": collected}
+        return self._sq_out_cache["outputs"]
 
-        sub_sess = None
-        sub_input = None
-        for out0, out1 in self._sq_out_cache["outputs"]:
-            if sub_sess is None:
-                model = _make_sub_graph(
-                    node, inits, out0, out1,
-                    self.model.model.opset_import, self.model.model.ir_version,
-                )
-                sub_sess = _build_qdq_session(model, self.providers)
-                sub_input = model.graph.input[0].name
-            loss += _qdq_loss(sub_sess, sub_input, out0 * scale, out1)
-        self.model.set_initializer(node.input[1], weight)
+    def _get_output_loss(self, node_name, scale, calib_iter):
+        """Get output loss of specific node after inserting QDQ pair.
+
+        Args:
+            node_name (str): node name
+            scale (float): scale of the specific node
+            calib_iter (int): iterations
+
+        The (alpha-dependent) quant-dequant weight is the ONLY thing that changes across the
+        alpha grid for a fixed node, so it is fed to the sub-graph session as a runtime input
+        (see _make_sub_graph) and the session itself is built once per node and cached on
+        ``self._sq_subgraph``. This keeps the count of ort.InferenceSession builds at one per
+        node instead of one per (node, alpha): a wide alpha grid no longer multiplies session
+        churn (whose never-reclaimed native arenas were OOM-ing wide-grid searches).
+        """
+        node = [i for i in self.model.nodes() if i.name == node_name]
+        loss = 0
+        if len(node) == 0:
+            return loss
+        node = node[0]
+        base_dir = os.path.dirname(self.model.model_path) if self.model.model_path is not None else ""
+
+        # The quant-dequant weight is alpha-dependent (the weight was just scaled for this
+        # alpha by _adjust_weights); it is fed to the cached session per call. bias / other
+        # non-weight initializers are alpha-independent and stay baked into the sub-graph.
+        weight = onnx.numpy_helper.to_array(self.model.get_initializer(node.input[1]), base_dir)
+        weight_q = quant_utils.qdq_data(weight, 3, True)
+        extra_inits = [
+            self.model.get_initializer(i)
+            for i in node.input[2:]
+            if self.model.get_initializer(i) is not None
+        ]
+
+        samples = self._reference_activations(node, node_name)
+        if not samples:
+            return loss
+
+        if self._sq_subgraph.get("node") != node_name:
+            ref_in, ref_out = samples[0]
+            sub_model = _make_sub_graph(
+                node, extra_inits, ref_in, ref_out, node.input[1], weight_q,
+                self.model.model.opset_import, self.model.model.ir_version,
+            )
+            self._sq_subgraph = {
+                "node": node_name,
+                "session": _build_qdq_session(sub_model, self.providers),
+                "input": sub_model.graph.input[0].name,
+                "weight": node.input[1],
+            }
+        sub_sess = self._sq_subgraph["session"]
+        sub_input = self._sq_subgraph["input"]
+        weight_name = self._sq_subgraph["weight"]
+
+        for ref_in, ref_out in samples:
+            loss += _qdq_loss(sub_sess, sub_input, ref_in * scale, ref_out, weight_name, weight_q)
         return loss
 
     def _reshape_scale_for_input(self, tensor, key):
@@ -620,6 +657,7 @@ class Smoother:
         # makes the per-node cache in _get_output_loss valid.
         self._sq_shared_session = None
         self._sq_out_cache = {"node": None, "outputs": None}
+        self._sq_subgraph = {"node": None, "session": None, "input": None, "weight": None}
         added_outputs = []
         if self.model.is_large_model:
             needed, seen = [], set()
@@ -683,6 +721,7 @@ class Smoother:
                 self.model.remove_tensors_from_outputs(added_outputs)
             self._sq_shared_session = None
             self._sq_out_cache = {"node": None, "outputs": None}
+            self._sq_subgraph = {"node": None, "session": None, "input": None, "weight": None}
 
         logger.info("auto tuning alpha done")
         self._log_alpha_summary(optimal_alphas)
