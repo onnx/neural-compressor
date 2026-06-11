@@ -12,6 +12,60 @@ Neural Compressor
 ---
 <div align="left">
 
+## About this fork
+
+This is a fork of [onnx/neural-compressor](https://github.com/onnx/neural-compressor)
+whose `diy` branch fixes and speeds up the **SmoothQuant static int8 path**. It is
+used (vendored as a submodule) to build the SmoothQuant int8 Parakeet TDT 0.6B v3
+ASR encoder published at
+[Olicorne/parakeet-tdt-0.6b-v3-smoothquant-onnx](https://huggingface.co/Olicorne/parakeet-tdt-0.6b-v3-smoothquant-onnx),
+which serves the browser app
+[parakeet_web](https://github.com/thiswillbeyourgithub/parakeet_web). The changes
+are candidates for upstream PRs; until those exist, here is what `diy` changes
+versus the upstream repo:
+
+Correctness:
+
+- **Auto-alpha search no longer runs on an exhausted dataloader.** Upstream's
+  `alpha="auto"` consumed the calibration reader before the search, so every layer
+  silently got `alpha_min`; the reader is now rewound and the per-node reference
+  activations are cached (also fixes the large-model path).
+- **The alpha grid includes both endpoints**: upstream's `np.arange` stopped one
+  step short of `alpha_max`, so the maximum alpha was never evaluated.
+
+Memory and speed:
+
+- **Streaming Entropy/Percentile calibration.** Static calibration used to buffer
+  every dumped activation tensor of every calibration sample until the end of the
+  loop (an in-code upstream TODO), so RAM grew linearly with samples x dumped
+  tensors and large exports OOMed. Each sample is now folded straight into the
+  per-tensor histogram; peak RAM no longer depends on the sample count.
+- **The auto-alpha QDQ sub-graph session is built once per node** (weights fed as
+  runtime inputs), not once per (node, alpha) and originally once per calibration
+  sample; wide alpha grids no longer balloon ORT arena memory or rebuild time.
+- **Per-node activation caching across the alpha grid** so each alpha evaluation
+  does not re-harvest the same reference activations.
+
+Features:
+
+- **Per-op-type alpha override** in the auto-alpha search (pin an op type to a
+  fixed alpha, or give it its own `min:max:step` grid).
+- **Per-layer alpha summary** logged after the search (histogram per op type plus
+  one line per smoothed node).
+- **Richer quantization statistics table**: fp32 ops are split into "quantizable"
+  (weight-bearing, the quantizer could convert them directly) versus "needs an
+  int8 input" (weightless/pass-through ops that only convert inside an int8
+  region), and the Reshape/Transpose glue rows are always shown.
+- tqdm progress bars over the alpha search and both calibration passes, and the
+  per-evaluation ORT warning spam is silenced.
+
+The changes are regression-tested from the model repo
+([`scripts/test_quantize-int8-smoothquant.py`](https://huggingface.co/Olicorne/parakeet-tdt-0.6b-v3-smoothquant-onnx/blob/main/scripts/test_quantize-int8-smoothquant.py)).
+This fork was developed with [Claude Code](https://claude.com/claude-code).
+The original upstream README follows.
+
+---
+
 Neural Compressor aims to provide popular model compression techniques inherited from [Intel Neural Compressor](https://github.com/intel/neural-compressor) yet focused on ONNX model quantization such as SmoothQuant, weight-only quantization through [ONNX Runtime](https://onnxruntime.ai/). In particular, the tool provides the key features, typical examples, and open collaborations as below:
 
 * Support a wide range of Intel hardware such as [Intel Xeon Scalable Processors](https://www.intel.com/content/www/us/en/products/details/processors/xeon/scalable.html) and AIPC
