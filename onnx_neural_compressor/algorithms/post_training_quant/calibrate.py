@@ -268,7 +268,6 @@ class ONNXRTAugment:
             name_to_node[data_name] = node.name
 
         activation_tensors_calib_range = {}
-        intermediate_tensor = {}
         name_to_calibrator = {}
         ort_inputs_for_next_split_model = []
 
@@ -287,16 +286,22 @@ class ONNXRTAugment:
                     else:
                         _calibrator = name_to_calibrator[node_output_names[output_idx]]
 
-                    # currently, the calibration range for each iteration is collected if
-                    # the calibration method is minmax, otherwise the tensor data is collected.
-                    # TODO: for entropy and percentile method, need to support range collection
-                    # per iteration in the future.
+                    # Every calibration method collects per iteration: MinMax keeps a
+                    # running range, Entropy/Percentile fold each sample into their
+                    # incremental histogram (HistogramCollector.combine_histogram).
+                    # Upstream instead buffered EVERY dumped tensor of EVERY sample for
+                    # Entropy/Percentile until the end of the loop (an explicit upstream
+                    # TODO), which made RAM grow linearly with the number of calibration
+                    # samples and OOMed large dump sets.
                     if _calibrator.method_name == "MinMax":
                         _calibrator.collect(output)
                         activation_tensors_calib_range[node_output_names[output_idx]] = [list(_calibrator.calib_range)]
                         name_to_calibrator[node_output_names[output_idx]] = _calibrator
                     else:
-                        intermediate_tensor.setdefault((node_output_names[output_idx], node_name), []).append(output)
+                        if output.dtype in [bool]:  # output type of some ops is bool, skip
+                            continue
+                        _calibrator.collect(output)
+                        name_to_calibrator[node_output_names[output_idx]] = _calibrator
                 elif q_config is None:
                     activation_tensors_calib_range.setdefault(node_output_names[output_idx], []).append(output)
 
@@ -314,19 +319,13 @@ class ONNXRTAugment:
                 _collect_data(inputs)
             idx += 1
 
-        # for entropy and percentile method, collect calibration range after all tensors are collected.
-        merged_dict = intermediate_tensor
-        for (output_name, node_name), datas in merged_dict.items():
-            if any([data is None for data in datas]):
+        # for entropy and percentile method, every sample is already merged into the
+        # per-tensor histogram; just read out the final calibration ranges.
+        for output_name, _calibrator in name_to_calibrator.items():
+            if _calibrator.method_name == "MinMax":
                 continue
-            if any([data.dtype in [bool] for data in datas]):  # output type of some ops is bool, skip
-                continue
-            calib_method = q_config[node_name]["calibrate_method"] if q_config and node_name in q_config else 0
-            _calibrator = calibrator.CALIBRATOR[calib_method]()
-            _calibrator.collect(datas)
             activation_tensors_calib_range.setdefault(output_name, []).append(list(_calibrator.calib_range))
             _calibrator.clear()
-            del _calibrator
 
         return activation_tensors_calib_range
 
