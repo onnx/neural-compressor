@@ -15,6 +15,7 @@
 
 import importlib.util
 import json
+import math
 import os
 import pathlib
 import shutil
@@ -32,63 +33,189 @@ from onnx_neural_compressor import data_reader, logger, onnx_model, utility
 from onnx_neural_compressor.algorithms import utility as quant_utils
 
 
-def _acts_dir(checkpoint_dir):
-    return pathlib.Path(checkpoint_dir) / "smooth-acts"
+STREAM_STATE_FILE = "smooth-stream.npz"
 
 
-def clear_acts_checkpoint(checkpoint_dir):
-    """Remove the partial per-sample activation dumps. Called once the FULL smooth-calib
-    checkpoint exists (the per-sample files are superseded, and they are the bulky part:
-    every smoothed tensor's activation for every collected sample)."""
-    shutil.rmtree(_acts_dir(checkpoint_dir), ignore_errors=True)
+def clear_stream_checkpoint(checkpoint_dir):
+    """Remove the mid-pass calibration state. Called once the FULL smooth-calib
+    checkpoint exists (which supersedes it). Also removes the smooth-acts/ directory
+    a pre-streaming version of this code may have left behind (it dumped raw
+    per-sample activations there; the streaming reducer made that obsolete)."""
+    try:
+        os.remove(pathlib.Path(checkpoint_dir) / STREAM_STATE_FILE)
+    except FileNotFoundError:
+        pass
+    shutil.rmtree(pathlib.Path(checkpoint_dir) / "smooth-acts", ignore_errors=True)
 
 
-def load_acts_checkpoint(checkpoint_dir, keys):
-    """Restore the per-sample activation dumps of an interrupted calibration pass.
+class StreamingChannelPercentile:
+    """Exact streaming replacement for the hold-everything per-channel percentile.
 
-    Returns a list of {tensor_name: array} dicts for the contiguous samples 0..k-1
-    found in <checkpoint_dir>/smooth-acts/. The dumped tensor set must match `keys`
-    exactly (same op_types config); on mismatch the stale dump is deleted and []
-    returned, so a changed configuration can never half-resume into wrong numerics."""
-    d = _acts_dir(checkpoint_dir)
-    names_file = d / "names.json"
-    if not names_file.exists():
-        return []
-    with open(names_file) as f:
-        names = json.load(f)
-    if names != list(keys):
-        logger.warning(
-            "smooth-acts checkpoint in {} was dumped for a different tensor set; discarding it".format(d)
-        )
-        clear_acts_checkpoint(checkpoint_dir)
-        return []
-    samples = []
-    while True:
-        f = d / "sample-{:05d}.npz".format(len(samples))
-        if not f.exists():
-            break
-        with np.load(f) as z:
-            samples.append({n: z["arr_{}".format(j)] for j, n in enumerate(names)})
-    return samples
+    The smoother needs, per smoothed tensor, the per-channel {percentile} of
+    |activations| over every calibration sample. Upstream stacked every sample in
+    RAM and called np.percentile once at the end, so memory grew as
+    samples x frames x channels (~6 GB per 395 s window on the 0.6B encoder,
+    hundreds of GB per export). But for the high percentiles SmoothQuant uses
+    (99.999 by default) the answer only depends on the few largest values per
+    channel: np.percentile's linear interpolation reads the two order statistics
+    around rank (n-1)*q/100, which sit within the top ceil((n-1)*(1-q/100))+1
+    values. So this keeps a per-channel running top-K plus the exact row count n,
+    folds each sample in as it is collected (which can then be freed), and
+    reproduces np.percentile's result bit-for-bit at the end.
+
+    K is sized once, from the planned sample count and the first sample's row
+    count with a 4x row headroom; `result` re-derives the rank it needs from the
+    ACTUAL n and raises if K turned out too small (wildly varying sample sizes),
+    so a result can never be silently wrong. Percentiles low enough to make K
+    huge (the streaming advantage vanishes) are rejected up front.
+    """
+
+    MAX_K = 8192
+
+    def __init__(self, percentile, planned_samples=None):
+        self.percentile = float(percentile)
+        # planned_samples=None means "unbounded dataloader": size K for 1024
+        # samples and let `result` catch the (pathological) overflow.
+        self.planned_samples = planned_samples
+        self.k = None
+        self.state = {}  # name -> {"topk": (<=K, C) array, "n": int, "shape": tuple}
+
+    @staticmethod
+    def _to_rows(data):
+        """|data| reshaped to (rows, channels); same layouts as _get_max_per_channel."""
+        if len(data.shape) == 3:
+            return np.abs(np.reshape(data, (-1, data.shape[-1])))
+        if len(data.shape) == 4:
+            tensor = np.swapaxes(data, 1, -1)
+            return np.abs(np.reshape(tensor, (-1, tensor.shape[-1])))
+        if len(data.shape) == 2:
+            return np.abs(data)
+        assert False, "not supported"
+
+    def _needed_k(self, n):
+        return int(math.ceil((n - 1) * (1.0 - self.percentile / 100.0))) + 1
+
+    def _size_k(self, first_sample_rows):
+        planned = self.planned_samples if self.planned_samples else 1024
+        est_n = max(first_sample_rows, 1) * planned * 4
+        k = self._needed_k(est_n) + 8
+        if k > self.MAX_K:
+            raise ValueError(
+                "percentile {} over an estimated {} rows needs a top-{} per channel, "
+                "beyond the streaming reducer's cap of {}; use a higher percentile or "
+                "fewer/shorter calibration samples".format(self.percentile, est_n, k, self.MAX_K)
+            )
+        return k
+
+    def add(self, name, data):
+        data = np.asarray(data)
+        rows = self._to_rows(data)
+        if self.k is None:
+            self.k = self._size_k(rows.shape[0])
+        st = self.state.get(name)
+        if st is None:
+            st = self.state[name] = {
+                "topk": np.empty((0, rows.shape[-1]), dtype=rows.dtype),
+                "n": 0,
+                "shape": tuple(data.shape),
+            }
+        st["n"] += rows.shape[0]
+        if rows.shape[0] > self.k:
+            rows = np.partition(rows, rows.shape[0] - self.k, axis=0)[rows.shape[0] - self.k :]
+        merged = np.concatenate([st["topk"], rows], axis=0)
+        if merged.shape[0] > self.k:
+            merged = np.partition(merged, merged.shape[0] - self.k, axis=0)[merged.shape[0] - self.k :]
+        st["topk"] = merged
+
+    def shape(self, name):
+        """Shape of the first collected sample for this tensor."""
+        return self.state[name]["shape"]
+
+    def result(self, name):
+        """The per-channel percentile, exactly as np.percentile(stacked, q, axis=0)."""
+        st = self.state[name]
+        n = st["n"]
+        if n == 0:
+            raise RuntimeError("no samples were collected for tensor {}".format(name))
+        sbuf = np.sort(st["topk"], axis=0)  # ascending per channel, the global top-m
+        m = sbuf.shape[0]
+        virtual = self.percentile / 100.0 * (n - 1)
+        f = int(np.floor(virtual))
+        gamma = virtual - f
+        c = min(f + 1, n - 1)
+        f_buf = f - (n - m)
+        c_buf = c - (n - m)
+        if f_buf < 0:
+            raise RuntimeError(
+                "streaming top-{} per channel cannot reach rank {} of {} rows for tensor "
+                "{}; the calibration set grew far beyond the planned sample count".format(m, f, n, name)
+            )
+        # replicate numpy exactly so the streamed result is bit-identical to the
+        # stacked np.percentile: quantile promotes sub-double floats to float64
+        # before its _lerp (which rearranges the formula when t >= 0.5)
+        a = sbuf[f_buf].astype(np.float64)
+        b = sbuf[c_buf].astype(np.float64)
+        diff = b - a
+        if gamma >= 0.5:
+            res = b - diff * (1 - gamma)
+        else:
+            res = a + diff * gamma
+        return res.astype(np.single)
 
 
-def save_acts_sample(checkpoint_dir, keys, index, sample):
-    """Dump one collected sample's activations (atomically) as smooth-acts/sample-NNNNN.npz,
-    arrays positional in the order of `keys` (recorded once in names.json: npz keys cannot
-    safely hold every ONNX tensor-name character)."""
-    d = _acts_dir(checkpoint_dir)
-    d.mkdir(parents=True, exist_ok=True)
-    names_file = d / "names.json"
-    if not names_file.exists():
-        tmp = str(names_file) + ".tmp"
-        with open(tmp, "w") as f:
-            json.dump(list(keys), f)
-        os.replace(tmp, names_file)
-    path = d / "sample-{:05d}.npz".format(index)
+def save_stream_checkpoint(checkpoint_dir, keys, reducer, collected):
+    """Atomically dump the streaming reducer's state (per tensor: top-K buffer + row
+    count) plus the collected-sample count as one npz; small (K is tiny), so unlike
+    the raw activations this can be flushed cheaply mid-pass. Arrays are positional
+    in `keys` order (npz keys cannot safely hold every ONNX tensor-name character);
+    the json metadata rides inside the npz so the whole checkpoint is one atomic file."""
+    meta = {
+        "names": list(keys),
+        "percentile": reducer.percentile,
+        "k": reducer.k,
+        "collected": collected,
+        "shapes": [list(reducer.state[name]["shape"]) for name in keys],
+    }
+    arrays = {}
+    for i, name in enumerate(keys):
+        st = reducer.state[name]
+        arrays["topk_{}".format(i)] = st["topk"]
+        arrays["n_{}".format(i)] = np.array(st["n"])
+    path = pathlib.Path(checkpoint_dir) / STREAM_STATE_FILE
     tmp = str(path) + ".tmp"
     with open(tmp, "wb") as f:
-        np.savez(f, *[sample[k] for k in keys])
+        np.savez(f, meta=np.array(json.dumps(meta)), **arrays)
     os.replace(tmp, path)
+
+
+def load_stream_checkpoint(checkpoint_dir, keys, reducer):
+    """Restore an interrupted pass's reducer state; returns the number of samples it
+    already collected (0 if absent/stale). The dumped tensor set and percentile must
+    match exactly (same op_types/percentile config); on mismatch the stale state is
+    deleted and 0 returned, so a changed configuration can never half-resume into
+    wrong numerics."""
+    path = pathlib.Path(checkpoint_dir) / STREAM_STATE_FILE
+    if not path.exists():
+        return 0
+    try:
+        with np.load(path) as z:
+            meta = json.loads(z["meta"].item())
+            if meta["names"] != list(keys) or meta["percentile"] != reducer.percentile:
+                raise ValueError("dumped for a different tensor set or percentile")
+            state = {}
+            for i, name in enumerate(keys):
+                state[name] = {
+                    "topk": z["topk_{}".format(i)],
+                    "n": int(z["n_{}".format(i)]),
+                    "shape": tuple(meta["shapes"][i]),
+                }
+    except Exception as e:
+        logger.warning("discarding stale smooth-stream checkpoint in {} ({})".format(checkpoint_dir, e))
+        clear_stream_checkpoint(checkpoint_dir)
+        return 0
+    reducer.k = meta["k"]
+    reducer.state = state
+    return int(meta["collected"])
 
 
 class Calibrator:
@@ -111,13 +238,13 @@ class Calibrator:
             dataloader (data_reader.CalibrationDataReader): user implemented object to read in and preprocess calibration dataset.
             iterations (List[int], optional): tensor of which iteration will be collected. Defaults to [].
             providers (List[str], optional): execution provider for onnxruntime. Defaults to ["CPUExecutionProvider"].
-            checkpoint_dir (str, optional): when set, the collected per-sample activations
-                are periodically dumped under <checkpoint_dir>/smooth-acts/ and reloaded on
-                the next run, so an interrupted calibration pass resumes mid-pass instead of
-                redoing every forward.
+            checkpoint_dir (str, optional): when set, the streaming reducer's state (small:
+                per-channel top-K + counts) is periodically dumped to
+                <checkpoint_dir>/smooth-stream.npz and reloaded on the next run, so an
+                interrupted calibration pass resumes mid-pass instead of redoing every
+                forward.
             checkpoint_interval_sec (float, optional): minimum seconds between those dumps
-                (they are activation-sized, so a fast pass should not pay the IO; 0 dumps
-                after every sample). Defaults to 1200 (20 minutes).
+                (0 dumps after every sample). Defaults to 1200 (20 minutes).
         """
         self.model_wrapper = model
         self.dataloader = dataloader
@@ -212,7 +339,7 @@ class Calibrator:
         max_per_channels = max_per_channels.astype(np.single)
         return max_per_channels
 
-    def get_intermediate_outputs(self, checkpoint_keys=None):
+    def get_intermediate_outputs(self, checkpoint_keys=None, reducer=None):
         so = onnxruntime.SessionOptions()
         if sys.version_info < (3, 11) and importlib.util.find_spec("onnxruntime_extensions"):  # pragma: no cover
             from onnxruntime_extensions import get_library_path
@@ -256,48 +383,42 @@ class Calibrator:
             name_to_node[data_name] = node.name
 
         def _collect_data(ort_inputs):
-            for output_idx, output in enumerate(session.run(None, ort_inputs)):
-                output_dicts.setdefault(node_output_names[output_idx], []).append(output)
+            outputs = session.run(None, ort_inputs)
+            if reducer is not None:
+                # streaming: fold each smoothed tensor into the reducer and free the
+                # sample; nothing is retained, so memory stays flat over the pass
+                by_name = dict(zip(node_output_names, outputs))
+                for key in checkpoint_keys:
+                    reducer.add(key, by_name[key])
+            else:
+                for output_idx, output in enumerate(outputs):
+                    output_dicts.setdefault(node_output_names[output_idx], []).append(output)
 
-        # Mid-pass resume: samples already dumped by an interrupted run are restored from
-        # the checkpoint and their forwards skipped entirely. Only checkpoint_keys (the
-        # smoothed tensors, the only ones calib_smooth reads) are dumped/restored, not the
-        # model's real outputs. Dumps are time-gated (the state is activation-sized): on a
-        # fast pass nothing is ever written; on a slow pass at most checkpoint_interval_sec
-        # of forwards can be lost to a crash.
-        checkpoint_on = bool(self.checkpoint_dir and checkpoint_keys)
+        # Mid-pass resume (streaming mode only): an interrupted run's reducer state is
+        # restored and the forwards of the samples it already folded in are skipped
+        # entirely. The state is tiny (per-channel top-K + counts), so the time-gated
+        # dump costs little even on a slow pass; at most checkpoint_interval_sec of
+        # forwards can be lost to a crash.
+        checkpoint_on = bool(self.checkpoint_dir and checkpoint_keys and reducer is not None)
         restored = 0
         if checkpoint_on:
-            for sample in load_acts_checkpoint(self.checkpoint_dir, checkpoint_keys):
-                for name, arr in sample.items():
-                    output_dicts.setdefault(name, []).append(arr)
-                restored += 1
+            restored = load_stream_checkpoint(self.checkpoint_dir, checkpoint_keys, reducer)
             if restored:
                 logger.info(
-                    "smooth-acts checkpoint: restored {} collected sample(s); "
-                    "skipping their forwards".format(restored)
+                    "smooth-stream checkpoint: restored the state of {} collected "
+                    "sample(s); skipping their forwards".format(restored)
                 )
-        state = {"collected": 0, "pending": [], "last_flush": time.time(), "flushed": False}
-
-        def _flush_pending():
-            for index, sample in state["pending"]:
-                save_acts_sample(self.checkpoint_dir, checkpoint_keys, index, sample)
-            state["pending"].clear()
-            state["last_flush"] = time.time()
-            state["flushed"] = True
+        state = {"collected": 0, "last_flush": time.time()}
 
         def _consume(ort_inputs):
             if state["collected"] < restored:
-                state["collected"] += 1  # already restored from the checkpoint
+                state["collected"] += 1  # already folded into the restored state
                 return
             _collect_data(ort_inputs)
-            if checkpoint_on:
-                state["pending"].append(
-                    (state["collected"], {k: output_dicts[k][-1] for k in checkpoint_keys})
-                )
-                if time.time() - state["last_flush"] >= self.checkpoint_interval_sec:
-                    _flush_pending()
             state["collected"] += 1
+            if checkpoint_on and time.time() - state["last_flush"] >= self.checkpoint_interval_sec:
+                save_stream_checkpoint(self.checkpoint_dir, checkpoint_keys, reducer, state["collected"])
+                state["last_flush"] = time.time()
 
         # This per-sample forward pass over the calibration set is the slow, otherwise
         # silent phase logged as "Start smooth model calibration"; show its progress.
@@ -319,13 +440,8 @@ class Calibrator:
             idx += 1
             pbar.update(1)
         pbar.close()
-        # Flush the tail only when a periodic flush already happened: a pass slow enough
-        # to have flushed deserves a complete checkpoint (the np.percentile reduction and
-        # the smooth-calib save still lie ahead and can OOM), while a fast pass should
-        # not suddenly write gigabytes that the full smooth-calib checkpoint supersedes
-        # moments later.
-        if checkpoint_on and state["flushed"] and state["pending"]:
-            _flush_pending()
+        # No tail flush: the full smooth-calib checkpoint is written immediately after
+        # this pass returns and supersedes the mid-pass state anyway.
         return output_dicts
 
     def calib_smooth(self, op_types, percentile: float = 99.999):
@@ -346,7 +462,13 @@ class Calibrator:
         # add the input tensors of {op_types} to outputs of the model
         tensors_to_node = self._get_input_tensor_of_ops(op_types)
         self.model_wrapper.add_tensors_to_outputs(tensors_to_node.keys())
-        output_dicts = self.get_intermediate_outputs(checkpoint_keys=list(tensors_to_node.keys()))
+        # Stream the percentile instead of stacking every sample: each collected
+        # sample is folded into a per-channel top-K and freed, so the pass holds
+        # O(K x channels) instead of O(samples x frames x channels) (which reached
+        # hundreds of GB on long-window runs). The result is bit-identical to the
+        # stacked np.percentile (see StreamingChannelPercentile).
+        reducer = StreamingChannelPercentile(percentile, planned_samples=len(self.iterations) or None)
+        self.get_intermediate_outputs(checkpoint_keys=list(tensors_to_node.keys()), reducer=reducer)
 
         # remove the input tensors of {op_types} to outputs of the model
         self.model_wrapper.remove_tensors_from_outputs(tensors_to_node.keys())
@@ -354,9 +476,8 @@ class Calibrator:
         shape_infos = {}
 
         for key, val in tensors_to_node.items():
-            max_val_per_channel = self._get_max_per_channel(output_dicts[key], percentile=percentile)
-            max_vals_per_channel[key] = max_val_per_channel
-            shape_infos[key] = output_dicts[key][0].shape
+            max_vals_per_channel[key] = reducer.result(key)
+            shape_infos[key] = reducer.shape(key)
             for item in val:
                 shape_infos[item[1][1]] = self.model_wrapper.get_initializer(item[1][1]).dims
         return max_vals_per_channel, shape_infos, tensors_to_node

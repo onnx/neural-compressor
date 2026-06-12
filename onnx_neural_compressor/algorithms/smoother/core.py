@@ -375,9 +375,9 @@ class Smoother:
                 files carry no model/config fingerprint, so a stale dir must not be reused
                 across different models, calibration data, or alpha grids.
             checkpoint_interval_sec (float, optional): minimum seconds between the
-                calibrator's MID-pass per-sample activation dumps (smooth-acts/); they are
-                activation-sized, so a fast pass writes nothing while a slow pass loses at
-                most this much work to a crash. Defaults to 1200 (20 minutes).
+                calibrator's MID-pass state dumps (smooth-stream.npz, small); a run killed
+                inside the calibration pass loses at most this much work to a crash.
+                Defaults to 1200 (20 minutes).
 
         Returns:
             onnx.ModelProto: A FP32 model with the same architecture as the orig model
@@ -427,7 +427,7 @@ class Smoother:
             iterations (int): iterations
             checkpoint_dir (str, optional): when set, load the calibration results from
                 there if present (skipping every forward pass), else compute and save them.
-                The calibrator additionally dumps its per-sample activations in there
+                The calibrator additionally dumps its streaming-reducer state in there
                 (time-gated) so even a run killed MID-pass resumes from the last dumped
                 sample instead of redoing every forward.
             checkpoint_interval_sec (float): minimum seconds between those mid-pass dumps
@@ -441,9 +441,9 @@ class Smoother:
                     len(self.max_vals_per_channel), checkpoint_dir
                 )
             )
-            # Partial per-sample dumps from the run that crashed before finishing the
-            # full checkpoint are superseded by it now; drop the dead weight.
-            calibrator.clear_acts_checkpoint(checkpoint_dir)
+            # Mid-pass state from the run that crashed before finishing the full
+            # checkpoint is superseded by it now; drop it.
+            calibrator.clear_stream_checkpoint(checkpoint_dir)
         else:
             sq_calibrator = calibrator.Calibrator(
                 self.model,
@@ -464,7 +464,7 @@ class Smoother:
                 save_smooth_calib_checkpoint(
                     checkpoint_dir, self.max_vals_per_channel, self.shape_info, self.tensors_to_node
                 )
-                calibrator.clear_acts_checkpoint(checkpoint_dir)
+                calibrator.clear_stream_checkpoint(checkpoint_dir)
         for node in self.model.nodes():
             for out in node.output:
                 if (
