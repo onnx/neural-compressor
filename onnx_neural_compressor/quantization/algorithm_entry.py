@@ -135,7 +135,8 @@ def static_quantize_entry(
     # that OOMed AFTER calibration (or during the final save) resumes without re-paying it.
     # The file carries no model fingerprint: the caller keys its path by the full run
     # configuration and owns invalidation.
-    ckpt_file = (getattr(quant_config, "extra_options", None) or {}).get("CalibParamsCheckpointFile")
+    extra = getattr(quant_config, "extra_options", None) or {}
+    ckpt_file = extra.get("CalibParamsCheckpointFile")
     if ckpt_file and os.path.exists(ckpt_file):
         with open(ckpt_file, "rb") as f:
             quantize_params = pickle.load(f)
@@ -151,6 +152,12 @@ def static_quantize_entry(
             dump_op_types=quant_config.op_types_to_quantize,
             execution_provider=quant_config.execution_provider,
             iterations=list(range(0, quant_config.calibration_sampling_size)),
+            # Mid-pass resume: the streaming per-tensor calibrator state (histograms /
+            # running ranges, small) is periodically pickled to <ckpt_file>.partial and
+            # already-consumed samples are skipped on the next run; the partial file is
+            # removed below once the final params land.
+            checkpoint_file=ckpt_file,
+            checkpoint_interval_sec=extra.get("CheckpointIntervalSec", 1200),
         )
         min_max = augment.dump_minmax(config_mapping)
         quantize_params = augment.dump_calibration(config_mapping, min_max=min_max)
@@ -159,6 +166,10 @@ def static_quantize_entry(
             with open(tmp, "wb") as f:
                 pickle.dump(quantize_params, f)
             os.replace(tmp, ckpt_file)
+            try:
+                os.remove(str(ckpt_file) + ".partial")
+            except FileNotFoundError:
+                pass
     _quantizer = quantizer.StaticQuantizer(
         model,
         config_mapping,
@@ -202,6 +213,9 @@ def _smoothquant_transform_params(quant_config):
         # Resumable intermediates (smooth-calib + per-node auto-alpha checkpoints); see
         # Smoother.transform's checkpoint_dir doc. The caller owns cache invalidation.
         "SmoothQuantCheckpointDir": "checkpoint_dir",
+        # Minimum seconds between MID-pass checkpoint dumps (shared with the static
+        # calibration's partial state in static_quantize_entry).
+        "CheckpointIntervalSec": "checkpoint_interval_sec",
     }
     params = {}
     for src, dst in mapping.items():

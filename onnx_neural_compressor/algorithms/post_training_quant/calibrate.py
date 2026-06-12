@@ -22,7 +22,9 @@
 import copy
 import logging
 import os
+import pickle
 import sys
+import time
 from importlib import util
 
 import numpy as np
@@ -54,6 +56,8 @@ class ONNXRTAugment:
         iterations=[],
         execution_provider="CPUExecutionProvider",
         reduce_range=False,
+        checkpoint_file=None,
+        checkpoint_interval_sec=1200,
         **kwargs,
     ):
         """Initialization.
@@ -67,6 +71,14 @@ class ONNXRTAugment:
             iterations (list, optional): tensor of which iteration will be collected. Defaults to [].
             execution_provider (list, optional): execution provider for onnxruntime. Defaults to 'CPUExecutionProvider'.
             reduce_range (bool, optional): use 7 bit or not. Defaults to False.
+            checkpoint_file (str, optional): when set, the activation-calibration loop
+                periodically pickles its streaming per-tensor calibrator state to
+                <checkpoint_file>.partial and skips already-consumed samples on the next
+                run, so a run killed MID-calibration resumes instead of redoing every
+                forward. The caller keys the file by its configuration and removes the
+                partial once the final params are saved.
+            checkpoint_interval_sec (float, optional): minimum seconds between those
+                state dumps (0 dumps after every sample). Defaults to 1200 (20 minutes).
         """
         self.model_wrapper = (
             model_wrapper
@@ -89,6 +101,8 @@ class ONNXRTAugment:
         self.dynamically_quantized = False
         self.ort_version = version.Version(onnxruntime.__version__)
         self.reduce_range = reduce_range
+        self.checkpoint_file = checkpoint_file
+        self.checkpoint_interval_sec = checkpoint_interval_sec
 
     def augment_graph(self):
         """Augment_graph.
@@ -272,6 +286,30 @@ class ONNXRTAugment:
         name_to_calibrator = {}
         ort_inputs_for_next_split_model = []
 
+        # Every calibration method streams per sample (running MinMax range or
+        # incremental histogram), so the whole loop state fits in a small pickle.
+        # When a checkpoint file is configured, restore that state and skip the
+        # forwards whose contribution it already contains.
+        partial_path = str(self.checkpoint_file) + ".partial" if self.checkpoint_file else None
+        restored = 0
+        if partial_path and os.path.exists(partial_path):
+            try:
+                with open(partial_path, "rb") as f:
+                    partial = pickle.load(f)
+                restored = int(partial["collected"])
+                name_to_calibrator = partial["name_to_calibrator"]
+                activation_tensors_calib_range = partial["activation_tensors_calib_range"]
+                logger.info(
+                    "Resuming activation calibration from {} ({} samples already collected)".format(
+                        partial_path, restored
+                    )
+                )
+            except Exception as e:
+                logger.warning("Discarding unreadable calibration checkpoint {} ({})".format(partial_path, e))
+                restored = 0
+                name_to_calibrator = {}
+                activation_tensors_calib_range = {}
+
         def _collect_data(inputs):
             for output_idx, output in enumerate(session.run(None, inputs)):
                 if q_config is not None and output.size != 0:
@@ -306,6 +344,32 @@ class ONNXRTAugment:
                 elif q_config is None:
                     activation_tensors_calib_range.setdefault(node_output_names[output_idx], []).append(output)
 
+        state = {"collected": 0, "last_flush": time.time()}
+
+        def _flush_partial():
+            tmp_path = partial_path + ".tmp"
+            with open(tmp_path, "wb") as f:
+                pickle.dump(
+                    {
+                        "collected": state["collected"],
+                        "name_to_calibrator": name_to_calibrator,
+                        "activation_tensors_calib_range": activation_tensors_calib_range,
+                    },
+                    f,
+                )
+            os.replace(tmp_path, partial_path)
+            state["last_flush"] = time.time()
+
+        def _consume(inputs):
+            if state["collected"] < restored:
+                # this sample's contribution is already inside the restored state
+                state["collected"] += 1
+                return
+            _collect_data(inputs)
+            state["collected"] += 1
+            if partial_path and time.time() - state["last_flush"] >= self.checkpoint_interval_sec:
+                _flush_partial()
+
         idx = 0
         while True:
             inputs = self.dataloader.get_next()
@@ -315,9 +379,9 @@ class ONNXRTAugment:
                 if idx > max(self.iterations):
                     break
                 if idx in self.iterations:
-                    _collect_data(inputs)
+                    _consume(inputs)
             else:
-                _collect_data(inputs)
+                _consume(inputs)
             idx += 1
 
         # for entropy and percentile method, every sample is already merged into the

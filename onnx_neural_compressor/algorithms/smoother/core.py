@@ -345,6 +345,7 @@ class Smoother:
         calib_iter: int = 100,
         auto_alpha_args: dict = {"alpha_min": 0.3, "alpha_max": 0.7, "alpha_step": 0.05, "attn_method": "min"},
         checkpoint_dir: Union[str, pathlib.Path, None] = None,
+        checkpoint_interval_sec: float = 1200,
         *args,
         **kwargs
     ):
@@ -373,6 +374,10 @@ class Smoother:
                 instead of restarting the whole search. Caller owns cache invalidation: the
                 files carry no model/config fingerprint, so a stale dir must not be reused
                 across different models, calibration data, or alpha grids.
+            checkpoint_interval_sec (float, optional): minimum seconds between the
+                calibrator's MID-pass per-sample activation dumps (smooth-acts/); they are
+                activation-sized, so a fast pass writes nothing while a slow pass loses at
+                most this much work to a crash. Defaults to 1200 (20 minutes).
 
         Returns:
             onnx.ModelProto: A FP32 model with the same architecture as the orig model
@@ -389,7 +394,8 @@ class Smoother:
                 alpha = 1.0
                 logger.warning("reset alpha to 1.0 ")
 
-        self._dump_op_info(percentile, op_types, calib_iter, checkpoint_dir=checkpoint_dir)
+        self._dump_op_info(percentile, op_types, calib_iter, checkpoint_dir=checkpoint_dir,
+                           checkpoint_interval_sec=checkpoint_interval_sec)
 
         if alpha == "auto":
             alpha = self._auto_tune_alpha(calib_iter, checkpoint_dir=checkpoint_dir, **auto_alpha_args)
@@ -411,7 +417,8 @@ class Smoother:
         self.model.remove_unused_nodes()
         return self.model.model
 
-    def _dump_op_info(self, percentile, op_types, iterations, checkpoint_dir=None):
+    def _dump_op_info(self, percentile, op_types, iterations, checkpoint_dir=None,
+                      checkpoint_interval_sec=1200):
         """Dump op info for smooth quant.
 
         Args:
@@ -419,7 +426,11 @@ class Smoother:
             op_types (list): the op type to be smooth quantized
             iterations (int): iterations
             checkpoint_dir (str, optional): when set, load the calibration results from
-                there if present (skipping every forward pass), else compute and save them
+                there if present (skipping every forward pass), else compute and save them.
+                The calibrator additionally dumps its per-sample activations in there
+                (time-gated) so even a run killed MID-pass resumes from the last dumped
+                sample instead of redoing every forward.
+            checkpoint_interval_sec (float): minimum seconds between those mid-pass dumps
         """
         loaded = load_smooth_calib_checkpoint(checkpoint_dir) if checkpoint_dir else None
         if loaded is not None:
@@ -430,6 +441,9 @@ class Smoother:
                     len(self.max_vals_per_channel), checkpoint_dir
                 )
             )
+            # Partial per-sample dumps from the run that crashed before finishing the
+            # full checkpoint are superseded by it now; drop the dead weight.
+            calibrator.clear_acts_checkpoint(checkpoint_dir)
         else:
             sq_calibrator = calibrator.Calibrator(
                 self.model,
@@ -439,6 +453,8 @@ class Smoother:
                 # `execution_provider=`, which fell into **kwargs and silently pinned
                 # every smoother-calibration forward to the CPU even on a CUDA run.
                 providers=self.providers,
+                checkpoint_dir=checkpoint_dir,
+                checkpoint_interval_sec=checkpoint_interval_sec,
             )
 
             self.max_vals_per_channel, self.shape_info, self.tensors_to_node = sq_calibrator.calib_smooth(
@@ -448,6 +464,7 @@ class Smoother:
                 save_smooth_calib_checkpoint(
                     checkpoint_dir, self.max_vals_per_channel, self.shape_info, self.tensors_to_node
                 )
+                calibrator.clear_acts_checkpoint(checkpoint_dir)
         for node in self.model.nodes():
             for out in node.output:
                 if (
