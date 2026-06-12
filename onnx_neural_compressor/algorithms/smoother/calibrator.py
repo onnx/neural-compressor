@@ -25,6 +25,7 @@ import onnxruntime
 import tqdm
 
 from onnx_neural_compressor import data_reader, logger, onnx_model, utility
+from onnx_neural_compressor.algorithms import utility as quant_utils
 
 
 class Calibrator:
@@ -145,6 +146,7 @@ class Calibrator:
             so.register_custom_ops_library(get_library_path())
 
         providers = self.providers if "TensorrtExecutionProvider" not in self.providers else ["CUDAExecutionProvider"]
+        providers = quant_utils.conservative_session_resources(so, providers)
         if self.model_wrapper.is_large_model:  # pragma: no cover
             with tempfile.TemporaryDirectory(prefix="ort.calib.") as tmp_dir:
                 onnx.save_model(

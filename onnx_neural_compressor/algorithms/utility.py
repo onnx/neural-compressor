@@ -38,6 +38,36 @@ ms_domain = "com.microsoft"
 QUANT_OP_NAME_SUFFIX = "_quant"
 
 
+def conservative_session_resources(sess_options, providers):
+    """Memory-conservative ORT settings for the dump/calibration sessions.
+
+    The augmented dump graphs return hundreds of activation tensors per forward
+    pass, and ORT's BFC arenas both grow ahead of demand (power-of-two extends)
+    and never give memory back, so these sessions can hold several GB beyond
+    their working set; on a loaded host (or a small GPU) that slack is the
+    difference between fitting and a BFCArena "Failed to allocate memory" abort
+    mid-calibration. These sessions only run a handful of forward passes, so
+    trading allocator speed for a demand-sized footprint costs nothing: disable
+    the CPU arena and make any CUDA arena grow only by what is actually
+    requested (with the heuristic cuDNN algo search instead of EXHAUSTIVE's
+    large transient workspaces).
+
+    Mutates sess_options in place and returns the providers list to pass to
+    InferenceSession (CUDA entries become (name, options) tuples).
+    """
+    sess_options.enable_cpu_mem_arena = False
+    out = []
+    for provider in providers:
+        if provider == "CUDAExecutionProvider":
+            out.append((provider, {
+                "arena_extend_strategy": "kSameAsRequested",
+                "cudnn_conv_algo_search": "HEURISTIC",
+            }))
+        else:
+            out.append(provider)
+    return out
+
+
 def attribute_to_kwarg(attribute):
     """Convert attribute to kwarg format for use with onnx.helper.make_node."""
     attribute_mapping = {

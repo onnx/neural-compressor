@@ -233,11 +233,12 @@ class ONNXRTAugment:
             if self.execution_provider != "TensorrtExecutionProvider"
             else "CUDAExecutionProvider"
         )
+        providers = quant_utils.conservative_session_resources(so, [execution_provider])
         session = (
-            onnxruntime.InferenceSession(self.augmented_model.SerializeToString(), so, providers=[execution_provider])
+            onnxruntime.InferenceSession(self.augmented_model.SerializeToString(), so, providers=providers)
             if not self.model_wrapper.is_large_model
             else onnxruntime.InferenceSession(
-                self.model_wrapper.model_path + "_augment.onnx", so, providers=[execution_provider]
+                self.model_wrapper.model_path + "_augment.onnx", so, providers=providers
             )
         )
 
