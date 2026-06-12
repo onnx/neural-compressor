@@ -61,6 +61,12 @@ Features:
   fixed alpha, or give it its own `min:max:step` grid).
 - **Per-layer alpha summary** logged after the search (histogram per op type plus
   one line per smoothed node).
+- **Sensitivity-based mixed precision** (`extra_options["SmoothQuantExcludeWorst"]`):
+  the auto-alpha search records every smoothed node's best achievable QDQ loss,
+  normalized by that node's reference-output energy so it is comparable across
+  nodes (`Smoother.auto_alpha_losses`). Setting the option to an int n (or a
+  fraction in (0, 1)) keeps the n worst-quantizing nodes out of quantization
+  entirely, trading a little file size for accuracy on the layers int8 hurts most.
 - **Richer quantization statistics table**: fp32 ops are split into "quantizable"
   (weight-bearing, the quantizer could convert them directly) versus "needs an
   int8 input" (weightless/pass-through ops that only convert inside an int8

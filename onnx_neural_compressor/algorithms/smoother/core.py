@@ -113,6 +113,31 @@ def _to_array_extern_safe(tensor, base_dir):
     return onnx.numpy_helper.to_array(tensor, base_dir)
 
 
+def select_worst_nodes(losses, spec):
+    """Pick the nodes whose BEST achievable QDQ loss is highest, i.e. the layers the
+    alpha search could fix least; excluding them from quantization (keeping them fp32)
+    is sensitivity-based mixed precision.
+
+    losses: {node_name: normalized best loss} as recorded by _auto_tune_alpha in
+    ``Smoother.auto_alpha_losses``. spec: an int n (>= 1) selects the n worst nodes,
+    a float f in (0, 1) selects the worst round(f * len(losses)) nodes (at least 1).
+    Ties are broken by node name so the selection is deterministic. Pure and
+    unit-testable; the SmoothQuantExcludeWorst plumbing lives in smooth_quant_entry.
+    """
+    if isinstance(spec, bool) or not isinstance(spec, (int, float)):
+        raise ValueError("exclude-worst spec must be an int >= 1 or a float in (0, 1), got {!r}".format(spec))
+    if isinstance(spec, float):
+        if not 0.0 < spec < 1.0:
+            raise ValueError("a fractional exclude-worst spec must be in (0, 1), got {!r}".format(spec))
+        count = max(1, round(len(losses) * spec))
+    else:
+        if spec < 1:
+            raise ValueError("an integer exclude-worst spec must be >= 1, got {!r}".format(spec))
+        count = min(spec, len(losses))
+    ranked = sorted(losses, key=lambda name: (-losses[name], name))
+    return ranked[:count]
+
+
 def _make_sub_graph(node, inits, input_data, output_data, weight_name, weight_data, opset, ir_version):
     """Build a single-node model whose weight is a runtime INPUT, not a baked initializer.
 
@@ -204,6 +229,11 @@ class Smoother:
         # fed as a runtime input, so the session is alpha-independent). Built once per node
         # instead of once per (node, alpha) -- see _make_sub_graph / _get_output_loss.
         self._sq_subgraph = {"node": None, "session": None, "input": None, "weight": None}
+        # Per-node best QDQ loss recorded by the auto-alpha search, normalized by each
+        # node's reference-output energy so values are comparable across nodes. Feeds
+        # select_worst_nodes / SmoothQuantExcludeWorst. Empty when alpha is a fixed
+        # float (no search) or for nodes pinned to a 1-point grid (never evaluated).
+        self.auto_alpha_losses = {}
         # Quiets _adjust_weights' own tqdm bar while it is called once per (node, alpha)
         # inside the auto-alpha search (where the single auto-alpha bar is the real signal);
         # the final single full-model apply in transform() re-enables it.
@@ -562,6 +592,13 @@ class Smoother:
                 "session": _build_qdq_session(sub_model, self.providers),
                 "input": sub_model.graph.input[0].name,
                 "weight": node.input[1],
+                # Reference-output energy of this node, the normalizer that makes
+                # per-node best losses comparable across nodes (the raw sum-of-squares
+                # loss scales with each node's output magnitude). Computed once per
+                # node alongside the session; on the small path the references drift
+                # slightly with the in-proto weight of the alpha under evaluation,
+                # which is fine for a ranking.
+                "ref_sq": float(sum((s[1].astype(np.float64) ** 2).sum() for s in samples)),
             }
         sub_sess = self._sq_subgraph["session"]
         sub_input = self._sq_subgraph["input"]
@@ -639,6 +676,7 @@ class Smoother:
         default_space = self._alpha_grid(alpha_min, alpha_max, alpha_step)
 
         optimal_alphas = {}
+        self.auto_alpha_losses = {}
 
         # Warn for op_alpha keys that match no smoothed node: setting an alpha for an op
         # type that is not in op_types, or that has no weight to migrate outliers into
@@ -763,6 +801,16 @@ class Smoother:
                         else:
                             self.recover()
                         pbar.update(1)
+                    if loss_alpha:
+                        # The node's best achievable loss, normalized by its reference-output
+                        # energy (cached on _sq_subgraph, still holding THIS node right after
+                        # its grid): the sensitivity ranking behind SmoothQuantExcludeWorst.
+                        ref_sq = (
+                            self._sq_subgraph.get("ref_sq")
+                            if self._sq_subgraph.get("node") == node_info[0]
+                            else None
+                        )
+                        self.auto_alpha_losses[node_info[0]] = min(loss_alpha.values()) / (ref_sq or 1.0)
         finally:
             pbar.close()
             self._quiet_adjust = False

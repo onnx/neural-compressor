@@ -226,6 +226,30 @@ def smooth_quant_entry(
         excluded_nodes = [i.name for i in smoothed_model.graph.node if i.name.endswith("_smooth_mul")]
         quant_config.nodes_to_exclude.extend(excluded_nodes)
 
+        # Sensitivity-based mixed precision (extra_options["SmoothQuantExcludeWorst"]):
+        # the auto-alpha search already scored every smoothed node's BEST achievable QDQ
+        # loss (normalized, see Smoother.auto_alpha_losses); keep the worst offenders out
+        # of quantization entirely (they stay fp32). An int keeps that many nodes, a
+        # float in (0, 1) that fraction. Only searched nodes are rankable: with a fixed
+        # alpha or an all-pinned grid there are no losses and the option is a logged no-op.
+        exclude_worst = (getattr(quant_config, "extra_options", None) or {}).get("SmoothQuantExcludeWorst")
+        if exclude_worst:
+            losses = getattr(smoother, "auto_alpha_losses", None) or {}
+            if not losses:
+                logger.warning(
+                    "SmoothQuantExcludeWorst=%r is set but the alpha search recorded no "
+                    "per-node losses (alpha is a fixed float, or every op's alpha is "
+                    "pinned); excluding nothing." % (exclude_worst,)
+                )
+            else:
+                worst = core.select_worst_nodes(losses, exclude_worst)
+                logger.info(
+                    "SmoothQuantExcludeWorst=%r: keeping the %d most quantization-damaged "
+                    "node(s) of %d searched in fp32: %s"
+                    % (exclude_worst, len(worst), len(losses), ", ".join(worst))
+                )
+                quant_config.nodes_to_exclude.extend(worst)
+
         q_model = static_quantize_entry(
             pathlib.Path(tmp_dir).joinpath("smooth.onnx").as_posix(),
             quant_config,
