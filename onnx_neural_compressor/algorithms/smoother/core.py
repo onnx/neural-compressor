@@ -192,27 +192,45 @@ def save_smooth_calib_checkpoint(checkpoint_dir, max_vals_per_channel, shape_inf
 
 
 def _alpha_checkpoint_path(checkpoint_dir):
-    return pathlib.Path(checkpoint_dir) / "alphas.json"
+    return pathlib.Path(checkpoint_dir) / "alphas.jsonl"
 
 
 def load_alpha_checkpoint(checkpoint_dir):
     """Per-node auto-alpha results from a previous (possibly crashed) run, as
-    {node_name: {"key", "op_type", "alpha", "loss", "losses"}}. Empty when absent."""
+    {node_name: {"node", "key", "op_type", "alpha", "loss", "losses"}}. Empty when absent.
+
+    The checkpoint is JSONL, one object per line appended as each node's grid completes
+    (append-only beats rewriting the whole file per node: O(1) per node, and a crash can
+    only damage the line being written). A corrupt line, i.e. the half-appended tail of
+    a killed run, is skipped with a warning: that node simply gets re-searched. When a
+    node somehow appears twice, the later line wins."""
     path = _alpha_checkpoint_path(checkpoint_dir)
     if not path.exists():
         return {}
+    nodes = {}
     with open(path) as f:
-        return json.load(f).get("nodes", {})
+        lines = f.readlines()
+    for i, line in enumerate(lines):
+        if not line.strip():
+            continue
+        try:
+            entry = json.loads(line)
+            nodes[entry["node"]] = entry
+        except (ValueError, KeyError, TypeError):
+            logger.warning(
+                "alpha checkpoint {}: skipping corrupt line {}{}".format(
+                    path, i + 1,
+                    " (a truncated final append from a killed run)" if i == len(lines) - 1 else "",
+                )
+            )
+    return nodes
 
 
-def save_alpha_checkpoint(checkpoint_dir, nodes):
-    """Rewrite the per-node alpha checkpoint (called after EVERY node's grid finishes,
-    so an OOM-killed search resumes from the last completed node). Also the run's
-    human-readable record of which alpha each layer picked and at what QDQ loss."""
-    _atomic_write_bytes(
-        _alpha_checkpoint_path(checkpoint_dir),
-        json.dumps({"nodes": nodes}, indent=1, sort_keys=True).encode(),
-    )
+def append_alpha_checkpoint(checkpoint_dir, entry):
+    """Append one completed node's search result to alphas.jsonl (see
+    load_alpha_checkpoint for the format and the crash-safety argument)."""
+    with open(_alpha_checkpoint_path(checkpoint_dir), "a") as f:
+        f.write(json.dumps(entry, sort_keys=True) + "\n")
 
 
 def _make_sub_graph(node, inits, input_data, output_data, weight_name, weight_data, opset, ir_version):
@@ -350,7 +368,7 @@ class Smoother:
             checkpoint_dir (str | pathlib.Path, optional): directory for resumable
                 intermediates. When set, the smoother-calibration results and the per-node
                 auto-alpha results are written there as they are produced (smooth-calib.npz/
-                .json, alphas.json) and any results already present are LOADED instead of
+                .json, alphas.jsonl) and any results already present are LOADED instead of
                 recomputed, so a crashed/OOM-killed run resumes from the last completed node
                 instead of restarting the whole search. Caller owns cache invalidation: the
                 files carry no model/config fingerprint, so a stale dir must not be reused
@@ -773,12 +791,12 @@ class Smoother:
             op_alpha (dict): optional per-op-type alpha override, {op_type: float | {alpha_min, alpha_max, alpha_step}}.
                 A float pins that op type's alpha (no search, one forward pass saved per node);
                 a dict gives it its own search grid; op types absent here use the global grid.
-            checkpoint_dir (str, optional): when set, alphas.json there is rewritten after
-                EVERY node's grid finishes (best alpha, normalized best loss, and the full
-                per-alpha loss curve), and nodes already recorded in it are restored instead
-                of re-searched. This is what lets an OOM-killed multi-hour search resume from
-                the last completed node. The caller is responsible for not reusing the dir
-                across different models/calibration data/grids.
+            checkpoint_dir (str, optional): when set, one line is appended to alphas.jsonl
+                there after EVERY node's grid finishes (best alpha, normalized best loss,
+                and the full per-alpha loss curve), and nodes already recorded in it are
+                restored instead of re-searched. This is what lets an OOM-killed multi-hour
+                search resume from the last completed node. The caller is responsible for
+                not reusing the dir across different models/calibration data/grids.
         """
         logger.info("auto tuning alpha")
 
@@ -902,11 +920,10 @@ class Smoother:
                         # saving of pinning an op you already trust (e.g. MatMul=0.5).
                         optimal_alphas[key] = space[0]
                         if checkpoint_dir:
-                            ckpt_nodes[node_info[0]] = {
-                                "key": key, "op_type": node.op_type, "alpha": space[0],
-                                "loss": None, "losses": {}, "pinned": True,
-                            }
-                            save_alpha_checkpoint(checkpoint_dir, ckpt_nodes)
+                            append_alpha_checkpoint(checkpoint_dir, {
+                                "node": node_info[0], "key": key, "op_type": node.op_type,
+                                "alpha": space[0], "loss": None, "losses": {}, "pinned": True,
+                            })
                         pbar.update(1)
                         continue
                     for alpha in space:
@@ -966,14 +983,14 @@ class Smoother:
                         # Checkpoint after EVERY completed node grid so a crash/OOM loses at
                         # most one node's work. "losses" keeps the full raw per-alpha curve
                         # (the search criterion), "loss" the normalized best (the ranking).
-                        ckpt_nodes[node_info[0]] = {
+                        append_alpha_checkpoint(checkpoint_dir, {
+                            "node": node_info[0],
                             "key": key,
                             "op_type": node.op_type,
                             "alpha": optimal_alphas[key],
                             "loss": self.auto_alpha_losses.get(node_info[0]),
                             "losses": {"{:g}".format(a): float(l) for a, l in loss_alpha.items()},
-                        }
-                        save_alpha_checkpoint(checkpoint_dir, ckpt_nodes)
+                        })
         finally:
             pbar.close()
             self._quiet_adjust = False
