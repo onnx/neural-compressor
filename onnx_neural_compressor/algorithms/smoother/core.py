@@ -93,6 +93,26 @@ def _format_alpha_summary(rows):
     return lines
 
 
+def _to_array_extern_safe(tensor, base_dir):
+    """numpy array of an initializer WITHOUT materializing external bytes into the live proto.
+
+    onnx.numpy_helper.to_array on an external-data tensor calls
+    load_external_data_for_tensor, which ASSIGNS tensor.raw_data in place while leaving
+    data_location EXTERNAL, so every later to_array on the same tensor assigns again.
+    Under protobuf's upb backend (the default) each assignment abandons the previous bytes
+    in the owning ModelProto's arena, which is only freed when the WHOLE proto dies: reads
+    repeated per (node, alpha) evaluation leak weight-sized blocks for the lifetime of the
+    model. Copying the (tiny, metadata-only) external tensor to a throwaway TensorProto and
+    letting to_array materialize THAT keeps the bytes in the throwaway's own arena, freed on
+    return. An in-proto tensor is read as-is (to_array does not mutate it).
+    """
+    if onnx.external_data_helper.uses_external_data(tensor):
+        detached = onnx.TensorProto()
+        detached.CopyFrom(tensor)
+        return onnx.numpy_helper.to_array(detached, base_dir)
+    return onnx.numpy_helper.to_array(tensor, base_dir)
+
+
 def _make_sub_graph(node, inits, input_data, output_data, weight_name, weight_data, opset, ir_version):
     """Build a single-node model whose weight is a runtime INPUT, not a baked initializer.
 
@@ -292,7 +312,7 @@ class Smoother:
                 if key not in self.tensor_scales_info:
                     continue
                 input = node_info[1][1]
-                weight = onnx.numpy_helper.to_array(
+                weight = _to_array_extern_safe(
                     self.model.get_initializer(input),
                     base_dir=os.path.dirname(self.model.model_path) if self.model.model_path is not None else "",
                 )
@@ -488,13 +508,17 @@ class Smoother:
             self._sq_out_cache = {"node": node_name, "outputs": collected}
         return self._sq_out_cache["outputs"]
 
-    def _get_output_loss(self, node_name, scale, calib_iter):
+    def _get_output_loss(self, node_name, scale, calib_iter, weight=None):
         """Get output loss of specific node after inserting QDQ pair.
 
         Args:
             node_name (str): node name
             scale (float): scale of the specific node
             calib_iter (int): iterations
+            weight (np.ndarray, optional): the candidate (already smooth-scaled) weight to
+                score. When given, the node's initializer is not read at all: the large-model
+                auto-alpha search passes the scaled weight directly so the search never has
+                to write it into the proto first (see _scaled_weight on why those writes leak).
 
         The (alpha-dependent) quant-dequant weight is the ONLY thing that changes across the
         alpha grid for a fixed node, so it is fed to the sub-graph session as a runtime input
@@ -511,9 +535,11 @@ class Smoother:
         base_dir = os.path.dirname(self.model.model_path) if self.model.model_path is not None else ""
 
         # The quant-dequant weight is alpha-dependent (the weight was just scaled for this
-        # alpha by _adjust_weights); it is fed to the cached session per call. bias / other
-        # non-weight initializers are alpha-independent and stay baked into the sub-graph.
-        weight = onnx.numpy_helper.to_array(self.model.get_initializer(node.input[1]), base_dir)
+        # alpha, either in-proto by _adjust_weights or passed in directly); it is fed to the
+        # cached session per call. bias / other non-weight initializers are alpha-independent
+        # and stay baked into the sub-graph.
+        if weight is None:
+            weight = _to_array_extern_safe(self.model.get_initializer(node.input[1]), base_dir)
         weight_q = quant_utils.qdq_data(weight, 3, True)
         extra_inits = [
             self.model.get_initializer(i)
@@ -696,13 +722,33 @@ class Smoother:
                         continue
                     for alpha in space:
                         scale = self._get_smooth_scales(alpha, [key])
-                        self._adjust_weights(scale)
+                        if self.model.is_large_model:
+                            # Score the candidate WITHOUT writing the proto. The historical
+                            # flow (_adjust_weights then recover) rewrote this node's weight
+                            # initializer twice per evaluation; under protobuf's upb backend
+                            # each rewrite permanently grows the ModelProto's arena (old
+                            # bytes are only freed when the whole proto dies), so the
+                            # retained memory scaled with n_nodes x n_alphas and survived
+                            # into static calibration: a 0.1-step grid OOMed where a
+                            # 0.2-step grid fit. The references are alpha-independent here
+                            # (original-weight augment session), so nothing else needs the
+                            # adjusted weight: compute it in numpy and feed it directly.
+                            # Bonus: each alpha now scales the PRISTINE on-disk weight
+                            # instead of one that drifted through k scale/unscale roundtrips.
+                            cand_weight, inv_scale = self._scaled_weight(node_info[1][1], key, scale)
+                            self.tensor_scales_info[key] = inv_scale
+                        else:
+                            # Small path: the reference activations are recomputed per call
+                            # from the live model, so the weight must really be adjusted
+                            # in-proto (and recovered below) to keep the loss semantics.
+                            cand_weight = None
+                            self._adjust_weights(scale)
                         input_scale = (
                             self._reshape_scale_for_input(tensor_name, key)
                             if not (node.op_type == "Gemm" and quant_utils.is_B_transposed(node))
                             else self.tensor_scales_info[key]
                         )
-                        loss = self._get_output_loss(node_info[0], input_scale, calib_iter)
+                        loss = self._get_output_loss(node_info[0], input_scale, calib_iter, weight=cand_weight)
                         loss_alpha[alpha] = loss
                         if key not in optimal_alphas:  # Update alpha results
                             optimal_alphas[key] = alpha
@@ -712,7 +758,10 @@ class Smoother:
                                 if optimal_alphas[key] in loss_alpha and loss < loss_alpha[optimal_alphas[key]]
                                 else optimal_alphas[key]
                             )
-                        self.recover()
+                        if self.model.is_large_model:
+                            self.tensor_scales_info = {}
+                        else:
+                            self.recover()
                         pbar.update(1)
         finally:
             pbar.close()
@@ -776,7 +825,7 @@ class Smoother:
                     node = self.model.get_node_by_weight(node_info[1][1])
                     if len(target_list) > 0 and node_info[0] not in target_list:
                         continue
-                    weight = onnx.numpy_helper.to_array(
+                    weight = _to_array_extern_safe(
                         self.model.get_initializer(node_info[1][1]),
                         base_dir=os.path.dirname(self.model.model_path) if self.model.model_path is not None else "",
                     )
@@ -792,7 +841,7 @@ class Smoother:
                 weights_in_channel_max = []
                 for node_info in nodes:
                     node = self.model.get_node_by_weight(node_info[1][1])
-                    weight = onnx.numpy_helper.to_array(
+                    weight = _to_array_extern_safe(
                         self.model.get_initializer(node_info[1][1]),
                         base_dir=os.path.dirname(self.model.model_path) if self.model.model_path is not None else "",
                     )
@@ -891,6 +940,42 @@ class Smoother:
                 for node_info in self.tensors_to_node[key]:
                     self.replace_input.append([self.model.get_node(node_info[0]), key, mul_output_name])
 
+    def _scaled_weight(self, input_name, key, scales):
+        """Scaled candidate weight for one node, computed WITHOUT writing the model proto.
+
+        Returns (new_weight, inv_scale): the weight with the smooth scale folded in, plus
+        the reshaped inverse scale that belongs in ``tensor_scales_info[key]`` (what
+        _reshape_scale_for_input and recover() consume). _adjust_weights delegates here
+        for its per-node math so the two can never drift apart; the auto-alpha search
+        calls it directly to score an alpha without mutating any initializer (under
+        protobuf's upb backend, rewriting an initializer of a long-lived ModelProto
+        abandons the old bytes in the proto's arena until the WHOLE model dies, so
+        per-evaluation rewrites leak memory proportional to the alpha-grid size).
+        """
+        node = self.model.get_node_by_weight(input_name)
+        weight = _to_array_extern_safe(
+            self.model.get_initializer(input_name),
+            base_dir=os.path.dirname(self.model.model_path) if self.model.model_path is not None else "",
+        )
+        if len(weight.shape) == 2:
+            scale = (
+                np.expand_dims(scales[key], axis=0)
+                if node.op_type == "Gemm" and quant_utils.is_B_transposed(node)
+                else np.expand_dims(scales[key], axis=-1)
+            )
+        elif len(weight.shape) == 4:  # TODO need to check conv
+            if (
+                weight.shape[1] == 1
+                and "group" in [i.name for i in node.attribute]
+                and [i for i in node.attribute if i.name == "group"][0].i > 1
+            ):
+                scale = np.reshape(scales[key], (-1, 1, 1, 1))
+            else:
+                scale = np.reshape(scales[key], (1, -1, 1, 1))
+        else:
+            assert False, "not support"
+        return weight * scale, 1.0 / scale
+
     def _adjust_weights(self, scales):
         """Adjust the weights with scale.
 
@@ -909,32 +994,8 @@ class Smoother:
                 if key not in scales:
                     continue
                 input = node_info[1][1]
-                node = self.model.get_node_by_weight(input)
-                weight = onnx.numpy_helper.to_array(
-                    self.model.get_initializer(input),
-                    base_dir=os.path.dirname(self.model.model_path) if self.model.model_path is not None else "",
-                )
-                if len(weight.shape) == 2:
-                    scale = (
-                        np.expand_dims(scales[key], axis=0)
-                        if node.op_type == "Gemm" and quant_utils.is_B_transposed(node)
-                        else np.expand_dims(scales[key], axis=-1)
-                    )
-                    new_weight = weight * scale
-                elif len(weight.shape) == 4:  # TODO need to check conv
-                    node = self.model.get_node_by_weight(input)
-                    if (
-                        weight.shape[1] == 1
-                        and "group" in [i.name for i in node.attribute]
-                        and [i for i in node.attribute if i.name == "group"][0].i > 1
-                    ):
-                        scale = np.reshape(scales[key], (-1, 1, 1, 1))
-                    else:
-                        scale = np.reshape(scales[key], (1, -1, 1, 1))
-                    new_weight = weight * scale
-                else:
-                    assert False, "not support"
-                self.tensor_scales_info[key] = 1.0 / scale
+                new_weight, inv_scale = self._scaled_weight(input, key, scales)
+                self.tensor_scales_info[key] = inv_scale
 
                 new_tensor = onnx.numpy_helper.from_array(new_weight, input)
                 self.model.get_initializer(input).CopyFrom(new_tensor)

@@ -45,6 +45,15 @@ Memory and speed:
   sample; wide alpha grids no longer balloon ORT arena memory or rebuild time.
 - **Per-node activation caching across the alpha grid** so each alpha evaluation
   does not re-harvest the same reference activations.
+- **The large-model alpha search never touches the model proto.** Each (node, alpha)
+  evaluation used to rewrite the node's weight initializer twice (scale then recover),
+  and even plain `numpy_helper.to_array` reads materialize external weights into the
+  proto. Under protobuf's upb backend every such write abandons the old bytes in the
+  ModelProto's arena (freed only when the whole proto dies), so retained RAM grew with
+  nodes x alphas and survived into static calibration: a 0.1-step grid OOMed a real
+  encoder export where a 0.2-step grid fit. Candidate weights are now scaled in numpy
+  and fed to the QDQ-loss session directly, and external weights are read via a
+  throwaway TensorProto, so the search retains nothing.
 
 Features:
 
