@@ -14,6 +14,8 @@
 """Smoother for onnxrt."""
 
 import copy
+import io
+import json
 import os
 import pathlib
 
@@ -138,6 +140,81 @@ def select_worst_nodes(losses, spec):
     return ranked[:count]
 
 
+def _atomic_write_bytes(path, data):
+    """Write checkpoint bytes via a temp file + os.replace so a crash (OOM kill) mid-write
+    can never leave a truncated checkpoint behind: the file either has the previous
+    complete content or the new complete content."""
+    tmp = str(path) + ".tmp"
+    with open(tmp, "wb") as f:
+        f.write(data)
+    os.replace(tmp, str(path))
+
+
+def _smooth_calib_checkpoint_paths(checkpoint_dir):
+    d = pathlib.Path(checkpoint_dir)
+    return d / "smooth-calib.npz", d / "smooth-calib.json"
+
+
+def load_smooth_calib_checkpoint(checkpoint_dir):
+    """Load _dump_op_info's smoother-calibration results from a checkpoint dir, or None.
+
+    Returns (max_vals_per_channel, shape_info, tensors_to_node) when both checkpoint
+    files exist, else None. The npz holds the per-tensor activation-max arrays in the
+    order of the json's "max_vals_names" list (names live in the json because npz keys
+    cannot hold every ONNX tensor-name character safely)."""
+    npz_path, json_path = _smooth_calib_checkpoint_paths(checkpoint_dir)
+    if not (npz_path.exists() and json_path.exists()):
+        return None
+    with open(json_path) as f:
+        meta = json.load(f)
+    with np.load(npz_path) as npz:
+        max_vals = {name: npz[f"arr_{i}"] for i, name in enumerate(meta["max_vals_names"])}
+    return max_vals, meta["shape_info"], meta["tensors_to_node"]
+
+
+def save_smooth_calib_checkpoint(checkpoint_dir, max_vals_per_channel, shape_info, tensors_to_node):
+    """Persist _dump_op_info's results so a resumed run skips the smoother-calibration
+    forward passes entirely. shape_info values and tensors_to_node node.input/output
+    are protobuf repeated containers; both are converted to plain lists for json."""
+    npz_path, json_path = _smooth_calib_checkpoint_paths(checkpoint_dir)
+    names = list(max_vals_per_channel)
+    buf = io.BytesIO()
+    np.savez(buf, *[max_vals_per_channel[n] for n in names])
+    _atomic_write_bytes(npz_path, buf.getvalue())
+    meta = {
+        "max_vals_names": names,
+        "shape_info": {k: [int(d) for d in v] for k, v in shape_info.items()},
+        "tensors_to_node": {
+            k: [[ni[0], list(ni[1]), list(ni[2])] for ni in v] for k, v in tensors_to_node.items()
+        },
+    }
+    _atomic_write_bytes(json_path, json.dumps(meta).encode())
+
+
+def _alpha_checkpoint_path(checkpoint_dir):
+    return pathlib.Path(checkpoint_dir) / "alphas.json"
+
+
+def load_alpha_checkpoint(checkpoint_dir):
+    """Per-node auto-alpha results from a previous (possibly crashed) run, as
+    {node_name: {"key", "op_type", "alpha", "loss", "losses"}}. Empty when absent."""
+    path = _alpha_checkpoint_path(checkpoint_dir)
+    if not path.exists():
+        return {}
+    with open(path) as f:
+        return json.load(f).get("nodes", {})
+
+
+def save_alpha_checkpoint(checkpoint_dir, nodes):
+    """Rewrite the per-node alpha checkpoint (called after EVERY node's grid finishes,
+    so an OOM-killed search resumes from the last completed node). Also the run's
+    human-readable record of which alpha each layer picked and at what QDQ loss."""
+    _atomic_write_bytes(
+        _alpha_checkpoint_path(checkpoint_dir),
+        json.dumps({"nodes": nodes}, indent=1, sort_keys=True).encode(),
+    )
+
+
 def _make_sub_graph(node, inits, input_data, output_data, weight_name, weight_data, opset, ir_version):
     """Build a single-node model whose weight is a runtime INPUT, not a baked initializer.
 
@@ -249,6 +326,7 @@ class Smoother:
         scales_per_op: bool = True,
         calib_iter: int = 100,
         auto_alpha_args: dict = {"alpha_min": 0.3, "alpha_max": 0.7, "alpha_step": 0.05, "attn_method": "min"},
+        checkpoint_dir: Union[str, pathlib.Path, None] = None,
         *args,
         **kwargs
     ):
@@ -269,6 +347,14 @@ class Smoother:
             calib_iter (int, optional): iteration num for calibration. Defaults to 100.
             auto_alpha_args (_type_, optional): alpha args for auto smooth.
                 Defaults to {"alpha_min": 0.3, "alpha_max": 0.7, "alpha_step": 0.05, "attn_method": "min"}.
+            checkpoint_dir (str | pathlib.Path, optional): directory for resumable
+                intermediates. When set, the smoother-calibration results and the per-node
+                auto-alpha results are written there as they are produced (smooth-calib.npz/
+                .json, alphas.json) and any results already present are LOADED instead of
+                recomputed, so a crashed/OOM-killed run resumes from the last completed node
+                instead of restarting the whole search. Caller owns cache invalidation: the
+                files carry no model/config fingerprint, so a stale dir must not be reused
+                across different models, calibration data, or alpha grids.
 
         Returns:
             onnx.ModelProto: A FP32 model with the same architecture as the orig model
@@ -285,10 +371,10 @@ class Smoother:
                 alpha = 1.0
                 logger.warning("reset alpha to 1.0 ")
 
-        self._dump_op_info(percentile, op_types, calib_iter)
+        self._dump_op_info(percentile, op_types, calib_iter, checkpoint_dir=checkpoint_dir)
 
         if alpha == "auto":
-            alpha = self._auto_tune_alpha(calib_iter, **auto_alpha_args)
+            alpha = self._auto_tune_alpha(calib_iter, checkpoint_dir=checkpoint_dir, **auto_alpha_args)
 
         scales = self._get_smooth_scales(alpha)
         self._insert_smooth_mul_op(scales)
@@ -307,24 +393,40 @@ class Smoother:
         self.model.remove_unused_nodes()
         return self.model.model
 
-    def _dump_op_info(self, percentile, op_types, iterations):
+    def _dump_op_info(self, percentile, op_types, iterations, checkpoint_dir=None):
         """Dump op info for smooth quant.
 
         Args:
             percentile (float): percentile of calibration to remove outliers
             op_types (list): the op type to be smooth quantized
             iterations (int): iterations
+            checkpoint_dir (str, optional): when set, load the calibration results from
+                there if present (skipping every forward pass), else compute and save them
         """
-        sq_calibrator = calibrator.Calibrator(
-            self.model,
-            self.dataloader,
-            iterations=list(range(0, iterations)),
-            execution_provider=self.providers,
-        )
+        loaded = load_smooth_calib_checkpoint(checkpoint_dir) if checkpoint_dir else None
+        if loaded is not None:
+            self.max_vals_per_channel, self.shape_info, self.tensors_to_node = loaded
+            logger.info(
+                "smooth-calib checkpoint: loaded {} activation-max tensor(s) from {}; "
+                "skipping the smoother calibration forwards".format(
+                    len(self.max_vals_per_channel), checkpoint_dir
+                )
+            )
+        else:
+            sq_calibrator = calibrator.Calibrator(
+                self.model,
+                self.dataloader,
+                iterations=list(range(0, iterations)),
+                execution_provider=self.providers,
+            )
 
-        self.max_vals_per_channel, self.shape_info, self.tensors_to_node = sq_calibrator.calib_smooth(
-            op_types, percentile
-        )
+            self.max_vals_per_channel, self.shape_info, self.tensors_to_node = sq_calibrator.calib_smooth(
+                op_types, percentile
+            )
+            if checkpoint_dir:
+                save_smooth_calib_checkpoint(
+                    checkpoint_dir, self.max_vals_per_channel, self.shape_info, self.tensors_to_node
+                )
         for node in self.model.nodes():
             for out in node.output:
                 if (
@@ -658,6 +760,7 @@ class Smoother:
         alpha_step: float = 0.05,
         attn_method: str = "min",
         op_alpha: dict = None,
+        checkpoint_dir=None,
     ):
         """Perform alpha-tuning to obtain layer-wise optimal alpha values and adjust parameters accordingly.
 
@@ -670,6 +773,12 @@ class Smoother:
             op_alpha (dict): optional per-op-type alpha override, {op_type: float | {alpha_min, alpha_max, alpha_step}}.
                 A float pins that op type's alpha (no search, one forward pass saved per node);
                 a dict gives it its own search grid; op types absent here use the global grid.
+            checkpoint_dir (str, optional): when set, alphas.json there is rewritten after
+                EVERY node's grid finishes (best alpha, normalized best loss, and the full
+                per-alpha loss curve), and nodes already recorded in it are restored instead
+                of re-searched. This is what lets an OOM-killed multi-hour search resume from
+                the last completed node. The caller is responsible for not reusing the dir
+                across different models/calibration data/grids.
         """
         logger.info("auto tuning alpha")
 
@@ -706,6 +815,26 @@ class Smoother:
         }
         n_nodes = len(node_spaces)
         total = sum(len(s) for s in node_spaces.values())
+
+        # Resume state: nodes whose grid already completed in a previous run of the SAME
+        # search (the caller keys checkpoint_dir by its full configuration). An entry only
+        # counts when its recorded scales key matches what THIS search would use, so a
+        # checkpoint from a different scales_per_op mode can never be silently misread.
+        ckpt_nodes = load_alpha_checkpoint(checkpoint_dir) if checkpoint_dir else {}
+        cached = {
+            ni[0]
+            for tname, infos in self.tensors_to_node.items()
+            for ni in infos
+            if ckpt_nodes.get(ni[0], {}).get("key") == (ni[0] if self.scales_per_op else tname)
+        }
+        if ckpt_nodes:
+            logger.info(
+                "auto-alpha checkpoint: {} of {} node(s) already searched in {}; "
+                "resuming with the remaining {}".format(
+                    len(cached), n_nodes, checkpoint_dir, n_nodes - len(cached)
+                )
+            )
+
         logger.info(
             "auto-alpha: {} node(s), {} QDQ-loss evaluation(s) over the per-node alpha grids".format(
                 n_nodes, total
@@ -723,7 +852,13 @@ class Smoother:
         self._sq_out_cache = {"node": None, "outputs": None}
         self._sq_subgraph = {"node": None, "session": None, "input": None, "weight": None}
         added_outputs = []
-        if self.model.is_large_model:
+        # When every multi-point node is already checkpointed (or pinned), no QDQ loss is
+        # ever evaluated, so skip the expensive augment save (a full external-data copy of
+        # the model) entirely; the end-of-search reload/cleanup is skipped to match.
+        needs_eval = any(len(space) > 1 and name not in cached for name, space in node_spaces.items())
+        augment_saved = False
+        if self.model.is_large_model and needs_eval:
+            augment_saved = True
             needed, seen = [], set()
             for node_infos in self.tensors_to_node.values():
                 for node_info in node_infos:
@@ -751,11 +886,27 @@ class Smoother:
                     key = node_info[0] if self.scales_per_op else tensor_name
                     node = self.model.get_node(node_info[0])
                     space = node_spaces[node_info[0]]
+                    if node_info[0] in cached:
+                        # Checkpointed by a previous run of this same search: restore the
+                        # best alpha and (for searched nodes) the normalized best loss the
+                        # exclude-worst ranking needs, and skip the whole grid.
+                        entry = ckpt_nodes[node_info[0]]
+                        optimal_alphas[key] = entry["alpha"]
+                        if entry.get("loss") is not None:
+                            self.auto_alpha_losses[node_info[0]] = entry["loss"]
+                        pbar.update(len(space))
+                        continue
                     if len(space) == 1:
                         # Pinned alpha (or a degenerate grid): nothing to compare, so record
                         # it and skip the QDQ loss evaluation entirely. This is the whole cost
                         # saving of pinning an op you already trust (e.g. MatMul=0.5).
                         optimal_alphas[key] = space[0]
+                        if checkpoint_dir:
+                            ckpt_nodes[node_info[0]] = {
+                                "key": key, "op_type": node.op_type, "alpha": space[0],
+                                "loss": None, "losses": {}, "pinned": True,
+                            }
+                            save_alpha_checkpoint(checkpoint_dir, ckpt_nodes)
                         pbar.update(1)
                         continue
                     for alpha in space:
@@ -811,6 +962,18 @@ class Smoother:
                             else None
                         )
                         self.auto_alpha_losses[node_info[0]] = min(loss_alpha.values()) / (ref_sq or 1.0)
+                    if checkpoint_dir:
+                        # Checkpoint after EVERY completed node grid so a crash/OOM loses at
+                        # most one node's work. "losses" keeps the full raw per-alpha curve
+                        # (the search criterion), "loss" the normalized best (the ranking).
+                        ckpt_nodes[node_info[0]] = {
+                            "key": key,
+                            "op_type": node.op_type,
+                            "alpha": optimal_alphas[key],
+                            "loss": self.auto_alpha_losses.get(node_info[0]),
+                            "losses": {"{:g}".format(a): float(l) for a, l in loss_alpha.items()},
+                        }
+                        save_alpha_checkpoint(checkpoint_dir, ckpt_nodes)
         finally:
             pbar.close()
             self._quiet_adjust = False
@@ -822,7 +985,7 @@ class Smoother:
 
         logger.info("auto tuning alpha done")
         self._log_alpha_summary(optimal_alphas)
-        if self.model.is_large_model:
+        if self.model.is_large_model and augment_saved:
 
             onnx.external_data_helper.load_external_data_for_model(
                 self.model.model, os.path.split(self.model.model_path)[0]

@@ -12,7 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 import pathlib
+import pickle
 import tempfile
 from typing import Union
 
@@ -126,16 +128,37 @@ def static_quantize_entry(
 
     config_mapping = quant_config.to_config_mapping(model=model)
 
-    calibration_data_reader.rewind()
-    augment = calibrate.ONNXRTAugment(
-        model,
-        calibration_data_reader,
-        dump_op_types=quant_config.op_types_to_quantize,
-        execution_provider=quant_config.execution_provider,
-        iterations=list(range(0, quant_config.calibration_sampling_size)),
-    )
-    min_max = augment.dump_minmax(config_mapping)
-    quantize_params = augment.dump_calibration(config_mapping, min_max=min_max)
+    # Resumable static calibration: when the caller names a checkpoint file (extra_options
+    # ["CalibParamsCheckpointFile"]) and it exists, reuse the quantization params from the
+    # previous run and skip the augmented dump sessions entirely. Those sessions are the
+    # RAM peak of a SmoothQuant export (the augmented fp32 model + dump buffers), so a run
+    # that OOMed AFTER calibration (or during the final save) resumes without re-paying it.
+    # The file carries no model fingerprint: the caller keys its path by the full run
+    # configuration and owns invalidation.
+    ckpt_file = (getattr(quant_config, "extra_options", None) or {}).get("CalibParamsCheckpointFile")
+    if ckpt_file and os.path.exists(ckpt_file):
+        with open(ckpt_file, "rb") as f:
+            quantize_params = pickle.load(f)
+        logger.info(
+            "static-calibration checkpoint: loaded quantization params for %d tensor(s) "
+            "from %s; skipping the calibration forwards" % (len(quantize_params), ckpt_file)
+        )
+    else:
+        calibration_data_reader.rewind()
+        augment = calibrate.ONNXRTAugment(
+            model,
+            calibration_data_reader,
+            dump_op_types=quant_config.op_types_to_quantize,
+            execution_provider=quant_config.execution_provider,
+            iterations=list(range(0, quant_config.calibration_sampling_size)),
+        )
+        min_max = augment.dump_minmax(config_mapping)
+        quantize_params = augment.dump_calibration(config_mapping, min_max=min_max)
+        if ckpt_file:
+            tmp = str(ckpt_file) + ".tmp"
+            with open(tmp, "wb") as f:
+                pickle.dump(quantize_params, f)
+            os.replace(tmp, ckpt_file)
     _quantizer = quantizer.StaticQuantizer(
         model,
         config_mapping,
@@ -176,6 +199,9 @@ def _smoothquant_transform_params(quant_config):
         "SmoothQuantPercentile": "percentile",
         # Not in the StaticQuantConfig docstring but read by transform() when alpha=="auto".
         "AutoAlphaArgs": "auto_alpha_args",
+        # Resumable intermediates (smooth-calib + per-node auto-alpha checkpoints); see
+        # Smoother.transform's checkpoint_dir doc. The caller owns cache invalidation.
+        "SmoothQuantCheckpointDir": "checkpoint_dir",
     }
     params = {}
     for src, dst in mapping.items():
