@@ -435,7 +435,10 @@ class Smoother:
                 self.model,
                 self.dataloader,
                 iterations=list(range(0, iterations)),
-                execution_provider=self.providers,
+                # NOTE: the ctor parameter is `providers`; the historical call passed
+                # `execution_provider=`, which fell into **kwargs and silently pinned
+                # every smoother-calibration forward to the CPU even on a CUDA run.
+                providers=self.providers,
             )
 
             self.max_vals_per_channel, self.shape_info, self.tensors_to_node = sq_calibrator.calib_smooth(
