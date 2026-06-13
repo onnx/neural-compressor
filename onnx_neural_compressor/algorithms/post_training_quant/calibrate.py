@@ -296,22 +296,37 @@ class ONNXRTAugment:
         # all earlier slices are complete. A pre-batching checkpoint has no "batch" key
         # and reads as slice 0 (the single-pass case is exactly slice 0 of 1).
         partial_path = str(self.checkpoint_file) + ".partial" if self.checkpoint_file else None
+        # The (slice, samples) restore point is meaningful ONLY against the partition that
+        # produced it: a changed dump_batch_size (or calibrated tensor set) re-slices the
+        # dump, so the same slice index then spans different tensors and resuming would
+        # skip the wrong ones, silently leaving tensors uncalibrated. Key the partial by
+        # its partition and discard one that does not match (this also drops pre-partition
+        # checkpoints, which carry no signature) rather than resume it into wrong ranges.
+        partition_sig = [None if b is None else list(b) for b in batches]
         restored_batch, restored_collected = 0, 0
         if partial_path and os.path.exists(partial_path):
+            discard = None
             try:
                 with open(partial_path, "rb") as f:
                     partial = pickle.load(f)
-                restored_batch = int(partial.get("batch", 0))
-                restored_collected = int(partial["collected"])
-                name_to_calibrator = partial["name_to_calibrator"]
-                activation_tensors_calib_range = partial["activation_tensors_calib_range"]
+                if partial.get("partition") != partition_sig:
+                    discard = ("dumped for a different slice partition: dump_batch_size or "
+                               "the calibrated tensor set changed")
+                else:
+                    restored_batch = int(partial.get("batch", 0))
+                    restored_collected = int(partial["collected"])
+                    name_to_calibrator = partial["name_to_calibrator"]
+                    activation_tensors_calib_range = partial["activation_tensors_calib_range"]
+            except Exception as e:
+                discard = "unreadable ({})".format(e)
+            if discard is None:
                 logger.info(
                     "Resuming activation calibration from {} (slice {}, {} samples already collected)".format(
                         partial_path, restored_batch, restored_collected
                     )
                 )
-            except Exception as e:
-                logger.warning("Discarding unreadable calibration checkpoint {} ({})".format(partial_path, e))
+            else:
+                logger.warning("Discarding stale calibration checkpoint {} ({})".format(partial_path, discard))
                 restored_batch, restored_collected = 0, 0
                 name_to_calibrator = {}
                 activation_tensors_calib_range = {}
@@ -323,6 +338,7 @@ class ONNXRTAugment:
             with open(tmp_path, "wb") as f:
                 pickle.dump(
                     {
+                        "partition": partition_sig,
                         "batch": state["batch"],
                         "collected": state["collected"],
                         "name_to_calibrator": name_to_calibrator,
