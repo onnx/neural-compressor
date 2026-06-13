@@ -158,6 +158,11 @@ def static_quantize_entry(
             # removed below once the final params land.
             checkpoint_file=ckpt_file,
             checkpoint_interval_sec=extra.get("CheckpointIntervalSec", 1200),
+            # When > 0, dump the calibrated tensors in slices of this many per augmented
+            # forward instead of all at once, bounding ORT's peak memory so a long-window
+            # calibration fits in GPU VRAM. Result-invariant (each tensor sees the same
+            # windows), so the caller leaves it out of the cache hash, like execution_provider.
+            dump_batch_size=extra.get("CalibDumpBatch", 0),
         )
         min_max = augment.dump_minmax(config_mapping)
         quantize_params = augment.dump_calibration(config_mapping, min_max=min_max)
