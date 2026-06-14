@@ -253,10 +253,21 @@ def _make_sub_graph(node, inits, input_data, output_data, weight_name, weight_da
         opset (object): opset of the model
         ir_version (object): ir_version of the model
     """
+    # The sub-graph session is built ONCE per node and then reused for every calibration
+    # sample (see _get_output_loss). Calibration windows may have DIFFERENT sequence
+    # lengths, so the activation input/output must stay shape-dynamic: baking the first
+    # sample's concrete shape here made ORT reject any differently-sized window with
+    # "Got invalid dimensions for input ... Got: N Expected: M". We keep the rank but drop
+    # every dim to dynamic; ORT resolves the real shapes per run() from the fed arrays, so
+    # equal-length calibration is numerically unchanged (the metadata never enters the
+    # MatMul math). Only the weight, fed as a constant-shaped runtime input, keeps its
+    # concrete shape.
+    dynamic_in = [None] * len(input_data.shape)
+    dynamic_out = [None] * len(output_data.shape)
     input = onnx.helper.make_tensor_value_info(
         node.input[0],
         onnx.helper.np_dtype_to_tensor_dtype(input_data.dtype),
-        input_data.shape,
+        dynamic_in,
     )
     weight = onnx.helper.make_tensor_value_info(
         weight_name,
@@ -266,7 +277,7 @@ def _make_sub_graph(node, inits, input_data, output_data, weight_name, weight_da
     output = onnx.helper.make_tensor_value_info(
         node.output[0],
         onnx.helper.np_dtype_to_tensor_dtype(output_data.dtype),
-        output_data.shape,
+        dynamic_out,
     )
     graph = onnx.helper.make_graph([node], "sub_graph", [input, weight], [output], inits)
     model = onnx.helper.make_model(graph, opset_imports=opset)

@@ -43,6 +43,15 @@ Memory and speed:
 - **The auto-alpha QDQ sub-graph session is built once per node** (weights fed as
   runtime inputs), not once per (node, alpha) and originally once per calibration
   sample; wide alpha grids no longer balloon ORT arena memory or rebuild time.
+- **Variable-length calibration windows are accepted.** That once-per-node QDQ
+  sub-graph baked the FIRST sample's concrete activation shape into its input/output
+  value_infos, so the cached session rejected any later calibration window of a
+  different sequence length (`Got invalid dimensions for input ... Got: N Expected:
+  M`). Calibration was silently constrained to uniformly-sized windows. The activation
+  input/output dims are now left dynamic (ORT resolves the real shape per `run()` from
+  the fed array, so equal-length calibration is numerically unchanged), letting one
+  calibration set mix short and long clips, e.g. per-language short utterances plus
+  full-length speeches.
 - **Per-node activation caching across the alpha grid** so each alpha evaluation
   does not re-harvest the same reference activations.
 - **The large-model alpha search never touches the model proto.** Each (node, alpha)
