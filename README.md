@@ -26,15 +26,15 @@ Correctness:
 - **Auto-alpha search no longer runs on an exhausted dataloader.** Upstream's
   `alpha="auto"` consumed the calibration reader before the search, so every layer
   silently got `alpha_min`; the reader is now rewound and the per-node reference
-  activations are cached (also fixes the large-model path).
+  activations are cached (also fixes the large-model path). (commit [`d6745e4`](https://github.com/thiswillbeyourgithub/neural-compressor-fork/commit/d6745e4))
 - **The alpha grid includes both endpoints**: upstream's `np.arange` stopped one
-  step short of `alpha_max`, so the maximum alpha was never evaluated.
+  step short of `alpha_max`, so the maximum alpha was never evaluated. (commit [`8d88f45`](https://github.com/thiswillbeyourgithub/neural-compressor-fork/commit/8d88f45))
 - **The selected execution provider reaches the smoother calibration.** The
   smoother passed `execution_provider=` to the `Calibrator`, whose constructor
   parameter is `providers=`, so the argument fell into `**kwargs` and was
   silently dropped: every smoother-calibration forward ran on the
   `CPUExecutionProvider` even when the caller selected CUDA. The provider list is
-  now forwarded, so `--ep cuda` actually calibrates on the GPU.
+  now forwarded, so `--ep cuda` actually calibrates on the GPU. (commit [`ad8c01b`](https://github.com/thiswillbeyourgithub/neural-compressor-fork/commit/ad8c01b))
 
 Memory and speed:
 
@@ -42,10 +42,10 @@ Memory and speed:
   every dumped activation tensor of every calibration sample until the end of the
   loop (an in-code upstream TODO), so RAM grew linearly with samples x dumped
   tensors and large exports OOMed. Each sample is now folded straight into the
-  per-tensor histogram; peak RAM no longer depends on the sample count.
+  per-tensor histogram; peak RAM no longer depends on the sample count. (commit [`6f69d55`](https://github.com/thiswillbeyourgithub/neural-compressor-fork/commit/6f69d55))
 - **The auto-alpha QDQ sub-graph session is built once per node** (weights fed as
   runtime inputs), not once per (node, alpha) and originally once per calibration
-  sample; wide alpha grids no longer balloon ORT arena memory or rebuild time.
+  sample; wide alpha grids no longer balloon ORT arena memory or rebuild time. (commits [`594f6f9`](https://github.com/thiswillbeyourgithub/neural-compressor-fork/commit/594f6f9), [`f2a102f`](https://github.com/thiswillbeyourgithub/neural-compressor-fork/commit/f2a102f))
 - **Variable-length calibration windows are accepted.** That once-per-node QDQ
   sub-graph baked the FIRST sample's concrete activation shape into its input/output
   value_infos, so the cached session rejected any later calibration window of a
@@ -54,9 +54,9 @@ Memory and speed:
   input/output dims are now left dynamic (ORT resolves the real shape per `run()` from
   the fed array, so equal-length calibration is numerically unchanged), letting one
   calibration set mix short and long clips, e.g. per-language short utterances plus
-  full-length speeches.
+  full-length speeches. (commit [`0a22d36`](https://github.com/thiswillbeyourgithub/neural-compressor-fork/commit/0a22d36))
 - **Per-node activation caching across the alpha grid** so each alpha evaluation
-  does not re-harvest the same reference activations.
+  does not re-harvest the same reference activations. (commit [`d6745e4`](https://github.com/thiswillbeyourgithub/neural-compressor-fork/commit/d6745e4))
 - **The large-model alpha search never touches the model proto.** Each (node, alpha)
   evaluation used to rewrite the node's weight initializer twice (scale then recover),
   and even plain `numpy_helper.to_array` reads materialize external weights into the
@@ -65,7 +65,7 @@ Memory and speed:
   nodes x alphas and survived into static calibration: a 0.1-step grid OOMed a real
   encoder export where a 0.2-step grid fit. Candidate weights are now scaled in numpy
   and fed to the QDQ-loss session directly, and external weights are read via a
-  throwaway TensorProto, so the search retains nothing.
+  throwaway TensorProto, so the search retains nothing. (commit [`72de740`](https://github.com/thiswillbeyourgithub/neural-compressor-fork/commit/72de740))
 - **Memory-conservative calibration sessions.** The augmented dump graphs return
   hundreds of activation tensors per forward and ORT's BFC arenas grow ahead of
   demand (power-of-two extends) and never release, so the calibration sessions
@@ -74,7 +74,7 @@ Memory and speed:
   handful of forwards, so the allocator-speed trade is free:
   `conservative_session_resources()` disables the CPU arena and pins the CUDA
   arena to `kSameAsRequested` growth (with the heuristic cuDNN algo search),
-  applied to both the static-calibration session and the smoother's dump session.
+  applied to both the static-calibration session and the smoother's dump session. (commit [`6c6e0cf`](https://github.com/thiswillbeyourgithub/neural-compressor-fork/commit/6c6e0cf))
 - **Streaming per-channel percentile in the smoother calibration.** The smoother
   calibration stacked every collected sample's activations and called
   `np.percentile` once at the end, so RAM grew as samples x frames x channels
@@ -84,7 +84,7 @@ Memory and speed:
   folded into a per-channel running top-K reducer (`StreamingChannelPercentile`)
   and freed; the reducer reproduces `np.percentile` bit-for-bit (its float64
   promotion and `t >= 0.5` lerp branch included) and re-checks that K was large
-  enough for the actual row count, so a result can never be silently wrong.
+  enough for the actual row count, so a result can never be silently wrong. (commit [`e61fb24`](https://github.com/thiswillbeyourgithub/neural-compressor-fork/commit/e61fb24))
 - **Sliced static-calibration dump to bound VRAM.** Static int8 calibration
   augments the model so EVERY calibrated tensor becomes a graph output, and ORT
   keeps all graph outputs resident for the whole forward, so a long calibration
@@ -94,20 +94,20 @@ Memory and speed:
   are dumped in slices of that many graph outputs, each slice its own augment +
   forward over the same (rewound) windows, so only one slice is resident at a
   time; the per-tensor calibration ranges stay bit-identical to the single-pass
-  dump (it only trades extra forwards for a smaller peak).
+  dump (it only trades extra forwards for a smaller peak). (commit [`a495323`](https://github.com/thiswillbeyourgithub/neural-compressor-fork/commit/a495323))
 
 Features:
 
 - **Per-op-type alpha override** in the auto-alpha search (pin an op type to a
-  fixed alpha, or give it its own `min:max:step` grid).
+  fixed alpha, or give it its own `min:max:step` grid). (commit [`280b123`](https://github.com/thiswillbeyourgithub/neural-compressor-fork/commit/280b123))
 - **Per-layer alpha summary** logged after the search (histogram per op type plus
-  one line per smoothed node).
+  one line per smoothed node). (commit [`0a532e1`](https://github.com/thiswillbeyourgithub/neural-compressor-fork/commit/0a532e1))
 - **Sensitivity-based mixed precision** (`extra_options["SmoothQuantExcludeWorst"]`):
   the auto-alpha search records every smoothed node's best achievable QDQ loss,
   normalized by that node's reference-output energy so it is comparable across
   nodes (`Smoother.auto_alpha_losses`). Setting the option to an int n (or a
   fraction in (0, 1)) keeps the n worst-quantizing nodes out of quantization
-  entirely, trading a little file size for accuracy on the layers int8 hurts most.
+  entirely, trading a little file size for accuracy on the layers int8 hurts most. (commit [`89b4363`](https://github.com/thiswillbeyourgithub/neural-compressor-fork/commit/89b4363))
 - **Resumable, crash-safe exports.** Given a checkpoint directory
   (`extra_options["SmoothQuantCheckpointDir"]` plus
   `CalibParamsCheckpointFile`), the smoother persists its expensive intermediates
@@ -123,13 +123,13 @@ Features:
   its full run configuration and owns invalidation) but DO record the slice
   partition that produced the static-calibration partial, so a resume with a
   changed `CalibDumpBatch` or tensor set is discarded rather than applied to the
-  wrong slices.
+  wrong slices. (commits [`55a3c75`](https://github.com/thiswillbeyourgithub/neural-compressor-fork/commit/55a3c75), [`628f57f`](https://github.com/thiswillbeyourgithub/neural-compressor-fork/commit/628f57f), [`9eb2d4e`](https://github.com/thiswillbeyourgithub/neural-compressor-fork/commit/9eb2d4e), [`0c58d7b`](https://github.com/thiswillbeyourgithub/neural-compressor-fork/commit/0c58d7b))
 - **Richer quantization statistics table**: fp32 ops are split into "quantizable"
   (weight-bearing, the quantizer could convert them directly) versus "needs an
   int8 input" (weightless/pass-through ops that only convert inside an int8
-  region), and the Reshape/Transpose glue rows are always shown.
+  region), and the Reshape/Transpose glue rows are always shown. (commit [`e792411`](https://github.com/thiswillbeyourgithub/neural-compressor-fork/commit/e792411))
 - tqdm progress bars over the alpha search and both calibration passes, and the
-  per-evaluation ORT warning spam is silenced.
+  per-evaluation ORT warning spam is silenced. (commits [`82e3451`](https://github.com/thiswillbeyourgithub/neural-compressor-fork/commit/82e3451), [`9f0e94b`](https://github.com/thiswillbeyourgithub/neural-compressor-fork/commit/9f0e94b))
 
 The changes are regression-tested from the model repo
 ([`scripts/test_quantize-int8-smoothquant.py`](https://huggingface.co/Olicorne/parakeet-tdt-0.6b-v3-smoothquant-onnx/blob/main/scripts/test_quantize-int8-smoothquant.py)).
