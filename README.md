@@ -32,6 +32,12 @@ Correctness:
   activations are cached (also fixes the large-model path).
 - **The alpha grid includes both endpoints**: upstream's `np.arange` stopped one
   step short of `alpha_max`, so the maximum alpha was never evaluated.
+- **The selected execution provider reaches the smoother calibration.** The
+  smoother passed `execution_provider=` to the `Calibrator`, whose constructor
+  parameter is `providers=`, so the argument fell into `**kwargs` and was
+  silently dropped: every smoother-calibration forward ran on the
+  `CPUExecutionProvider` even when the caller selected CUDA. The provider list is
+  now forwarded, so `--ep cuda` actually calibrates on the GPU.
 
 Memory and speed:
 
@@ -63,6 +69,35 @@ Memory and speed:
   encoder export where a 0.2-step grid fit. Candidate weights are now scaled in numpy
   and fed to the QDQ-loss session directly, and external weights are read via a
   throwaway TensorProto, so the search retains nothing.
+- **Memory-conservative calibration sessions.** The augmented dump graphs return
+  hundreds of activation tensors per forward and ORT's BFC arenas grow ahead of
+  demand (power-of-two extends) and never release, so the calibration sessions
+  carried ~1 GB of pure allocator slack on a 0.6B encoder and could abort with a
+  BFCArena "Failed to allocate memory" on a loaded host. These sessions run only a
+  handful of forwards, so the allocator-speed trade is free:
+  `conservative_session_resources()` disables the CPU arena and pins the CUDA
+  arena to `kSameAsRequested` growth (with the heuristic cuDNN algo search),
+  applied to both the static-calibration session and the smoother's dump session.
+- **Streaming per-channel percentile in the smoother calibration.** The smoother
+  calibration stacked every collected sample's activations and called
+  `np.percentile` once at the end, so RAM grew as samples x frames x channels
+  (~6 GB per ~400 s window, hundreds of GB for a multi-window export) and
+  swap-thrashed mid-pass. Because the high percentiles SmoothQuant uses (99.999 by
+  default) depend only on the largest values per channel, each sample is now
+  folded into a per-channel running top-K reducer (`StreamingChannelPercentile`)
+  and freed; the reducer reproduces `np.percentile` bit-for-bit (its float64
+  promotion and `t >= 0.5` lerp branch included) and re-checks that K was large
+  enough for the actual row count, so a result can never be silently wrong.
+- **Sliced static-calibration dump to bound VRAM.** Static int8 calibration
+  augments the model so EVERY calibrated tensor becomes a graph output, and ORT
+  keeps all graph outputs resident for the whole forward, so a long calibration
+  window peaks every activation at once (the per-layer attention-score MatMuls are
+  ~0.8 GB each near a FastConformer's ~400 s reach) and overflows GPU VRAM. With
+  `dump_batch_size > 0` (the `CalibDumpBatch` extra_option) the calibrated tensors
+  are dumped in slices of that many graph outputs, each slice its own augment +
+  forward over the same (rewound) windows, so only one slice is resident at a
+  time; the per-tensor calibration ranges stay bit-identical to the single-pass
+  dump (it only trades extra forwards for a smaller peak).
 
 Features:
 
@@ -76,6 +111,22 @@ Features:
   nodes (`Smoother.auto_alpha_losses`). Setting the option to an int n (or a
   fraction in (0, 1)) keeps the n worst-quantizing nodes out of quantization
   entirely, trading a little file size for accuracy on the layers int8 hurts most.
+- **Resumable, crash-safe exports.** Given a checkpoint directory
+  (`extra_options["SmoothQuantCheckpointDir"]` plus
+  `CalibParamsCheckpointFile`), the smoother persists its expensive intermediates
+  as they are produced and reloads whatever already exists on the next run: the
+  smoother calibration, the per-node alpha search (append-only `alphas.jsonl`, one
+  line per completed node grid so an interrupted multi-hour search resumes from
+  the last completed node), and the static-calibration quantization params. Both
+  per-sample calibration loops also checkpoint MID-pass, time-gated by
+  `CheckpointIntervalSec` (default 1200 s) so a fast pass pays no IO, so an OOM- or
+  time-killed pass resumes from the last sample instead of restarting. All writes
+  are atomic (temp + `os.replace`) so a crash mid-write never leaves a truncated
+  file. Checkpoints carry no model fingerprint (the caller keys the directory by
+  its full run configuration and owns invalidation) but DO record the slice
+  partition that produced the static-calibration partial, so a resume with a
+  changed `CalibDumpBatch` or tensor set is discarded rather than applied to the
+  wrong slices.
 - **Richer quantization statistics table**: fp32 ops are split into "quantizable"
   (weight-bearing, the quantizer could convert them directly) versus "needs an
   int8 input" (weightless/pass-through ops that only convert inside an int8
