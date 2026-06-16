@@ -35,6 +35,17 @@ Correctness:
   silently dropped: every smoother-calibration forward ran on the
   `CPUExecutionProvider` even when the caller selected CUDA. The provider list is
   now forwarded, so `--ep cuda` actually calibrates on the GPU. (commit [`ad8c01b`](https://github.com/thiswillbeyourgithub/neural-compressor-fork/commit/ad8c01b))
+- **SmoothQuant `extra_options` are no longer silently ignored.** `quantize()`
+  routes a `StaticQuantConfig` (with `extra_options["SmoothQuant"]`) into
+  `smooth_quant_entry`, which called
+  `smoother.transform(**quant_config.get_model_params_dict())`. But
+  `get_model_params_dict()` only surfaces the static-quant knobs, so NONE of the
+  smooth knobs (`SmoothQuantAlpha`, `SmoothQuantOpTypes`, `AutoAlphaArgs`, ...)
+  reached `transform()`: the smoother always ran with its hard-coded defaults
+  (`alpha=0.5`, the `[0.3, 0.7]` auto grid, op types Conv+Gemm+MatMul+FusedConv)
+  no matter what the caller set. A new `_smoothquant_transform_params()` maps the
+  documented `extra_options` names to the `transform()` argument names so they
+  take effect. (commit [`d6745e4`](https://github.com/thiswillbeyourgithub/neural-compressor-fork/commit/d6745e4))
 
 Memory and speed:
 
