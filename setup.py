@@ -58,6 +58,7 @@ if __name__ == "__main__":
             "py-cpuinfo",
             "pydantic",
             "transformers",
+            "tqdm",
         ],
         python_requires=">=3.8.0",
         classifiers=[

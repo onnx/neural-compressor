@@ -12,7 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 import pathlib
+import pickle
 import tempfile
 from typing import Union
 
@@ -126,16 +128,53 @@ def static_quantize_entry(
 
     config_mapping = quant_config.to_config_mapping(model=model)
 
-    calibration_data_reader.rewind()
-    augment = calibrate.ONNXRTAugment(
-        model,
-        calibration_data_reader,
-        dump_op_types=quant_config.op_types_to_quantize,
-        execution_provider=quant_config.execution_provider,
-        iterations=list(range(0, quant_config.calibration_sampling_size)),
-    )
-    min_max = augment.dump_minmax(config_mapping)
-    quantize_params = augment.dump_calibration(config_mapping, min_max=min_max)
+    # Resumable static calibration: when the caller names a checkpoint file (extra_options
+    # ["CalibParamsCheckpointFile"]) and it exists, reuse the quantization params from the
+    # previous run and skip the augmented dump sessions entirely. Those sessions are the
+    # RAM peak of a SmoothQuant export (the augmented fp32 model + dump buffers), so a run
+    # that OOMed AFTER calibration (or during the final save) resumes without re-paying it.
+    # The file carries no model fingerprint: the caller keys its path by the full run
+    # configuration and owns invalidation.
+    extra = getattr(quant_config, "extra_options", None) or {}
+    ckpt_file = extra.get("CalibParamsCheckpointFile")
+    if ckpt_file and os.path.exists(ckpt_file):
+        with open(ckpt_file, "rb") as f:
+            quantize_params = pickle.load(f)
+        logger.info(
+            "static-calibration checkpoint: loaded quantization params for %d tensor(s) "
+            "from %s; skipping the calibration forwards" % (len(quantize_params), ckpt_file)
+        )
+    else:
+        calibration_data_reader.rewind()
+        augment = calibrate.ONNXRTAugment(
+            model,
+            calibration_data_reader,
+            dump_op_types=quant_config.op_types_to_quantize,
+            execution_provider=quant_config.execution_provider,
+            iterations=list(range(0, quant_config.calibration_sampling_size)),
+            # Mid-pass resume: the streaming per-tensor calibrator state (histograms /
+            # running ranges, small) is periodically pickled to <ckpt_file>.partial and
+            # already-consumed samples are skipped on the next run; the partial file is
+            # removed below once the final params land.
+            checkpoint_file=ckpt_file,
+            checkpoint_interval_sec=extra.get("CheckpointIntervalSec", 1200),
+            # When > 0, dump the calibrated tensors in slices of this many per augmented
+            # forward instead of all at once, bounding ORT's peak memory so a long-window
+            # calibration fits in GPU VRAM. Result-invariant (each tensor sees the same
+            # windows), so the caller leaves it out of the cache hash, like execution_provider.
+            dump_batch_size=extra.get("CalibDumpBatch", 0),
+        )
+        min_max = augment.dump_minmax(config_mapping)
+        quantize_params = augment.dump_calibration(config_mapping, min_max=min_max)
+        if ckpt_file:
+            tmp = str(ckpt_file) + ".tmp"
+            with open(tmp, "wb") as f:
+                pickle.dump(quantize_params, f)
+            os.replace(tmp, ckpt_file)
+            try:
+                os.remove(str(ckpt_file) + ".partial")
+            except FileNotFoundError:
+                pass
     _quantizer = quantizer.StaticQuantizer(
         model,
         config_mapping,
@@ -154,6 +193,42 @@ def static_quantize_entry(
 
 
 ###################### SmoothQuant Entry ##################################
+def _smoothquant_transform_params(quant_config):
+    """Translate the SmoothQuant* keys in a StaticQuantConfig's extra_options into the
+    keyword arguments Smoother.transform expects.
+
+    quantize() routes a StaticQuantConfig (with extra_options["SmoothQuant"] == True)
+    here, but StaticQuantConfig.get_model_params_dict() only surfaces the static-quant
+    knobs. Passing that to Smoother.transform forwards NONE of the smooth knobs, so the
+    smoother silently runs with its hard-coded defaults (alpha=0.5, the [0.3, 0.7] auto
+    grid, op_types Conv+Gemm+MatMul+FusedConv) no matter what the caller set. This maps
+    the documented extra_options names to the transform() argument names so they take
+    effect.
+    """
+    eo = dict(getattr(quant_config, "extra_options", None) or {})
+    mapping = {
+        "SmoothQuantAlpha": "alpha",
+        "SmoothQuantFolding": "folding",
+        "SmoothQuantOpTypes": "op_types",
+        "SmoothQuantCalibIter": "calib_iter",
+        "SmoothQuantScalesPerOp": "scales_per_op",
+        "SmoothQuantPercentile": "percentile",
+        # Not in the StaticQuantConfig docstring but read by transform() when alpha=="auto".
+        "AutoAlphaArgs": "auto_alpha_args",
+        # Resumable intermediates (smooth-calib + per-node auto-alpha checkpoints); see
+        # Smoother.transform's checkpoint_dir doc. The caller owns cache invalidation.
+        "SmoothQuantCheckpointDir": "checkpoint_dir",
+        # Minimum seconds between MID-pass checkpoint dumps (shared with the static
+        # calibration's partial state in static_quantize_entry).
+        "CheckpointIntervalSec": "checkpoint_interval_sec",
+    }
+    params = {}
+    for src, dst in mapping.items():
+        if src in eo and eo[src] is not None:
+            params[dst] = eo[src]
+    return params
+
+
 @utility.register_algo(name=constants.SMOOTH_QUANT)
 def smooth_quant_entry(
     model: Union[pathlib.Path, str],
@@ -176,7 +251,7 @@ def smooth_quant_entry(
         calibration_data_reader,
         execution_provider=getattr(quant_config, "execution_provider", "CPUExecutionProvider"),
     )
-    smoothed_model = smoother.transform(**quant_config.get_model_params_dict())
+    smoothed_model = smoother.transform(**_smoothquant_transform_params(quant_config))
     with tempfile.TemporaryDirectory(prefix="ort.quant.") as tmp_dir:
         # ORT quant API requires str input
         onnx.save_model(
@@ -195,6 +270,30 @@ def smooth_quant_entry(
         # exclude Mul operations which are inserted during smooth operation
         excluded_nodes = [i.name for i in smoothed_model.graph.node if i.name.endswith("_smooth_mul")]
         quant_config.nodes_to_exclude.extend(excluded_nodes)
+
+        # Sensitivity-based mixed precision (extra_options["SmoothQuantExcludeWorst"]):
+        # the auto-alpha search already scored every smoothed node's BEST achievable QDQ
+        # loss (normalized, see Smoother.auto_alpha_losses); keep the worst offenders out
+        # of quantization entirely (they stay fp32). An int keeps that many nodes, a
+        # float in (0, 1) that fraction. Only searched nodes are rankable: with a fixed
+        # alpha or an all-pinned grid there are no losses and the option is a logged no-op.
+        exclude_worst = (getattr(quant_config, "extra_options", None) or {}).get("SmoothQuantExcludeWorst")
+        if exclude_worst:
+            losses = getattr(smoother, "auto_alpha_losses", None) or {}
+            if not losses:
+                logger.warning(
+                    "SmoothQuantExcludeWorst=%r is set but the alpha search recorded no "
+                    "per-node losses (alpha is a fixed float, or every op's alpha is "
+                    "pinned); excluding nothing." % (exclude_worst,)
+                )
+            else:
+                worst = core.select_worst_nodes(losses, exclude_worst)
+                logger.info(
+                    "SmoothQuantExcludeWorst=%r: keeping the %d most quantization-damaged "
+                    "node(s) of %d searched in fp32: %s"
+                    % (exclude_worst, len(worst), len(losses), ", ".join(worst))
+                )
+                quant_config.nodes_to_exclude.extend(worst)
 
         q_model = static_quantize_entry(
             pathlib.Path(tmp_dir).joinpath("smooth.onnx").as_posix(),

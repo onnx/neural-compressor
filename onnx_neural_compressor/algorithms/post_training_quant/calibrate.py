@@ -22,12 +22,15 @@
 import copy
 import logging
 import os
+import pickle
 import sys
+import time
 from importlib import util
 
 import numpy as np
 import onnx
 import onnxruntime
+import tqdm
 from packaging import version
 
 from onnx_neural_compressor import logger, onnx_model
@@ -54,6 +57,9 @@ class ONNXRTAugment:
         iterations=[],
         execution_provider="CPUExecutionProvider",
         reduce_range=False,
+        checkpoint_file=None,
+        checkpoint_interval_sec=1200,
+        dump_batch_size=0,
         **kwargs,
     ):
         """Initialization.
@@ -67,6 +73,24 @@ class ONNXRTAugment:
             iterations (list, optional): tensor of which iteration will be collected. Defaults to [].
             execution_provider (list, optional): execution provider for onnxruntime. Defaults to 'CPUExecutionProvider'.
             reduce_range (bool, optional): use 7 bit or not. Defaults to False.
+            checkpoint_file (str, optional): when set, the activation-calibration loop
+                periodically pickles its streaming per-tensor calibrator state to
+                <checkpoint_file>.partial and skips already-consumed samples on the next
+                run, so a run killed MID-calibration resumes instead of redoing every
+                forward. The caller keys the file by its configuration and removes the
+                partial once the final params are saved.
+            checkpoint_interval_sec (float, optional): minimum seconds between those
+                state dumps (0 dumps after every sample). Defaults to 1200 (20 minutes).
+            dump_batch_size (int, optional): when > 0, dump the calibrated activation
+                tensors in slices of this many per augmented forward pass instead of
+                exposing them all as graph outputs at once. ORT keeps every graph
+                output resident for the whole forward, so a single long-sequence
+                window can peak past GPU VRAM; slicing bounds the peak to one slice's
+                activations at the cost of re-forwarding the dataloader once per slice.
+                Each tensor is still calibrated over the same windows, so the per-tensor
+                range is identical to the single-pass result. Defaults to 0 (dump all at
+                once, the original behaviour). Ignored for the DequantizeLinear-augmented
+                / already-quantized inspection paths.
         """
         self.model_wrapper = (
             model_wrapper
@@ -89,16 +113,22 @@ class ONNXRTAugment:
         self.dynamically_quantized = False
         self.ort_version = version.Version(onnxruntime.__version__)
         self.reduce_range = reduce_range
+        self.checkpoint_file = checkpoint_file
+        self.checkpoint_interval_sec = checkpoint_interval_sec
+        self.dump_batch_size = dump_batch_size
 
-    def augment_graph(self):
+    def augment_graph(self, tensor_filter=None):
         """Augment_graph.
 
         Adds nodes to all quantization_candidates op type nodes in model and
         ensures their outputs are stored as part of the graph output.
 
         Args:
-            activation_only (bool, optional): whether to dump activation tensor only. Defaults to False.
-            weight_only (bool, optional): whether to dump weight_only. Defaults to False.
+            tensor_filter (set, optional): when given, only tensors in this set are
+                exposed as graph outputs (the rest are skipped). Lets the caller dump
+                the calibrated tensors in slices across several smaller augmented
+                graphs to bound ORT's peak memory. None (default) dumps every
+                calibrated tensor, the original behaviour.
         """
         self.dequantized_output.clear()
         onnx_version = version.Version(onnx.__version__)
@@ -154,6 +184,8 @@ class ONNXRTAugment:
         model_inputs = [i.name for i in model.graph.input]
         for tensor in tensors_to_dump:
             if tensor not in node_outputs and tensor not in model_inputs:
+                continue
+            if tensor_filter is not None and tensor not in tensor_filter:
                 continue
             if self.augment_nodes:
                 for augment_node_type in self.augment_nodes:
@@ -222,111 +254,239 @@ class ONNXRTAugment:
         Returns:
             dict: calib ranges
         """
-        # conduct inference session and get intermediate outputs
-        so = onnxruntime.SessionOptions()
-        so.graph_optimization_level = onnxruntime.GraphOptimizationLevel.ORT_DISABLE_ALL
-        if sys.version_info < (3, 11) and util.find_spec("onnxruntime_extensions"):
-            so.register_custom_ops_library(onnxruntime_extensions.get_library_path())
-
-        execution_provider = (
-            self.execution_provider
-            if self.execution_provider != "TensorrtExecutionProvider"
-            else "CUDAExecutionProvider"
+        # The augmented dump graph exposes every calibrated tensor as a graph OUTPUT,
+        # and ORT keeps every graph output resident for the whole forward, so one
+        # long-sequence window's activations all peak at once and can exceed GPU VRAM.
+        # When dump_batch_size > 0 the calibrated tensors are dumped in slices: each
+        # slice gets its own augment + forward pass (the dataloader is rewound between
+        # passes), so only one slice's outputs are retained at a time. Each tensor is
+        # still calibrated over the SAME windows, so its per-tensor range is identical
+        # to the single-pass result; dump_batch_size only trades extra forwards for a
+        # smaller peak. Batching needs plain-tensor outputs addressable by name, so it
+        # is off for the DequantizeLinear-augmented / already-quantized inspect paths.
+        batched = bool(
+            self.dump_batch_size
+            and self.dump_batch_size > 0
+            and not self.augment_nodes
+            and not self.already_quantized
         )
-        session = (
-            onnxruntime.InferenceSession(self.augmented_model.SerializeToString(), so, providers=[execution_provider])
-            if not self.model_wrapper.is_large_model
-            else onnxruntime.InferenceSession(
-                self.model_wrapper.model_path + "_augment.onnx", so, providers=[execution_provider]
-            )
-        )
-
-        len_inputs = len(session.get_inputs())
-        inputs_names = [session.get_inputs()[i].name for i in range(len_inputs)]
-        len_outputs = len(session.get_outputs())
-        outputs_names = [session.get_outputs()[i].name for i in range(len_outputs)]
-
-        node_output_names = [
-            output.name if output.name not in self.dequantized_output else self.dequantized_output[output.name]
-            for output in session.get_outputs()
-        ]
-        augment_model_wrapper = (
-            onnx_model.ONNXModel(self.augmented_model, load_external_data=False)
-            if not self.model_wrapper.is_large_model
-            else onnx_model.ONNXModel(self.model_wrapper.model_path + "_augment.onnx", load_external_data=False)
-        )
-        input_name_to_nodes = augment_model_wrapper.input_name_to_nodes()
-        output_name_to_node = augment_model_wrapper.output_name_to_node()
-        name_to_node = {}
-        for data_name in node_output_names:
-            node = None
-            if data_name in output_name_to_node:
-                node = output_name_to_node[data_name]
-            elif data_name in input_name_to_nodes:
-                node = input_name_to_nodes[data_name][0]
-            assert node, "{} is neither an input nor an output of nodes in augmented model.".format(data_name)
-            name_to_node[data_name] = node.name
+        if batched:
+            # Full augment once, only to enumerate the calibrated tensor set (no session
+            # is built here, so no GPU cost); then re-augment per slice. Reuses
+            # augment_graph rather than duplicating its tensor-selection logic. Every
+            # calibrated tensor is exposed as a graph output, so the augmented outputs ARE
+            # that set (this includes the model's own outputs, which a per-slice augment
+            # cannot drop and which _collect_data therefore calibrates only in their
+            # owning slice, see slice_owned below).
+            self.augment_graph()
+            dump_names = sorted(o.name for o in self.augmented_model.graph.output)
+            batches = [
+                dump_names[i : i + self.dump_batch_size]
+                for i in range(0, len(dump_names), self.dump_batch_size)
+            ] or [[]]
+        else:
+            batches = [None]
 
         activation_tensors_calib_range = {}
-        intermediate_tensor = {}
         name_to_calibrator = {}
-        ort_inputs_for_next_split_model = []
 
-        def _collect_data(inputs):
-            for output_idx, output in enumerate(session.run(None, inputs)):
-                if q_config is not None and output.size != 0:
-                    node_name = name_to_node[node_output_names[output_idx]]
-                    if node_output_names[output_idx] not in name_to_calibrator:
-                        calib_method = (
-                            q_config[node_name]["calibrate_method"] if q_config and node_name in q_config else "MinMax"
-                        )
-                        assert calib_method in calibrator.CALIBRATOR, "Calibration method {} is not registered.".format(
-                            calib_method
-                        )
-                        _calibrator = calibrator.CALIBRATOR[calib_method]()
-                    else:
-                        _calibrator = name_to_calibrator[node_output_names[output_idx]]
-
-                    # currently, the calibration range for each iteration is collected if
-                    # the calibration method is minmax, otherwise the tensor data is collected.
-                    # TODO: for entropy and percentile method, need to support range collection
-                    # per iteration in the future.
-                    if _calibrator.method_name == "MinMax":
-                        _calibrator.collect(output)
-                        activation_tensors_calib_range[node_output_names[output_idx]] = [list(_calibrator.calib_range)]
-                        name_to_calibrator[node_output_names[output_idx]] = _calibrator
-                    else:
-                        intermediate_tensor.setdefault((node_output_names[output_idx], node_name), []).append(output)
-                elif q_config is None:
-                    activation_tensors_calib_range.setdefault(node_output_names[output_idx], []).append(output)
-
-        idx = 0
-        while True:
-            inputs = self.dataloader.get_next()
-            if not inputs:
-                break
-            if self.iterations != []:
-                if idx > max(self.iterations):
-                    break
-                if idx in self.iterations:
-                    _collect_data(inputs)
+        # Mid-pass checkpoint: every calibration method streams per sample (running
+        # MinMax range or incremental histogram), so the loop state is a small pickle.
+        # The restore point is (slice index, samples already folded into that slice);
+        # all earlier slices are complete. A pre-batching checkpoint has no "batch" key
+        # and reads as slice 0 (the single-pass case is exactly slice 0 of 1).
+        partial_path = str(self.checkpoint_file) + ".partial" if self.checkpoint_file else None
+        # The (slice, samples) restore point is meaningful ONLY against the partition that
+        # produced it: a changed dump_batch_size (or calibrated tensor set) re-slices the
+        # dump, so the same slice index then spans different tensors and resuming would
+        # skip the wrong ones, silently leaving tensors uncalibrated. Key the partial by
+        # its partition and discard one that does not match (this also drops pre-partition
+        # checkpoints, which carry no signature) rather than resume it into wrong ranges.
+        partition_sig = [None if b is None else list(b) for b in batches]
+        restored_batch, restored_collected = 0, 0
+        if partial_path and os.path.exists(partial_path):
+            discard = None
+            try:
+                with open(partial_path, "rb") as f:
+                    partial = pickle.load(f)
+                if partial.get("partition") != partition_sig:
+                    discard = ("dumped for a different slice partition: dump_batch_size or "
+                               "the calibrated tensor set changed")
+                else:
+                    restored_batch = int(partial.get("batch", 0))
+                    restored_collected = int(partial["collected"])
+                    name_to_calibrator = partial["name_to_calibrator"]
+                    activation_tensors_calib_range = partial["activation_tensors_calib_range"]
+            except Exception as e:
+                discard = "unreadable ({})".format(e)
+            if discard is None:
+                logger.info(
+                    "Resuming activation calibration from {} (slice {}, {} samples already collected)".format(
+                        partial_path, restored_batch, restored_collected
+                    )
+                )
             else:
-                _collect_data(inputs)
-            idx += 1
+                logger.warning("Discarding stale calibration checkpoint {} ({})".format(partial_path, discard))
+                restored_batch, restored_collected = 0, 0
+                name_to_calibrator = {}
+                activation_tensors_calib_range = {}
 
-        # for entropy and percentile method, collect calibration range after all tensors are collected.
-        merged_dict = intermediate_tensor
-        for (output_name, node_name), datas in merged_dict.items():
-            if any([data is None for data in datas]):
+        state = {"batch": 0, "collected": 0, "last_flush": time.time()}
+
+        def _flush_partial():
+            tmp_path = partial_path + ".tmp"
+            with open(tmp_path, "wb") as f:
+                pickle.dump(
+                    {
+                        "partition": partition_sig,
+                        "batch": state["batch"],
+                        "collected": state["collected"],
+                        "name_to_calibrator": name_to_calibrator,
+                        "activation_tensors_calib_range": activation_tensors_calib_range,
+                    },
+                    f,
+                )
+            os.replace(tmp_path, partial_path)
+            state["last_flush"] = time.time()
+
+        total_iters = (max(self.iterations) + 1) if self.iterations else None
+        for batch_idx, batch in enumerate(batches):
+            if batch_idx < restored_batch:
+                # this whole slice's contribution is already inside the restored state
                 continue
-            if any([data.dtype in [bool] for data in datas]):  # output type of some ops is bool, skip
+            # (re)augment for this slice; the unbatched path (batch is None) augments
+            # every calibrated tensor exactly once, reproducing the original behaviour.
+            self.augment_graph(tensor_filter=set(batch) if batch is not None else None)
+            # The model's own graph outputs stay exposed in every slice's session (a
+            # per-slice augment cannot remove a model output), so restrict calibration to
+            # the tensors this slice owns; the rest are dumped in their own slice. None
+            # (unbatched) calibrates every session output, as before.
+            slice_owned = set(batch) if batch is not None else None
+
+            # conduct inference session and get intermediate outputs
+            so = onnxruntime.SessionOptions()
+            so.graph_optimization_level = onnxruntime.GraphOptimizationLevel.ORT_DISABLE_ALL
+            if sys.version_info < (3, 11) and util.find_spec("onnxruntime_extensions"):
+                so.register_custom_ops_library(onnxruntime_extensions.get_library_path())
+            execution_provider = (
+                self.execution_provider
+                if self.execution_provider != "TensorrtExecutionProvider"
+                else "CUDAExecutionProvider"
+            )
+            providers = quant_utils.conservative_session_resources(so, [execution_provider])
+            session = (
+                onnxruntime.InferenceSession(self.augmented_model.SerializeToString(), so, providers=providers)
+                if not self.model_wrapper.is_large_model
+                else onnxruntime.InferenceSession(
+                    self.model_wrapper.model_path + "_augment.onnx", so, providers=providers
+                )
+            )
+
+            node_output_names = [
+                output.name if output.name not in self.dequantized_output else self.dequantized_output[output.name]
+                for output in session.get_outputs()
+            ]
+            augment_model_wrapper = (
+                onnx_model.ONNXModel(self.augmented_model, load_external_data=False)
+                if not self.model_wrapper.is_large_model
+                else onnx_model.ONNXModel(self.model_wrapper.model_path + "_augment.onnx", load_external_data=False)
+            )
+            input_name_to_nodes = augment_model_wrapper.input_name_to_nodes()
+            output_name_to_node = augment_model_wrapper.output_name_to_node()
+            name_to_node = {}
+            for data_name in node_output_names:
+                node = None
+                if data_name in output_name_to_node:
+                    node = output_name_to_node[data_name]
+                elif data_name in input_name_to_nodes:
+                    node = input_name_to_nodes[data_name][0]
+                assert node, "{} is neither an input nor an output of nodes in augmented model.".format(data_name)
+                name_to_node[data_name] = node.name
+
+            def _collect_data(inputs):
+                for output_idx, output in enumerate(session.run(None, inputs)):
+                    if slice_owned is not None and node_output_names[output_idx] not in slice_owned:
+                        continue  # belongs to another slice; calibrated there, not here
+                    if q_config is not None and output.size != 0:
+                        node_name = name_to_node[node_output_names[output_idx]]
+                        if node_output_names[output_idx] not in name_to_calibrator:
+                            calib_method = (
+                                q_config[node_name]["calibrate_method"]
+                                if q_config and node_name in q_config
+                                else "MinMax"
+                            )
+                            assert (
+                                calib_method in calibrator.CALIBRATOR
+                            ), "Calibration method {} is not registered.".format(calib_method)
+                            _calibrator = calibrator.CALIBRATOR[calib_method]()
+                        else:
+                            _calibrator = name_to_calibrator[node_output_names[output_idx]]
+
+                        # Every calibration method collects per iteration: MinMax keeps a
+                        # running range, Entropy/Percentile fold each sample into their
+                        # incremental histogram (HistogramCollector.combine_histogram).
+                        # Upstream instead buffered EVERY dumped tensor of EVERY sample for
+                        # Entropy/Percentile until the end of the loop (an explicit upstream
+                        # TODO), which made RAM grow linearly with the number of calibration
+                        # samples and OOMed large dump sets.
+                        if _calibrator.method_name == "MinMax":
+                            _calibrator.collect(output)
+                            activation_tensors_calib_range[node_output_names[output_idx]] = [
+                                list(_calibrator.calib_range)
+                            ]
+                            name_to_calibrator[node_output_names[output_idx]] = _calibrator
+                        else:
+                            if output.dtype in [bool]:  # output type of some ops is bool, skip
+                                continue
+                            _calibrator.collect(output)
+                            name_to_calibrator[node_output_names[output_idx]] = _calibrator
+                    elif q_config is None:
+                        activation_tensors_calib_range.setdefault(node_output_names[output_idx], []).append(output)
+
+            state["batch"] = batch_idx
+            state["collected"] = 0
+            skip_in_batch = restored_collected if batch_idx == restored_batch else 0
+
+            def _consume(inputs):
+                if state["collected"] < skip_in_batch:
+                    # this sample's contribution is already inside the restored state
+                    state["collected"] += 1
+                    return
+                _collect_data(inputs)
+                state["collected"] += 1
+                if partial_path and time.time() - state["last_flush"] >= self.checkpoint_interval_sec:
+                    _flush_partial()
+
+            # This per-sample forward pass is the slow, otherwise silent static-int8
+            # calibration phase; show its progress (one bar per slice when batched).
+            desc = "static int8 calibration"
+            if batched:
+                desc += " (slice {}/{})".format(batch_idx + 1, len(batches))
+            pbar = tqdm.tqdm(total=total_iters, desc=desc, unit="sample", leave=False)
+            self.dataloader.rewind()
+            idx = 0
+            while True:
+                inputs = self.dataloader.get_next()
+                if not inputs:
+                    break
+                if self.iterations != []:
+                    if idx > max(self.iterations):
+                        break
+                    if idx in self.iterations:
+                        _consume(inputs)
+                else:
+                    _consume(inputs)
+                idx += 1
+                pbar.update(1)
+            pbar.close()
+
+        # for entropy and percentile method, every sample is already merged into the
+        # per-tensor histogram; just read out the final calibration ranges.
+        for output_name, _calibrator in name_to_calibrator.items():
+            if _calibrator.method_name == "MinMax":
                 continue
-            calib_method = q_config[node_name]["calibrate_method"] if q_config and node_name in q_config else 0
-            _calibrator = calibrator.CALIBRATOR[calib_method]()
-            _calibrator.collect(datas)
             activation_tensors_calib_range.setdefault(output_name, []).append(list(_calibrator.calib_range))
             _calibrator.clear()
-            del _calibrator
 
         return activation_tensors_calib_range
 
@@ -509,11 +669,13 @@ class ONNXRTAugment:
     def dump_minmax(self, q_config):
         """Get calib ranges of tensors."""
         # pipeline of getting calib ranges of tensors during calibration:
-        # 1. augment_graph(): insert activation tensors to model output
-        # 2. get_intermediate_outputs():
-        #   2.1 get_activation_tensors_calib_range(): get calib ranges of activation tensors using the augment graph
-        #   2.2 get_weight_tensors_calib_range(): get calib ranges of weight tensors
-        self.augment_graph()
+        # 1. get_intermediate_outputs():
+        #   1.1 get_activation_tensors_calib_range(): augment the graph (all calibrated
+        #       tensors at once, or one slice at a time when dump_batch_size > 0) and
+        #       read each tensor's calib range off the augmented dump session(s)
+        #   1.2 get_weight_tensors_calib_range(): get calib ranges of weight tensors
+        # augment_graph() is owned by get_activation_tensors_calib_range now, because the
+        # batched path re-augments per slice; calling it here too would double-augment.
         node_output_names, output_dicts = self.get_intermediate_outputs(q_config)
         return self._map_calibration(node_output_names, output_dicts)
 

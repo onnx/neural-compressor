@@ -9,3 +9,4 @@ pydantic
 transformers
 prettytable
 scipy
+tqdm
