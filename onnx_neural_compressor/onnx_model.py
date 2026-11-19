@@ -364,7 +364,7 @@ class ONNXModel:
         new_tensor = (
             onnx.helper.make_tensor(tensor, data_type, dims, array.flatten().tolist())
             if not raw
-            else onnx.helper.make_tensor(tensor, data_type, dims, array.tostring(), raw=raw)
+            else onnx.helper.make_tensor(tensor, data_type, dims, array.tobytes(), raw=raw)
         )
         self.add_initializer(new_tensor)
 

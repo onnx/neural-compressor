@@ -1,3 +1,1 @@
-optimum
-pytest
-torch < 2.5.0
+-e .[test]

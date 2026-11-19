@@ -17,16 +17,11 @@
 
 import re
 import struct
-import sys
-from importlib import util
 
 import numpy as np
 from packaging import version
 
 from onnx_neural_compressor import constants, utility
-
-if sys.version_info < (3, 11) and util.find_spec("onnxruntime_extensions"):  # pragma: no cover
-    import onnxruntime_extensions
 
 onnx = utility.LazyImport("onnx")
 ort = utility.LazyImport("onnxruntime")
@@ -636,8 +631,6 @@ def prepare_inputs(model, data_reader, providers):
     """
 
     so = ort.SessionOptions()
-    if sys.version_info < (3, 11) and util.find_spec("onnxruntime_extensions"):  # pragma: no cover
-        so.register_custom_ops_library(onnxruntime_extensions.get_library_path())
     if model.is_large_model:
         onnx.save_model(
             model.model,
@@ -698,9 +691,9 @@ def dump_woq_stats(model, quantize_config, white_list=["MatMul"]):
 
         dtype = "FP32"
         for inp in node.input:
-            if re.match("^.*_Q\d*G\d*", inp):
-                Q_position = re.search("_Q\d*", inp)
-                full_position = re.search("_Q\d*G\d*", inp)
+            if re.match(r"^.*_Q\d*G\d*", inp):
+                Q_position = re.search(r"_Q\d*", inp)
+                full_position = re.search(r"_Q\d*G\d*", inp)
                 dtype = "A32W{}G{}".format(
                     inp[Q_position.start() + 2 : Q_position.end()],
                     inp[Q_position.end() + 1 : full_position.end()],
