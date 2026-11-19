@@ -1,3 +1,55 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "onnx_neural_compressor"
+dynamic = ["version"]
+description = "Model compression techniques for ONNX models"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+authors = [
+    { name = "Intel AIPT Team" },
+]
+keywords = ["quantization", "ONNX"]
+classifiers = [
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "onnx",
+    "onnxruntime",
+    "psutil",
+    "prettytable",
+    "scipy",
+    "numpy",
+    "py-cpuinfo",
+    "pydantic",
+    "transformers<5",
+]
+
+[project.optional-dependencies]
+test = [
+    "optimum[onnxruntime]<2",
+    "pytest",
+    "torch<2.5.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/onnx/neural-compressor"
+Repository = "https://github.com/onnx/neural-compressor"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["onnx_neural_compressor*"]
+
 [tool.isort]
 profile = "black"
 line_length = 120
@@ -48,8 +100,8 @@ exclude = [
 line-length = 120
 indent-width = 4
 
-# Assume Python 3.8
-target-version = "py38"
+# Assume Python 3.11
+target-version = "py311"
 
 [tool.ruff.lint]
 # Enable Pyflakes (`F`) and a subset of the pycodestyle (`E`)  codes by default.

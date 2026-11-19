@@ -1,11 +1,1 @@
-# onnxruntime doesn't support numpy>=2.0.0. The restriction will be removed once they fix it.
-numpy<2.0.0
-onnx
-onnxruntime
-onnxruntime-extensions
-psutil
-py-cpuinfo
-pydantic
-transformers
-prettytable
-scipy
+-e .

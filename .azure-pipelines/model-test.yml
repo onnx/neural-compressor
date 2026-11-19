@@ -87,9 +87,9 @@ stages:
               patterns: "**/result.json"
               path: $(OUT_SCRIPT_PATH)
           - task: UsePythonVersion@0
-            displayName: "Use Python 3.10"
+            displayName: "Use Python 3.12"
             inputs:
-              versionSpec: "3.10"
+              versionSpec: "3.12"
           - script: |
               cd ${OUT_SCRIPT_PATH}
               mkdir generated last_generated

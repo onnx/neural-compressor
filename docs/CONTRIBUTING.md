@@ -29,6 +29,15 @@ Before sending your pull requests, follow the information below:
 - Add unit tests in [Unit Tests](https://github.com/onnx/neural-compressor/tree/main/test) to cover the code you would like to contribute.
 - Neural Compressor has adopted the [Developer Certificate of Origin](https://en.wikipedia.org/wiki/Developer_Certificate_of_Origin), you must agree to the terms of Developer Certificate of Origin by signing off each of your commits with `-s`, e.g. `git commit -s -m 'This is my commit message'`.
 
+## Running Tests Locally
+
+Install the package with its test dependencies, then run the test suite:
+
+```shell
+python -m pip install -e ".[test]"
+python -m pytest -q test
+```
+
 ## Pull Request Template
 
 See [PR template](/.github/pull_request_template.md)
