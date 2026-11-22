@@ -337,6 +337,7 @@ def make_weight_only_dequant_node(
 
     q_weight = q_weight.reshape((weight_shape[-1], -1)).T
     if num_bits == 4:
+        q_weight = q_weight.astype(np.int16)
         q_weight = ((q_weight[:, ::2] & 0xF | q_weight[:, 1::2] << 4) & 0xFF).astype("uint8")
 
     qtype = ONNX_TENSOR_TYPE.get(dtype + str(num_bits), None)
@@ -370,6 +371,7 @@ def make_weight_only_dequant_node(
     # build zero_point tensor
     zero_point = zero_point.reshape((weight_shape[-1], -1)).T
     if num_bits == 4:
+        zero_point = zero_point.astype(np.int16)
         zero_point = ((zero_point[:, ::2] & 0xF | zero_point[:, 1::2] << 4) & 0xFF).astype("uint8")
 
     zp_tensor = onnx.helper.make_tensor(
@@ -435,7 +437,7 @@ def make_matmul_weight_only_node(
         op_type = "MatMulNBits"
 
         # pack quantized weight
-        q_weight_pairs = q_weight[:, ::2] | q_weight[:, 1::2] << 4
+        q_weight_pairs = (q_weight[:, ::2].astype(np.int16) & 0xF) | ((q_weight[:, 1::2].astype(np.int16) & 0xF) << 4)
         packed[:, :] = q_weight_pairs[:, :blob_size]
         packed = np.reshape(packed, (-1, k_blocks, blob_size))
 
@@ -456,15 +458,12 @@ def make_matmul_weight_only_node(
             if num_bits > 4:
                 packed_zp = np.reshape(zero_point, (1, -1)).astype("uint8")
             else:
-                packed_zp = np.full((zero_point.shape[0] + 1) // 2, 136, dtype="uint8")
-                # create an index array
-                idx = np.arange(zero_point.shape[0] // k_blocks * k_blocks).reshape(-1)
-                # separate odd and even indices
-                even_idx = idx[::2]
-                odd_idx = idx[1::2]
-                # vectorized operation for even and odd indices
-                packed_zp[even_idx // 2] = (packed_zp[even_idx // 2] & 0xF0) | zero_point[even_idx].ravel()
-                packed_zp[odd_idx // 2] = (packed_zp[odd_idx // 2] & 0x0F) | (zero_point[odd_idx].ravel() << 4)
+                zero_point = np.asarray(zero_point).reshape(-1, k_blocks).astype(np.int16)
+                packed_zp = np.full((zero_point.shape[0], (k_blocks + 1) // 2), 136, dtype="uint8")
+                even_zp = (zero_point[:, ::2] & 0xF).astype("uint8")
+                odd_zp = (zero_point[:, 1::2] & 0xF).astype("uint8")
+                packed_zp[:, : even_zp.shape[1]] = (packed_zp[:, : even_zp.shape[1]] & 0xF0) | even_zp
+                packed_zp[:, : odd_zp.shape[1]] = (packed_zp[:, : odd_zp.shape[1]] & 0x0F) | (odd_zp << 4)
 
             zp_tensor = onnx.helper.make_tensor(
                 name=node.input[1] + "_zp", data_type=2, dims=packed_zp.shape, vals=packed_zp.tobytes(), raw=True

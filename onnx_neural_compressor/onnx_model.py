@@ -17,10 +17,10 @@ import collections
 import copy
 import os
 import pathlib
-import sys
 
 import onnx
 import transformers
+from google.protobuf.message import EncodeError
 
 from onnx_neural_compressor import constants, logger, utility
 
@@ -116,16 +116,12 @@ class ONNXModel:
             if init.HasField("data_location") and init.data_location == onnx.TensorProto.EXTERNAL:
                 self._is_large_model = True
                 return
-            # if raise error of initializer size > 2GB, return True
+            # Measure size without serializing large initializer data.
             try:
-                init_bytes = init.SerializeToString()
-                init_size += sys.getsizeof(init_bytes)
-            except Exception as e:
-                if "exceeds maximum protobuf size of 2GB" in str(e):
-                    self._is_large_model = True
-                    return
-                else:  # pragma: no cover
-                    raise e
+                init_size += init.ByteSize()
+            except EncodeError:
+                self._is_large_model = True
+                return
             if init_size > constants.MAXIMUM_PROTOBUF:
                 self._is_large_model = True
                 return
@@ -239,6 +235,10 @@ class ONNXModel:
             os.mkdir(os.path.split(root)[0])
         if self.is_large_model:  # pragma: no cover
             onnx.external_data_helper.load_external_data_for_model(self.model, os.path.split(self._model_path)[0])
+        external_data_path = os.path.join(os.path.dirname(root), os.path.basename(root) + "_data")
+        if os.path.exists(external_data_path):
+            os.remove(external_data_path)
+        if self.is_large_model:  # pragma: no cover
             onnx.save_model(
                 self.model,
                 root,

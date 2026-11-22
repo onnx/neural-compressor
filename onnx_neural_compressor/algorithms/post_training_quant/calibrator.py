@@ -309,15 +309,20 @@ class HistogramCollector:
             assert datas.size > 0, "collected intermediate data size" "should not be 0, please check augmented_model"
             self._collect_value(datas)
 
+    @staticmethod
+    def _histogram_for_range(data, num_bins, threshold):
+        edges = np.linspace(-threshold, threshold, num_bins + 1, dtype=np.float64)
+        return np.histogram(data, bins=edges)
+
     def _collect_value(self, data):
         """Collect value."""
         data = np.asarray(data)
         min_range = np.min(data)
         max_range = np.max(data)
 
-        th = max(abs(min_range), abs(max_range))
+        th = max(float(abs(min_range)), float(abs(max_range)), np.finfo(np.float64).eps * self._num_bins)
         if self._histogram is None:
-            hist, hist_edges = np.histogram(data, self._num_bins, range=(-th, th))
+            hist, hist_edges = self._histogram_for_range(data, self._num_bins, th)
             self._histogram = (hist, hist_edges, min_range, max_range, th)
         else:
             self._histogram = self.combine_histogram(self._histogram, data, min_range, max_range, th)
@@ -327,7 +332,7 @@ class HistogramCollector:
         (old_hist, old_hist_edges, old_min, old_max, old_th) = old_hist
 
         if new_th <= old_th:
-            hist, _ = np.histogram(data_arr, bins=len(old_hist), range=(-old_th, old_th))
+            hist, _ = self._histogram_for_range(data_arr, len(old_hist), old_th)
             return (
                 old_hist + hist,
                 old_hist_edges,
@@ -338,7 +343,7 @@ class HistogramCollector:
         else:
             # Need to generate new histogram with new_th
             if old_th == 0:
-                hist, hist_edges = np.histogram(data_arr, len(old_hist), range=(-new_th, new_th))
+                hist, hist_edges = self._histogram_for_range(data_arr, len(old_hist), new_th)
                 hist += old_hist
             else:
                 old_num_bins = len(old_hist)
@@ -346,7 +351,7 @@ class HistogramCollector:
                 half_increased_bins = int((new_th - old_th) // old_step + 1)
                 new_num_bins = half_increased_bins * 2 + old_num_bins
                 new_th = half_increased_bins * old_step + old_th
-                hist, hist_edges = np.histogram(data_arr, bins=new_num_bins, range=(-new_th, new_th))
+                hist, hist_edges = self._histogram_for_range(data_arr, new_num_bins, new_th)
                 hist[half_increased_bins : new_num_bins - half_increased_bins] += old_hist
             return (
                 hist,
