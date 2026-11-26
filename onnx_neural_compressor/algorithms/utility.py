@@ -50,7 +50,7 @@ def attribute_to_kwarg(attribute):
         value = attribute_mapping[attribute.type]
     else:  # pragma: no cover
         raise ValueError(
-            "attribute {} has no type specified " "or unsupported type {}.".format(attribute.name, attribute.type)
+            "attribute {} has no type specified or unsupported type {}.".format(attribute.name, attribute.type)
         )
     return {attribute.name: value}
 

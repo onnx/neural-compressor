@@ -64,7 +64,6 @@ class GatherOperator(base_op.Operator):
         children = self.quantizer.model.get_children(node)
 
         if any([i.op_type == "DequantizeLinear" for i in parents]):
-
             inputs = []
             inputs.append(parents[0].input[0])
             inputs.append(node.input[1])

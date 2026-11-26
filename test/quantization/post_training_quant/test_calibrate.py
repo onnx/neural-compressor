@@ -18,7 +18,6 @@ def generate_input_initializer(tensor_shape, tensor_dtype, input_name):
 
 
 class DataReader(data_reader.CalibrationDataReader):
-
     def __init__(self):
         self.data_list = []
         self.data_list.append(
@@ -54,7 +53,6 @@ class DataReader(data_reader.CalibrationDataReader):
 
 
 class DataReader2(data_reader.CalibrationDataReader):
-
     def __init__(self):
         self.data_list = []
         self.data_list.append({"A": np.random.random([1, 1, 5, 5]).astype(np.float32)})

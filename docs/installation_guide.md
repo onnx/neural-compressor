@@ -20,12 +20,12 @@ You can install Neural Compressor from binary or source.
 
 The following prerequisites and requirements must be satisfied for a successful installation:
 
-- Python versions: 3.11, 3.12, 3.13, or 3.14
+- Python version: 3.11 through 3.14
 
-Package metadata restricts this source tree and the next release to Python
-`>=3.11,<3.15`. See the [compatibility policy](Compatibility.md) for dependency
-minimums and the [release notes](ReleaseNotes.md) for migration details. The
-published v1.0 package has different requirements.
+See the [compatibility policy](Compatibility.md) for dependency minimums and
+platform coverage, and the [release notes](ReleaseNotes.md) for migration details.
+These requirements describe the current source tree and next release; published
+v1.0 has different requirements.
 
 ### Install from Binary
   ```Shell
@@ -53,6 +53,6 @@ published v1.0 package has different requirements.
 ### Validated Software Environment
 
 * OS versions: Ubuntu 24.04, Windows Server 2022, macOS 15 (CPU artifact tests)
-* Python versions: 3.11, 3.12, 3.13, or 3.14
+* Python version: 3.11 through 3.14
 * ONNX Runtime minimum: 1.20.1 on Python 3.11/3.12, 1.24.2 on Python 3.13/3.14
-* Minimum and current dependency sets: see the [compatibility matrix](Compatibility.md)
+* Current compatible ONNX Runtime versions are also tested; see the [compatibility matrix](Compatibility.md)

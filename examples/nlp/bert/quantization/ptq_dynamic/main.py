@@ -86,8 +86,10 @@ class ONNXRTBertDataset:
             "bert",
             "mobilebert",
             "roberta",
-        ], "Unsupported \
+        ], (
+            "Unsupported \
             model type"
+        )
         self.dynamic_length = dynamic_length
         self.model_type = model_type
         self.max_seq_length = max_seq_length
@@ -429,7 +431,7 @@ if __name__ == "__main__":
                 model = pathlib.Path(tmp_dir).joinpath("opt.onnx").as_posix()
             except Exception as e:
                 logger.warning("Optimized model is invalid: {}. ".format(e))
-                logger.warning("Model optimizer will be skipped. " "Try to upgrade onnxruntime to avoid this error")
+                logger.warning("Model optimizer will be skipped. Try to upgrade onnxruntime to avoid this error")
                 model = args.model_path
 
             custom_tune_config = tuning.TuningConfig(config_set=config.DynamicQuantConfig.get_config_set_for_tuning())

@@ -31,7 +31,6 @@ from typing import Any, Callable, Dict, Generator, Iterator, List, Optional, Siz
 
 
 class EvaluationFuncWrapper:
-
     def __init__(self, eval_fn: Callable, eval_args=None):
         """Evaluation function wrapper.
 
@@ -140,7 +139,6 @@ evaluator = Evaluator()
 
 
 class ConfigSet:
-
     def __init__(self, config_list: List[config.BaseConfig]) -> None:
         self.config_list = config_list
 
@@ -198,7 +196,6 @@ class ConfigSet:
 
 
 class Sampler:
-
     def __init__(self, config_source: Optional[ConfigSet]) -> None:
         pass
 
@@ -230,7 +227,6 @@ default_sampler = SequentialSampler
 
 
 class ConfigLoader:
-
     def __init__(
         self, config_set: ConfigSet, sampler: Sampler = default_sampler, skip_verified_config: bool = True
     ) -> None:
@@ -304,7 +300,6 @@ class TuningConfig:
 
 
 class _TrialRecord:
-
     @staticmethod
     def _generate_unique_id():
         unique_id = str(uuid.uuid4())
@@ -319,7 +314,6 @@ class _TrialRecord:
 
 
 class TuningMonitor:
-
     def __init__(self, tuning_config: TuningConfig) -> None:
         self.tuning_config = tuning_config
         self.trial_cnt = 0
@@ -448,9 +442,9 @@ def _quantize(
         quant_config = config.ComposableConfig.from_dict(quant_config, config_registry=registered_configs)
         logger.info(f"Parsed a config dict to construct the quantization config: {quant_config}.")
     else:
-        assert isinstance(
-            quant_config, config.BaseConfig
-        ), f"Please pass a dict or config instance as the quantization configuration, but got {type(quant_config)}."
+        assert isinstance(quant_config, config.BaseConfig), (
+            f"Please pass a dict or config instance as the quantization configuration, but got {type(quant_config)}."
+        )
     logger.debug(f"Quantize model with config: \n {quant_config} \n")
 
     # select quantization algo according to config

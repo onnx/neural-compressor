@@ -19,7 +19,7 @@ from onnx_neural_compressor.algorithms.post_training_quant.operators import base
 
 
 @base_op.op_registry(
-    op_types="ReduceMean, ReduceLogSum, ReduceLogSumExp, " "ReduceL1, ReduceL2, ReduceProd, ReduceSum, ReduceSumSquare",
+    op_types="ReduceMean, ReduceLogSum, ReduceLogSumExp, ReduceL1, ReduceL2, ReduceProd, ReduceSum, ReduceSumSquare",
     mode=[constants.STATIC_QUANT],
 )
 class ReduceOperator(base_op.Operator):

@@ -11,9 +11,8 @@ from optimum.exporters.onnx import main_export
 from packaging import version
 
 from onnx_neural_compressor import logger
-from onnx_neural_compressor.quantization import QuantFormat
+from onnx_neural_compressor.quantization import QuantFormat, config, matmul_4bits_quantizer, matmul_nbits_quantizer
 from onnx_neural_compressor.quantization import algorithm_entry as algos
-from onnx_neural_compressor.quantization import config, matmul_4bits_quantizer, matmul_nbits_quantizer
 
 
 def find_onnx_file(folder_path):
@@ -44,7 +43,6 @@ def build_matmul_model():
 
 
 class TestRTNQuant(unittest.TestCase):
-
     @classmethod
     def setUpClass(self):
         main_export(
@@ -93,7 +91,6 @@ class TestRTNQuant(unittest.TestCase):
 
 
 class TestRTNQuantWithInternalAPI(TestRTNQuant):
-
     def test_rtn_params_combination(self):
 
         # some tests were skipped to accelerate the CI
@@ -184,7 +181,6 @@ class TestRTNQuantWithInternalAPI(TestRTNQuant):
 
 
 class TestRTNQuantWithORTLikeAPI(TestRTNQuant):
-
     def test_rtn_config_4bits(self):
         algo_config = matmul_4bits_quantizer.RTNWeightOnlyQuantConfig()
 

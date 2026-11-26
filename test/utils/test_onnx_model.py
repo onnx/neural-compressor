@@ -60,7 +60,6 @@ def build_matmul_model():
 
 
 class TestONNXModel(unittest.TestCase):
-
     @classmethod
     def setUpClass(self):
         main_export(
@@ -76,12 +75,7 @@ class TestONNXModel(unittest.TestCase):
             os.makedirs(folder_path)
         with torch.no_grad():
             torch.onnx.export(
-                model,
-                (input,),
-                os.path.join(folder_path, "model.onnx"),
-                do_constant_folding=True,
-                opset_version=13,
-                dynamo=False,  # Keep the same tracing fixture across PyTorch 2.4 and 2.9.
+                model, (input,), os.path.join(folder_path, "model.onnx"), do_constant_folding=True, opset_version=13
             )
         self.large_model = os.path.join(folder_path, "model.onnx")
 

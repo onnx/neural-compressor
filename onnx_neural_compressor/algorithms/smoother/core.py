@@ -475,7 +475,6 @@ class Smoother:
                     self.recover()
         logger.info("auto tuning alpha done")
         if self.model.is_large_model:
-
             onnx.external_data_helper.load_external_data_for_model(
                 self.model.model, os.path.split(self.model.model_path)[0]
             )

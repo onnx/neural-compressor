@@ -25,7 +25,6 @@ GPTQWeightOnlyQuantConfig = matmul_nbits_quantizer.GPTQWeightOnlyQuantConfig
 
 
 class MatMul4BitsQuantizer(matmul_nbits_quantizer.MatMulNBitsQuantizer):
-
     def __init__(
         self,
         model: Union[onnx.ModelProto, str],

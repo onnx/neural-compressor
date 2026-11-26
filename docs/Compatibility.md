@@ -6,8 +6,9 @@ v1.0 has its own [release notes](https://github.com/onnx/neural-compressor/relea
 ## Python and platforms
 
 Supported interpreters are **CPython 3.11, 3.12, 3.13, and 3.14** (standard builds).
-Package metadata enforces `>=3.11,<3.15`. Python 3.10 is no longer supported. Python 3.15 and later need
-validation before the supported range is extended.
+Package metadata requires `>=3.11`. Python 3.10 is no longer supported. Later
+Python versions are not blocked by an upper bound, but need validation before
+they are included in the supported range.
 
 Release CI installs both the wheel and source archive in clean environments on
 Ubuntu 24.04 (x86-64), Windows Server 2022 (x86-64), and macOS 15 (ARM64), on all four
@@ -35,8 +36,8 @@ The declared lower bounds are tested together as a minimum dependency set:
 Python-specific dependency markers select a baseline with binary wheels for each
 interpreter. Python 3.11/3.12 minimum jobs retain NumPy 1.26.4; Python 3.13/3.14 use
 NumPy 2.3.5 or newer. Current dependency jobs also cover NumPy 2
-where selected by the resolver. Both sets run the full unit suite on Linux and
-the installed-artifact checks on all three platforms and all four Python versions.
+where selected by the resolver. Both sets run unit tests on Linux and the
+installed-artifact checks on all three platforms and all four Python versions.
 
 “Current” means the newest mutually compatible stable versions selected by pip
 within package metadata and test-extra requirements at the time of the run.
@@ -44,12 +45,16 @@ Dependencies can impose additional compatibility constraints. This policy tests
 these two sets; it does not certify every possible mixture of dependency versions.
 CI runs `pip check` and records `pip freeze` for both sets so failures can be reproduced.
 
-The full unit suite's model-export tooling uses Optimum `>=1.27.0,<2` and PyTorch
-`>=2.4.1,<2.5` on Python 3.11/3.12. Python 3.13/3.14 use the split
-`optimum-onnx[onnxruntime]>=0.1.0,<0.2` package and PyTorch `>=2.9.1,<2.10`, which
-provides wheels for these interpreters. CI installs CPU PyTorch wheels.
-The exporters further constrain the Transformers version selected for
-these jobs. Installed-artifact jobs use only runtime dependencies and also test
+Python 3.11-3.13 run the full suite with Optimum `<2`, PyTorch `<2.9`, and SymPy
+in the test extra. Python 3.14 runs the portable suite: released Optimum exporters
+do not yet support that interpreter, so the exporter-dependent tests listed in
+`test/conftest.py` are not collected there. Its installed-artifact jobs still test
+dynamic/static quantization and inference on all three platforms with both
+dependency sets. This is a test-tool limitation, not an exclusion of Python 3.14
+from package support.
+
+Optimum further constrains the Transformers version selected for the full-suite
+jobs. Installed-artifact jobs use only runtime dependencies and also test
 the newest compatible Transformers 4.x independently of the export tooling.
 
 The minimum pins live in [`.github/constraints/minimum.txt`](../.github/constraints/minimum.txt).

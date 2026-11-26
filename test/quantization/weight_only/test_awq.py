@@ -13,9 +13,8 @@ from optimum.exporters.onnx import main_export
 from packaging import version
 
 from onnx_neural_compressor import data_reader, logger
-from onnx_neural_compressor.quantization import QuantFormat
+from onnx_neural_compressor.quantization import QuantFormat, config, matmul_4bits_quantizer, matmul_nbits_quantizer
 from onnx_neural_compressor.quantization import algorithm_entry as algos
-from onnx_neural_compressor.quantization import config, matmul_4bits_quantizer, matmul_nbits_quantizer
 
 
 def find_onnx_file(folder_path):
@@ -28,7 +27,6 @@ def find_onnx_file(folder_path):
 
 
 class DummyNLPDataloader(data_reader.CalibrationDataReader):
-
     def __init__(self, model_name):
         self.tokenizer = transformers.AutoTokenizer.from_pretrained(model_name)
         self.sequence_a = "intel-extension-for-transformers is based in SH"
@@ -57,7 +55,6 @@ class DummyNLPDataloader(data_reader.CalibrationDataReader):
 
 
 class MatMulDataloader(data_reader.CalibrationDataReader):
-
     def __init__(self):
         self.encoded_list = [{"A": torch.randn((1, 11008)).numpy()}]
         self.iter_next = iter(self.encoded_list)
@@ -88,7 +85,6 @@ def build_matmul_model():
 
 
 class TestAWQQuant(unittest.TestCase):
-
     @classmethod
     def setUpClass(self):
         main_export(
@@ -142,7 +138,6 @@ class TestAWQQuant(unittest.TestCase):
 
 
 class TestAWQQuantWithInternalAPI(TestAWQQuant):
-
     def test_awq_params_combination(self):
 
         # some tests were skipped to accelerate the CI
@@ -241,7 +236,6 @@ class TestAWQQuantWithInternalAPI(TestAWQQuant):
 
 
 class TestAWQQuantWithORTLikeAPI(TestAWQQuant):
-
     def test_awq_config_4bits(self):
         algo_config = matmul_4bits_quantizer.AWQWeightOnlyQuantConfig(
             calibration_data_reader=self.calibration_data_reader

@@ -13,7 +13,6 @@
 # limitations under the License.
 """Conv Operator."""
 
-
 import onnx
 from onnx import onnx_pb as onnx_proto
 

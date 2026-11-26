@@ -38,6 +38,28 @@ python -m pip install -e ".[test]"
 python -m pytest -q test
 ```
 
+Python 3.14 runs the portable test suite. Tests that exercise Hugging Face's
+Optimum ONNX exporter run on Python 3.11 through 3.13 until its released
+packages support Python 3.14. The release workflow separately verifies installed
+dynamic and static quantization round trips on Python 3.14.
+
+## Running Lint Locally
+
+Install Ruff and run the same checks as CI:
+
+```shell
+python -m pip install -r requirements-lint.txt
+ruff check .
+ruff format --check .
+```
+
+Ruff can apply the available lint fixes and format the code:
+
+```shell
+ruff check --fix .
+ruff format .
+```
+
 ## Pull Request Template
 
 Release managers should follow the [release process](Releasing.md) for version

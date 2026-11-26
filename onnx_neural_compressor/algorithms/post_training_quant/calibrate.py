@@ -179,7 +179,9 @@ class ONNXRTAugment:
                                 added_nodes.extend(nodes)
                                 added_outputs.append(
                                     onnx.helper.make_tensor_value_info(
-                                        output, onnx.TensorProto.FLOAT, ()  # pylint: disable=no-member
+                                        output,
+                                        onnx.TensorProto.FLOAT,
+                                        (),  # pylint: disable=no-member
                                     )
                                 )  # pylint: disable=no-member
                         else:
@@ -338,7 +340,7 @@ class ONNXRTAugment:
             new_white_nodes = []
             for white_node in self.white_nodes:
                 new_white_node = white_node + "_quant"
-                assert new_white_node in model_nodes_names, "no quantized {} in the " "graph".format(white_node)
+                assert new_white_node in model_nodes_names, "no quantized {} in the graph".format(white_node)
                 new_white_nodes.append(new_white_node)
             self.white_nodes = new_white_nodes
 
@@ -616,9 +618,9 @@ class ONNXRTAugment:
                     if attrs[attrs_names.index("activation")].s == b"Relu":
                         rmin = max(rmin, 0)
                     if attrs[attrs_names.index("activation")].s == b"Clip":
-                        assert (
-                            "activation_params" in attrs_names
-                        ), "the model contains no params for clip node {}".format(last_node)
+                        assert "activation_params" in attrs_names, (
+                            "the model contains no params for clip node {}".format(last_node)
+                        )
                         clip_params = attrs[attrs_names.index("activation_params")].floats
                         rmin = min(rmin, clip_params[0], clip_params[1])
                         rmax = max(rmax, clip_params[0], clip_params[1])

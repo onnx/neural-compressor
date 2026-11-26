@@ -20,7 +20,6 @@ def find_onnx_file(folder_path):
 
 
 class TestUtilityFunctions(unittest.TestCase):
-
     def test_is_B_transposed(self):
         node = onnx.helper.make_node(
             "Gemm",

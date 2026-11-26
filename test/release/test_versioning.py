@@ -3,6 +3,7 @@
 import datetime
 import importlib.metadata
 import runpy
+import tomllib
 from pathlib import Path
 from unittest import mock
 
@@ -73,3 +74,22 @@ def test_uninstalled_source_has_unknown_version():
     with mock.patch("importlib.metadata.version", side_effect=importlib.metadata.PackageNotFoundError):
         module = runpy.run_path(str(ROOT / "onnx_neural_compressor/__init__.py"))
     assert module["__version__"] == "unknown"
+
+
+def test_supported_python_versions_and_declarative_version_source():
+    with (ROOT / "pyproject.toml").open("rb") as stream:
+        pyproject = tomllib.load(stream)
+
+    project = pyproject["project"]
+    assert project["requires-python"] == ">=3.11"
+    assert {
+        "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
+        "Programming Language :: Python :: 3.13",
+        "Programming Language :: Python :: 3.14",
+    } <= set(project["classifiers"])
+    assert "optimum[onnxruntime]<2; python_version < '3.14'" in project["optional-dependencies"]["test"]
+    assert "sympy" in project["optional-dependencies"]["test"]
+    assert "torch<2.9; python_version < '3.14'" in project["optional-dependencies"]["test"]
+    assert pyproject["tool"]["setuptools"]["dynamic"]["version"] == {"file": ["VERSION_NUMBER"]}
+    assert not (ROOT / "setup.py").exists()

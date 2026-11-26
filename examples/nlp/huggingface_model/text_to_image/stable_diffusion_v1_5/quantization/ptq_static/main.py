@@ -99,7 +99,6 @@ def benchmark(model):
 
 
 class DataReader(data_reader.CalibrationDataReader):
-
     def __init__(self, model_path, batch_size=1):
         self.encoded_list = []
         self.batch_size = batch_size

@@ -25,9 +25,9 @@ def op_registry(op_types, mode):
     """The class decorator used to register all Operator subclasses."""
 
     def decorator_op(cls):
-        assert cls.__name__.endswith(
-            "Operator"
-        ), "The name of subclass of Operator should end with 'Operator' substring."
+        assert cls.__name__.endswith("Operator"), (
+            "The name of subclass of Operator should end with 'Operator' substring."
+        )
         for item in mode:
             if cls.__name__[: -len("Operator")] in OPERATORS[item]:  # pragma: no cover
                 raise ValueError("Cannot have two operators with the same name for {} mode.".format(item))
