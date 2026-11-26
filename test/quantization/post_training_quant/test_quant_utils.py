@@ -7,7 +7,6 @@ from onnx_neural_compressor.algorithms import utility as quant_utils
 
 
 class TestQuantUtility(unittest.TestCase):
-
     def test_pad_tensor(self):
         data = np.random.random((100, 32))
         group_size = 32

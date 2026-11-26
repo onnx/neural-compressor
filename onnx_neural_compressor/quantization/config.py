@@ -1518,7 +1518,6 @@ DYNAMIC_CHECK_FUNC_LIST = [
 
 @register_config(algo_name=constants.STATIC_QUANT, priority=constants.PRIORITY_STATIC_QUANT)
 class StaticQuantConfig(BaseConfig, ort_quant.StaticQuantConfig):
-
     supported_configs: List[_OperatorConfig] = []
     params_list: List[str] = [
         "weight_type",

@@ -21,7 +21,6 @@ log_msg_lst = [
 
 
 class TestLogger(unittest.TestCase):
-
     def test_logger(self):
 
         for msg in log_msg_lst:

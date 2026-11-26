@@ -316,7 +316,8 @@ class HFLM(lm_eval.api.model.TemplateLM):
                 and not os.path.exists(os.path.join(pretrained, "model.onnx"))
             ):
                 raise ValueError(
-                    "Couldn't find any ONNX model name in " + "['decoder_model.onnx', 'decoder_with_past_model.onnx', "
+                    "Couldn't find any ONNX model name in "
+                    + "['decoder_model.onnx', 'decoder_with_past_model.onnx', "
                     "'decoder_model_merged.onnx', 'model.onnx'] in {}.".format(pretrained)
                 )
 
@@ -413,8 +414,7 @@ class HFLM(lm_eval.api.model.TemplateLM):
                 and not os.path.exists(os.path.join(pretrained, "decoder_model_merged.onnx"))
             ):
                 raise ValueError(
-                    "Please ensure encoder_model.onnx and "
-                    "decoder_model(_merged).onnx are under {}.".format(pretrained)
+                    "Please ensure encoder_model.onnx and decoder_model(_merged).onnx are under {}.".format(pretrained)
                 )
 
             sess_options = onnxruntime.SessionOptions()
@@ -1005,7 +1005,9 @@ class HFLM(lm_eval.api.model.TemplateLM):
         batch_size = (
             self.batch_size
             if self.batch_size != "auto"
-            else adaptive_batch_size if adaptive_batch_size is not None else 0
+            else adaptive_batch_size
+            if adaptive_batch_size is not None
+            else 0
         )
         batch_fn = self._batch_scheduler if self.batch_size == "auto" and not adaptive_batch_size else None
 

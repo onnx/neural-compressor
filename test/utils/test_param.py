@@ -7,7 +7,6 @@ from onnx_neural_compressor.quantization import config
 
 
 class TestTuningParam(unittest.TestCase):
-
     def test_is_tunable_same_type(self):
         # Test when tunable_type has the same type as the default value
         param = config.TuningParam("param_name", [1, 2, 3], List[int])

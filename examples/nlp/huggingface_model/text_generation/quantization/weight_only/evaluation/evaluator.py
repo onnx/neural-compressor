@@ -30,6 +30,7 @@ import lm_eval.utils
 import numpy as np
 import optimum.onnxruntime
 import torch
+
 from evaluation.models import huggingface
 
 if TYPE_CHECKING:
@@ -224,7 +225,9 @@ def simple_evaluate(
             use_cache
             # each rank receives a different cache db.
             # necessary to avoid multiple writes to cache at once
-            + "_rank" + str(lm.rank) + ".db",
+            + "_rank"
+            + str(lm.rank)
+            + ".db",
         )
 
     if task_manager is None:

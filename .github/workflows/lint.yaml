@@ -19,63 +19,20 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  optional-lint:
-    name: Optional Lint
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
-        with:
-          go-version: "1.24.0"
-      - name: misspell # Check spellings as well
-        run: git ls-files -z | xargs -0 go run github.com/client9/misspell/cmd/misspell@v0.3.4 -locale US
-      - name: shellcheck # Static check shell scripts
-        uses: reviewdog/action-shellcheck@4c07458293ac342d477251099501a718ae5ef86e # v1.32.0
-        with:
-          github_token: ${{ secrets.github_token }}
-          reporter: github-pr-check
-          level: info
-          filter_mode: diff_context
-
   enforce-style:
     name: Enforce style
     runs-on: ubuntu-latest
-    permissions:
-      security-events: write
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
       - name: Setup Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: "3.12"
-      - name: Install ONNX Neural Compressor
-        run: |
-          pip install .
-      - name: Install dependencies
-        run: |
-          python -m pip install lintrunner lintrunner-adapters
-          lintrunner init
-      - name: Run lintrunner on all files
-        run: |
-          set +e
-          if ! lintrunner --force-color --all-files --tee-json=lint.json -v; then
-              echo ""
-              echo -e "\e[1m\e[36mYou can reproduce these results locally by using \`lintrunner\`.\e[0m"
-              echo -e "\e[1m\e[36mSee https://github.com/onnx/neural-compressor/blob/main/.lintrunner.toml for setup instructions.\e[0m"
-              exit 1
-          fi
-      - name: Produce SARIF
-        if: always()
-        run: |
-          python -m lintrunner_adapters to-sarif lint.json lintrunner.sarif
-      - name: Upload SARIF file
-        # Use always() to always upload SARIF even if lintrunner returns with error code
-        # To toggle linter comments in the files page, press `i` on the keyboard
-        if: always()
-        continue-on-error: true
-        uses: github/codeql-action/upload-sarif@89a39a4e59826350b863aa6b6252a07ad50cf83e # v4.32.4
-        with:
-          # Path to SARIF file relative to the root of the repository
-          sarif_file: lintrunner.sarif
-          category: lintrunner
-          checkout_path: ${{ github.workspace }}
+      - name: Install Ruff
+        run: python -m pip install --requirement requirements-lint.txt
+      - name: Lint
+        run: ruff check --output-format=github .
+      - name: Check formatting
+        run: ruff format --check --diff .

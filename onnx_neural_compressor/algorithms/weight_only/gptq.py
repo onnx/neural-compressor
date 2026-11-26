@@ -343,7 +343,6 @@ def gptq_quantize(
 
     # reload external data to prevent external data file path errors
     if model.is_large_model:
-
         onnx.external_data_helper.load_external_data_for_model(model.model, os.path.split(model.model_path)[0])
 
     if return_modelproto:
