@@ -38,10 +38,10 @@ dependencies = [
 
 [project.optional-dependencies]
 test = [
-    "optimum[onnxruntime]>=2; python_version < '3.14'",
+    "optimum[onnxruntime]<2; python_version < '3.14'",
     "pytest",
     "sympy",
-    "torch; python_version < '3.14'",
+    "torch<2.9; python_version < '3.14'",
 ]
 
 [project.urls]
