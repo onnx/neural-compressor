@@ -1,130 +1,78 @@
-<div align="center">
+# Neural Compressor
 
-Neural Compressor
-===========================
-<h3> An open-source Python library supporting popular model compression techniques for ONNX</h3>
+[![Python 3.11 and 3.12](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue)](https://github.com/onnx/neural-compressor)
+[![Release](https://img.shields.io/badge/release-1.0-green)](https://github.com/onnx/neural-compressor/releases)
+[![License](https://img.shields.io/badge/license-Apache%202-blue)](https://github.com/onnx/neural-compressor/blob/main/LICENSE)
 
-[![python](https://img.shields.io/badge/python-3.11%2B-blue)](https://github.com/onnx/neural-compressor)
-[![version](https://img.shields.io/badge/release-1.0-green)](https://github.com/onnx/neural-compressor/releases)
-[![license](https://img.shields.io/badge/license-Apache%202-blue)](https://github.com/onnx/neural-compressor/blob/master/LICENSE)
+Neural Compressor is an open-source Python library for compressing ONNX models. It provides post-training static and dynamic quantization, weight-only quantization, and SmoothQuant workflows that produce models for ONNX Runtime.
 
+## Features
 
----
-<div align="left">
+- Post-training static and dynamic quantization
+- INT4/INT8 weight-only quantization with RTN, AWQ, and GPTQ
+- Layer-wise quantization for reducing peak memory use
+- Accuracy-aware tuning and examples for popular ONNX models
 
-Neural Compressor aims to provide popular model compression techniques inherited from [Intel Neural Compressor](https://github.com/intel/neural-compressor) yet focused on ONNX model quantization such as SmoothQuant, weight-only quantization through [ONNX Runtime](https://onnxruntime.ai/). In particular, the tool provides the key features, typical examples, and open collaborations as below:
+## Requirements
 
-* Support a wide range of Intel hardware such as [Intel Xeon Scalable Processors](https://www.intel.com/content/www/us/en/products/details/processors/xeon/scalable.html) and AIPC
-
-* Validate popular LLMs such as [LLama2](./examples/nlp/huggingface_model/text_generation/), [Llama3](./examples/nlp/huggingface_model/text_generation/), [Qwen2](./examples/nlp/huggingface_model/text_generation/) and broad models such as [BERT-base](./examples/nlp/bert/quantization), and [ResNet50](./examples/image_recognition/resnet50/quantization/ptq_static) from popular model hubs such as [Hugging Face](https://huggingface.co/), [ONNX Model Zoo](https://github.com/onnx/models#models), by leveraging automatic [accuracy-driven](./docs/design.md#workflow) quantization strategies
-
-* Collaborate with software platforms such as [Microsoft Olive](https://github.com/microsoft/Olive), and open AI ecosystem such as [Hugging Face](https://huggingface.co/blog/intel), [ONNX](https://github.com/onnx/models#models) and [ONNX Runtime](https://github.com/microsoft/onnxruntime)
+- Python 3.11 or 3.12
+- An ONNX model and ONNX Runtime execution provider suitable for your model
 
 ## Installation
 
-### Install from source
-```Shell
+Install the stable package from PyPI:
+
+```shell
+python -m pip install onnx-neural-compressor
+```
+
+To install from source with the test dependencies:
+
+```shell
 git clone https://github.com/onnx/neural-compressor.git
 cd neural-compressor
-pip install .
+python -m pip install -e ".[test]"
 ```
 
-> **Note**:
-> Further installation methods can be found under [Installation Guide](./docs/installation_guide.md).
+Run the test suite with:
 
-## Getting Started
-
-Setting up the environment:
-```bash
-pip install onnx-neural-compressor "onnxruntime>=1.17.0" onnx
+```shell
+python -m pytest -q test
 ```
-After successfully installing these packages, try your first quantization program.
-> Notes: please install from source before the formal pypi release.
 
-### Weight-Only Quantization (LLMs)
-Following example code demonstrates Weight-Only Quantization on LLMs, device will be selected for efficiency automatically when multiple devices are available.
+See the [installation guide](./docs/installation_guide.md) for supported environments and hardware.
 
-Run the example:
+## Quick start
+
+Dynamic quantization takes an existing ONNX model and writes a quantized model:
+
 ```python
-from onnx_neural_compressor.quantization import matmul_nbits_quantizer
+from onnx_neural_compressor.quantization import config, quantize
 
-algo_config = matmul_nbits_quantizer.RTNWeightOnlyQuantConfig()
-quant = matmul_nbits_quantizer.MatMulNBitsQuantizer(
-    model,
-    n_bits=4,
-    block_size=32,
-    is_symmetric=True,
-    algo_config=algo_config,
+quantize(
+    model_input="model.onnx",
+    model_output="model_int8.onnx",
+    quant_config=config.DynamicQuantConfig(),
 )
-quant.process()
-best_model = quant.model
 ```
 
-### Static Quantization
+For static quantization, provide a calibration data reader whose batches match the model's inputs. See the [quantization guide](./docs/quantization.md) for the reader interface and configuration options.
 
-```python
-from onnx_neural_compressor.quantization import quantize, config
-from onnx_neural_compressor import data_reader
+## Documentation and examples
 
+| Guide | Description |
+| --- | --- |
+| [Quantization](./docs/quantization.md) | Static and dynamic post-training quantization |
+| [Weight-only quantization](./docs/quantization_weight_only.md) | INT4/INT8 RTN, AWQ, and GPTQ |
+| [Layer-wise quantization](./docs/quantization_layer_wise.md) | Quantize models layer by layer |
+| [SmoothQuant](./docs/smooth_quant.md) | SmoothQuant workflow |
+| [Autotuning](./docs/autotune.md) | Search quantization configurations |
+| [Examples](./examples/) | End-to-end model examples |
+| [Design](./docs/design.md) | Architecture and workflow |
 
-class DataReader(data_reader.CalibrationDataReader):
-    def __init__(self):
-        self.encoded_list = []
-        # append data into self.encoded_list
+## Contributing and support
 
-        self.iter_next = iter(self.encoded_list)
-
-    def get_next(self):
-        return next(self.iter_next, None)
-
-    def rewind(self):
-        self.iter_next = iter(self.encoded_list)
-
-
-data_reader = DataReader()
-qconfig = config.StaticQuantConfig(calibration_data_reader=data_reader)
-quantize(model, output_model_path, qconfig)
-```
-
-## Documentation
-
-<table class="docutils">
-  <thead>
-  <tr>
-    <th colspan="8">Overview</th>
-  </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td colspan="3" align="center"><a href="./docs/design.md#architecture">Architecture</a></td>
-      <td colspan="3" align="center"><a href="./docs/design.md#workflow">Workflow</a></td>
-      <td colspan="3" align="center"><a href="./examples/">Examples</a></td>
-    </tr>
-  </tbody>
-  <thead>
-    <tr>
-      <th colspan="8">Feature</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-        <td colspan="4" align="center"><a href="./docs/quantization.md">Quantization</a></td>
-          <td colspan="4" align="center"><a href="./docs/smooth_quant.md">SmoothQuant</td>
-      <tr>
-          <td colspan="4" align="center"><a href="./docs/quantization_weight_only.md">Weight-Only Quantization (INT8/INT4) </td>
-           </td>
-          <td colspan="4" align="center"><a href="./docs/quantization_layer_wise.md">Layer-Wise Quantization </td>
-      </tr>
-  </tbody>
-</table>
-
-
-
-## Additional Content
-
-* [Contribution Guidelines](./docs/CONTRIBUTING.md)
-* [Security Policy](SECURITY.md)
-
-## Communication
-- [GitHub Issues](https://github.com/onnx/neural-compressor/issues): mainly for bug reports, new feature requests, question asking, etc.
-- [Email](mailto:inc.maintainers@intel.com): welcome to raise any interesting research ideas on model compression techniques by email for collaborations.
+- [Contribution guidelines](./docs/CONTRIBUTING.md)
+- [Security policy](./SECURITY.md)
+- [GitHub Issues](https://github.com/onnx/neural-compressor/issues) for bugs, feature requests, and questions
+- [Email the maintainers](mailto:inc.maintainers@intel.com) with research and collaboration ideas
