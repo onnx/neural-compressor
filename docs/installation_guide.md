@@ -20,7 +20,7 @@ You can install Neural Compressor from binary or source.
 
 The following prerequisites and requirements must be satisfied for a successful installation:
 
-- Python version: 3.11 or 3.12
+- Python version: 3.11 through 3.14
 
 ### Install from Binary
   ```Shell
@@ -48,5 +48,5 @@ The following prerequisites and requirements must be satisfied for a successful 
 ### Validated Software Environment
 
 * OS version: Ubuntu 24.04
-* Python version: 3.11 or 3.12
-* ONNX Runtime version: 1.18.1
+* Python version: 3.11 through 3.14
+* ONNX Runtime version: 1.32.0

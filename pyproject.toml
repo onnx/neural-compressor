@@ -17,8 +17,11 @@ keywords = ["quantization", "ONNX"]
 classifiers = [
     "Intended Audience :: Science/Research",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dependencies = [
@@ -35,9 +38,10 @@ dependencies = [
 
 [project.optional-dependencies]
 test = [
-    "optimum[onnxruntime]<2",
+    "optimum[onnxruntime]<2; python_version < '3.14'",
     "pytest",
-    "torch<2.5.0",
+    "sympy",
+    "torch<2.9; python_version < '3.14'",
 ]
 
 [project.urls]
@@ -46,6 +50,9 @@ Repository = "https://github.com/onnx/neural-compressor"
 
 [tool.setuptools]
 include-package-data = true
+
+[tool.setuptools.dynamic]
+version = { file = ["VERSION_NUMBER"] }
 
 [tool.setuptools.packages.find]
 include = ["onnx_neural_compressor*"]

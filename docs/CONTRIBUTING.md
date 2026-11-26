@@ -38,6 +38,11 @@ python -m pip install -e ".[test]"
 python -m pytest -q test
 ```
 
+Python 3.14 runs the portable test suite. Tests that exercise Hugging Face's
+Optimum ONNX exporter run on Python 3.11 through 3.13 until its released
+packages support Python 3.14. The release workflow separately verifies installed
+dynamic and static quantization round trips on Python 3.14.
+
 ## Pull Request Template
 
 Release managers should follow the [release process](Releasing.md) for version

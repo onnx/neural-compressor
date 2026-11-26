@@ -1,6 +1,6 @@
 # Neural Compressor
 
-[![Python 3.11 and 3.12](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue)](https://github.com/onnx/neural-compressor)
+[![Python 3.11 through 3.14](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-blue)](https://github.com/onnx/neural-compressor)
 [![Release](https://img.shields.io/badge/release-1.0-green)](https://github.com/onnx/neural-compressor/releases)
 [![License](https://img.shields.io/badge/license-Apache%202-blue)](https://github.com/onnx/neural-compressor/blob/main/LICENSE)
 
@@ -15,7 +15,7 @@ Neural Compressor is an open-source Python library for compressing ONNX models. 
 
 ## Requirements
 
-- Python 3.11 or 3.12
+- Python 3.11 through 3.14
 - An ONNX model and ONNX Runtime execution provider suitable for your model
 
 ## Installation

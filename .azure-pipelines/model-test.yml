@@ -9,7 +9,8 @@ pr:
   paths:
     include:
       - onnx_neural_compressor
-      - setup.py
+      - pyproject.toml
+      - VERSION_NUMBER
       - requirements.txt
       - .azure-pipelines/scripts/models
       - .azure-pipelines/model-test.yml
