@@ -7,10 +7,11 @@ pure Python, so a single universal wheel and source archive serve all platforms.
 
 ## Version source
 
-`VERSION_NUMBER` is the only maintained package version. `setup.py` reads it
-without Git or importing the package, and `MANIFEST.in` includes it in the source
-archive. Builds from a checkout and from an extracted source archive therefore
-use the same version. Installed callers can use `onnx_neural_compressor.__version__`;
+`VERSION_NUMBER` is the only maintained package version. Setuptools reads it
+declaratively from `pyproject.toml` without Git or importing the package, and
+`MANIFEST.in` includes it in the source archive. Builds from a checkout and from
+an extracted source archive therefore use the same version. Installed callers
+can use `onnx_neural_compressor.__version__`;
 the existing `onnx_neural_compressor.version.__version__` import remains supported.
 Both read installed distribution metadata. Uninstalled source reports `unknown`.
 
@@ -62,10 +63,10 @@ For a release candidate or final build, select the release branch and choose:
 
 The workflow builds the source archive and then builds its wheel from that archive,
 checks metadata with Twine and verifies matching versions. It installs each artifact
-into a separate clean environment on Linux, Windows, and macOS with Python 3.11 and
-3.12, runs `pip check`, and verifies version imports and dynamic/static quantization
-round trips outside the checkout. Download both files from the `distributions`
-artifact. Artifacts are retained for 30 days.
+into a separate clean environment on Linux, Windows, and macOS with Python 3.11
+through 3.14, runs `pip check`, and verifies version imports and dynamic/static
+quantization round trips outside the checkout. Download both files from the
+`distributions` artifact. Artifacts are retained for 30 days.
 
 For a local exact-version build:
 

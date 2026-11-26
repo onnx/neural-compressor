@@ -10,7 +10,8 @@ pr:
     include:
       - onnx_neural_compressor
       - test
-      - setup.py
+      - pyproject.toml
+      - VERSION_NUMBER
       - requirements.txt
       - .azure-pipelines/scripts/ut
       - .azure-pipelines/ut-3x-ort.yml
