@@ -28,11 +28,40 @@ jobs:
         python-version: ["3.11", "3.12", "3.13", "3.14"]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
       - name: Set up Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install package and test dependencies
         run: python -m pip install -e ".[test]"
+      - name: Check and record dependencies
+        run: |
+          python -m pip check
+          python -m pip freeze
+      - name: Run tests
+        run: python -m pytest -q test
+
+  minimum-dependencies:
+    name: Minimum dependencies / Python ${{ matrix.python-version }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install package and test dependencies at runtime minimums
+        run: python -m pip install --constraint .github/constraints/minimum.txt -e ".[test]"
+      - name: Check and record dependencies
+        run: |
+          python -m pip check
+          python -m pip freeze
       - name: Run tests
         run: python -m pytest -q test

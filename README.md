@@ -18,6 +18,11 @@ Neural Compressor is an open-source Python library for compressing ONNX models. 
 - Python 3.11 through 3.14
 - An ONNX model and ONNX Runtime execution provider suitable for your model
 
+See the [compatibility policy](./docs/Compatibility.md) for tested platforms and
+minimum/current dependency combinations, and the [release notes](./docs/ReleaseNotes.md)
+for changes planned for the next release. These requirements describe the current
+source tree; the published v1.0 package predates these changes.
+
 ## Installation
 
 Install the stable package from PyPI:
