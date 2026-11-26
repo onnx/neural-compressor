@@ -33,7 +33,7 @@ jobs:
           level: info
           filter_mode: diff_context
       - name: shellcheck # Static check shell scripts
-        uses: reviewdog/action-shellcheck@72365a51bf6476fe952a117c3ff703eb7775e40a # v1.20.0
+        uses: reviewdog/action-shellcheck@4c07458293ac342d477251099501a718ae5ef86e # v1.32.0
         with:
           github_token: ${{ secrets.github_token }}
           reporter: github-pr-check
@@ -76,7 +76,7 @@ jobs:
         # To toggle linter comments in the files page, press `i` on the keyboard
         if: always()
         continue-on-error: true
-        uses: github/codeql-action/upload-sarif@cdcdbb579706841c47f7063dda365e292e5cad7a # v2.13.4
+        uses: github/codeql-action/upload-sarif@89a39a4e59826350b863aa6b6252a07ad50cf83e # v4.32.4
         with:
           # Path to SARIF file relative to the root of the repository
           sarif_file: lintrunner.sarif
