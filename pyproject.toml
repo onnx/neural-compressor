@@ -38,9 +38,9 @@ dependencies = [
 
 [project.optional-dependencies]
 test = [
-    "optimum[onnxruntime]<2",
+    "optimum[onnxruntime]>=2; python_version < '3.14'",
     "pytest",
-    "torch",
+    "torch; python_version < '3.14'",
 ]
 
 [project.urls]

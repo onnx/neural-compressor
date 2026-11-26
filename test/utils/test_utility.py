@@ -7,7 +7,6 @@ import unittest
 import onnx
 import onnxruntime
 import onnxruntime.tools.symbolic_shape_infer as symbolic_shape_infer
-import optimum.exporters.onnx
 
 from onnx_neural_compressor import onnx_model, utility
 
