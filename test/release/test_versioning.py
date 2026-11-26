@@ -89,6 +89,7 @@ def test_supported_python_versions_and_declarative_version_source():
         "Programming Language :: Python :: 3.14",
     } <= set(project["classifiers"])
     assert "optimum[onnxruntime]>=2; python_version < '3.14'" in project["optional-dependencies"]["test"]
+    assert "sympy" in project["optional-dependencies"]["test"]
     assert "torch; python_version < '3.14'" in project["optional-dependencies"]["test"]
     assert pyproject["tool"]["setuptools"]["dynamic"]["version"] == {"file": ["VERSION_NUMBER"]}
     assert not (ROOT / "setup.py").exists()
