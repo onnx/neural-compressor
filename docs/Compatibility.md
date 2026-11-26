@@ -30,7 +30,7 @@ The declared lower bounds are tested together as a minimum dependency set:
 | prettytable | 3.10.0 |
 | py-cpuinfo | 9.0.0 |
 | Pydantic | 2.7.4 |
-| Transformers | 4.57.6, with an upper bound of `<5` |
+| Transformers | 4.53.3, with an upper bound of `<5` |
 
 The minimum set uses NumPy 1.26.4. Current dependency jobs also cover NumPy 2
 where selected by the resolver. Both sets run the full unit suite on Linux and
@@ -41,6 +41,11 @@ within package metadata and test-extra requirements at the time of the run.
 Dependencies can impose additional compatibility constraints. This policy tests
 these two sets; it does not certify every possible mixture of dependency versions.
 CI runs `pip check` and records `pip freeze` for both sets so failures can be reproduced.
+
+The full unit suite's model-export tooling requires Optimum `>=1.27.0,<2` and
+PyTorch `<2.5.0`. Optimum further constrains the Transformers version selected for
+these jobs. Installed-artifact jobs use only runtime dependencies and also test
+the newest compatible Transformers 4.x independently of the export tooling.
 
 The minimum pins live in [`.github/constraints/minimum.txt`](../.github/constraints/minimum.txt).
 They must match every direct runtime dependency's lower bound in `pyproject.toml`;

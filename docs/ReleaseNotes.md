@@ -13,6 +13,9 @@
 - NumPy 1.26.4 and current compatible NumPy 2 versions are covered by the minimum
   and current dependency jobs respectively. Transformers remains below version 5.
 - `packaging` is now an explicit dependency because the library imports it directly.
+- The test extra requires Optimum `>=1.27.0,<2` to avoid resolving an older exporter
+  that installs successfully but fails the model-export fixtures. Its dependency
+  constraints may select an older Transformers version than a runtime-only install.
 
 ### Quantization fixes
 
