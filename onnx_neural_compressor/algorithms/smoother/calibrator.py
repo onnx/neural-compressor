@@ -13,9 +13,7 @@
 # limitations under the License.
 """Calibration for smooth quant."""
 
-import importlib.util
 import pathlib
-import sys
 import tempfile
 from typing import List
 
@@ -138,11 +136,6 @@ class Calibrator:
 
     def get_intermediate_outputs(self):
         so = onnxruntime.SessionOptions()
-        if sys.version_info < (3, 11) and importlib.util.find_spec("onnxruntime_extensions"):  # pragma: no cover
-            from onnxruntime_extensions import get_library_path
-
-            so.register_custom_ops_library(get_library_path())
-
         providers = self.providers if "TensorrtExecutionProvider" not in self.providers else ["CUDAExecutionProvider"]
         if self.model_wrapper.is_large_model:  # pragma: no cover
             with tempfile.TemporaryDirectory(prefix="ort.calib.") as tmp_dir:

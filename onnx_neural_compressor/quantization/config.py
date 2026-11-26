@@ -31,12 +31,23 @@ import onnxruntime as ort
 import pydantic
 from onnxruntime import quantization as ort_quant
 from packaging import version
-from typing_extensions import Self
 
 from onnx_neural_compressor import constants, data_reader, logger, quantization, utility
 
 from collections import OrderedDict  # isort: skip
-from typing import Any, Callable, Dict, List, NamedTuple, Optional, Tuple, Type, Union, _GenericAlias  # isort: skip
+from typing import (  # isort: skip
+    Any,
+    Callable,
+    Dict,
+    List,
+    NamedTuple,
+    Optional,
+    Self,
+    Tuple,
+    Type,
+    Union,
+    _GenericAlias,
+)
 
 ort_version = version.Version(ort.__version__)
 
@@ -450,7 +461,7 @@ class BaseConfig(ABC):
         return tuning_param
 
     def expand(self) -> List[BaseConfig]:
-        """Expand the config.
+        r"""Expand the config.
 
         Expand rule is:
             1. Expand model_params_list first, then expand params_list

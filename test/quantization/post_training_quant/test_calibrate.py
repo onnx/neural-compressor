@@ -535,6 +535,16 @@ class TestCalibrate(unittest.TestCase):
         print("Finished" + " test calculation of quantization params.")
 
     def test_calibrator(self):
+        histogram = calibrator.HistogramCollector(num_bins=128)
+        histogram.collect_data(np.zeros(128, dtype=np.float32))
+        self.assertEqual(histogram.histogram[0].sum(), 128)
+        self.assertTrue(np.all(np.diff(histogram.histogram[1]) > 0))
+
+        histogram = calibrator.HistogramCollector(num_bins=128)
+        histogram.collect_data(np.full(128, 1e-5, dtype=np.float16))
+        self.assertEqual(histogram.histogram[0].sum(), 128)
+        self.assertTrue(np.all(np.diff(histogram.histogram[1]) > 0))
+
         regular_data = [np.arange(15).reshape(3, 5).astype("float32"), np.arange(15).reshape(3, 5).astype("float32")]
         irregular_data = [np.arange(10).reshape(2, 5).astype("float32"), np.arange(5).reshape(1, 5).astype("float32")]
 

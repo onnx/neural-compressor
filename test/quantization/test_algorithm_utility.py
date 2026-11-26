@@ -56,6 +56,39 @@ class TestUtilityFunctions(unittest.TestCase):
                 zero_point=np.zeros((2, 32)),
             )
 
+    def test_make_woq_dq_node_packs_signed_int4(self):
+        node = onnx.helper.make_node("MatMul", ["input", "weight"], ["output"], name="Matmul")
+        q_weight = np.array([-8, -7, 7, -1, 1, 2, -3, -4], dtype=np.int8)
+        _, initializers = quant_utils.make_weight_only_dequant_node(
+            node=node,
+            weight_shape=(2, 4),
+            block_size=2,
+            num_bits=4,
+            dtype="int",
+            q_weight=q_weight,
+            scale=np.ones(8, dtype=np.float32),
+            zero_point=np.zeros(8, dtype=np.int8),
+        )
+
+        self.assertEqual(initializers[0].raw_data, bytes([0x78, 0xD1, 0xF9, 0xC2]))
+
+    def test_matmul_nbits_packs_zero_points_per_output_channel(self):
+        node = onnx.helper.make_node("MatMul", ["input", "weight"], ["output"], name="Matmul")
+        _, initializers = quant_utils.make_matmul_weight_only_node(
+            node=node,
+            weight_shape=(2, 8),
+            num_bits=4,
+            group_size=2,
+            k_blocks=1,
+            q_weight=np.arange(16, dtype=np.uint8).reshape(8, 2),
+            scale=np.ones(8, dtype=np.float32),
+            zero_point=np.arange(8, dtype=np.uint8),
+        )
+        zero_point = next(initializer for initializer in initializers if initializer.name.endswith("_zp"))
+
+        self.assertEqual(tuple(zero_point.dims), (8, 1))
+        self.assertEqual(zero_point.raw_data, bytes([0x80 + value for value in range(8)]))
+
     def test_split_shared_bias(self):
         input = onnx.helper.make_tensor_value_info("input", onnx.TensorProto.FLOAT, [1, 3, 15, 15])
         output = onnx.helper.make_tensor_value_info("output", onnx.TensorProto.FLOAT, [1, 5, 11, 11])

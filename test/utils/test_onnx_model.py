@@ -1,6 +1,7 @@
 import copy
 import os
 import shutil
+import tempfile
 import unittest
 
 import numpy as np
@@ -137,17 +138,16 @@ class TestONNXModel(unittest.TestCase):
         self.assertTrue(model.is_large_model)
 
     def test_save(self):
-        # test save
-        model = onnx_model.ONNXModel(self.gptj)
-        save_path = "./gptj/test.onnx"
-        model.save(save_path)
+        with tempfile.TemporaryDirectory() as output_dir:
+            model = onnx_model.ONNXModel(self.gptj)
+            model.save(os.path.join(output_dir, "test.onnx"))
 
-        # test large model save
-        model = onnx_model.ONNXModel(self.large_model)
-        save_path = ".large_model_save.onnx"
-        model.save(save_path)
+            model = onnx_model.ONNXModel(self.large_model)
+            save_path = os.path.join(output_dir, "large_model.onnx")
+            model.save(save_path)
+            model.save(save_path)
 
-        self.assertEqual(model.model_path, ".large_model_save.onnx")
+            self.assertEqual(model.model_path, save_path)
 
     def test_get_initializer_share_num(self):
         model = onnx_model.ONNXModel(self.matmul_add_model)

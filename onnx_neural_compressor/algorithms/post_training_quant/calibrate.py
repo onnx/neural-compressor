@@ -22,8 +22,6 @@
 import copy
 import logging
 import os
-import sys
-from importlib import util
 
 import numpy as np
 import onnx
@@ -33,9 +31,6 @@ from packaging import version
 from onnx_neural_compressor import logger, onnx_model
 from onnx_neural_compressor.algorithms import utility as quant_utils
 from onnx_neural_compressor.algorithms.post_training_quant import calibrator
-
-if sys.version_info < (3, 11) and util.find_spec("onnxruntime_extensions"):
-    import onnxruntime_extensions
 
 ONNX18_VERSION = version.Version("1.8.0")
 ORT112_VERSION = version.Version("1.12.0")
@@ -225,8 +220,6 @@ class ONNXRTAugment:
         # conduct inference session and get intermediate outputs
         so = onnxruntime.SessionOptions()
         so.graph_optimization_level = onnxruntime.GraphOptimizationLevel.ORT_DISABLE_ALL
-        if sys.version_info < (3, 11) and util.find_spec("onnxruntime_extensions"):
-            so.register_custom_ops_library(onnxruntime_extensions.get_library_path())
 
         execution_provider = (
             self.execution_provider

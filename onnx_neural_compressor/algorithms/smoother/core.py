@@ -119,7 +119,7 @@ class Smoother:
         calib_iter: int = 100,
         auto_alpha_args: dict = {"alpha_min": 0.3, "alpha_max": 0.7, "alpha_step": 0.05, "attn_method": "min"},
         *args,
-        **kwargs
+        **kwargs,
     ):
         """The main entry of smooth quant.
 

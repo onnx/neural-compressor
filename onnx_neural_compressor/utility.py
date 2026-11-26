@@ -217,14 +217,10 @@ class CpuInfo(object):
                     b"\xB8\x07\x00\x00\x00" b"\x0f\xa2" b"\xC3",  # mov eax, 7  # cpuid  # ret
                 )
                 self._bf16 = bool(eax & (1 << 5))
-        # TODO: The implementation will be refined in the future.
-        # https://github.com/intel/neural-compressor/tree/detect_sockets
-        if "arch" in info and "ARM" in info["arch"]:  # pragma: no cover
-            self._sockets = 1
-        else:
-            self._sockets = self.get_number_of_sockets()
-        self._cores = psutil.cpu_count(logical=False)
-        self._cores_per_socket = int(self._cores / self._sockets)
+        self._is_arm = "arch" in info and "ARM" in info["arch"]
+        self._cores = psutil.cpu_count(logical=False) or psutil.cpu_count() or 1
+        # Detected on first use so that importing the package does not spawn a subprocess.
+        self._cores_per_socket = None
 
     @property
     def bf16(self):
@@ -239,28 +235,34 @@ class CpuInfo(object):
     @property
     def cores_per_socket(self):
         """Get the cores per socket."""
+        if self._cores_per_socket is None:
+            sockets = 1 if self._is_arm else self.get_number_of_sockets()
+            self._cores_per_socket = max(1, self._cores // sockets)
         return self._cores_per_socket
 
     def get_number_of_sockets(self) -> int:
-        """Get number of sockets in platform."""
-        cmd = "cat /proc/cpuinfo | grep 'physical id' | sort -u | wc -l"
-        if psutil.WINDOWS:
-            cmd = r'wmic cpu get DeviceID | C:\Windows\System32\find.exe /C "CPU"'
-        elif psutil.MACOS:  # pragma: no cover
-            cmd = "sysctl -n machdep.cpu.core_count"
-
-        with subprocess.Popen(
-            args=cmd,
-            shell=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            universal_newlines=False,
-        ) as proc:
-            proc.wait()
-            if proc.stdout:
-                for line in proc.stdout:
-                    return int(line.decode("utf-8", errors="ignore").strip())
-        return 0
+        """Get number of sockets in platform, or 1 if it cannot be determined."""
+        sockets = 0
+        try:
+            if psutil.LINUX:
+                with open("/proc/cpuinfo", encoding="utf-8", errors="ignore") as f:
+                    sockets = len({line.split(":", 1)[1].strip() for line in f if line.startswith("physical id")})
+            elif psutil.WINDOWS:
+                # wmic is no longer shipped with current Windows releases; query CIM instead.
+                cmd = [
+                    "powershell",
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-Command",
+                    "(Get-CimInstance -ClassName Win32_Processor | Measure-Object).Count",
+                ]
+                sockets = int(subprocess.run(cmd, capture_output=True, text=True, timeout=60).stdout.strip() or 0)
+            elif psutil.MACOS:  # pragma: no cover
+                cmd = ["sysctl", "-n", "hw.packages"]
+                sockets = int(subprocess.run(cmd, capture_output=True, text=True, timeout=60).stdout.strip() or 0)
+        except (OSError, ValueError, subprocess.SubprocessError):
+            sockets = 0
+        return max(1, sockets)
 
 
 def set_random_seed(seed: int):
