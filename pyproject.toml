@@ -59,10 +59,10 @@ extend_skip_glob = ["**/__init__.py"]
 line-length = 120
 
 [tool.codespell]
-skip = '*.po,*.ts,*.js,*.map,*.js.map,*.css.map,.azure-pipelines/scripts/codeScan/codespell/inc_dict.txt'
+skip = '*.po,*.ts,*.js,*.map,*.js.map,*.css.map'
 count = ''
 quiet-level = 3
-ignore-words = ".azure-pipelines/scripts/codeScan/codespell/nc_dict.txt"
+ignore-words = ".github/ci/codespell-ignore.txt"
 
 
 [tool.ruff]

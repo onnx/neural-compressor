@@ -1,0 +1,67 @@
+# Copyright (c) ONNX Neural Compressor Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+name: Model smoke tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  merge_group:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  models:
+    name: ${{ matrix.model }} / ${{ matrix.mode }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - model: bert
+            mode: dynamic
+          - model: bert
+            mode: qdq
+          - model: resnet
+            mode: qdq
+          - model: resnet
+            mode: qoperator
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.12"
+      - name: Build and install the wheel
+        run: |
+          python -m pip wheel --no-deps --wheel-dir dist .
+          python -m pip install dist/*.whl
+          python -m pip install "torch<2.5" --index-url https://download.pytorch.org/whl/cpu
+          python -m pip check
+      - name: Quantize and run models outside the source checkout
+        working-directory: ${{ runner.temp }}
+        env:
+          MODEL: ${{ matrix.model }}
+          MODE: ${{ matrix.mode }}
+          HF_HUB_OFFLINE: "1"
+        run: >-
+          python "$GITHUB_WORKSPACE/.github/ci/model_smoke.py"
+          --model "$MODEL" --mode "$MODE"
+          --output "$GITHUB_WORKSPACE/reports"
+      - name: Upload model reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: model-${{ matrix.model }}-${{ matrix.mode }}
+          path: reports/*.json
+          retention-days: 30
+          if-no-files-found: warn

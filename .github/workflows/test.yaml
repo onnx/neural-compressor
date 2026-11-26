@@ -10,6 +10,7 @@ on:
       - main
   pull_request:
   merge_group:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -22,17 +23,76 @@ jobs:
   tests:
     name: Python ${{ matrix.python-version }}
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
         python-version: ["3.11", "3.12"]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
       - name: Set up Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install package and test dependencies
-        run: python -m pip install -e ".[test]"
+        run: python -m pip install -e ".[test]" pytest-cov
       - name: Run tests
-        run: python -m pytest -q test
+        run: >-
+          python -m pytest -q test --junitxml=reports/junit.xml
+          --cov=onnx_neural_compressor --cov-branch
+          --cov-config=.github/ci/coverage.ini
+          --cov-report=term-missing --cov-report=xml:reports/coverage.xml
+          --cov-report=html:reports/htmlcov
+      - name: Upload test and coverage reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: coverage-${{ matrix.python-version }}
+          path: reports/
+          retention-days: 30
+          if-no-files-found: error
+
+  coverage:
+    name: Coverage comparison
+    if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
+    needs: tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.12"
+      - name: Download candidate coverage
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: coverage-3.12
+          path: candidate
+      - name: Compare with the tested base commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+        run: |
+          run_id=$(gh api -X GET "repos/$GITHUB_REPOSITORY/actions/runs" \
+            -f head_sha="$BASE_SHA" -f event=push -f status=success -f per_page=100 \
+            --jq '[.workflow_runs[] | select(.path == ".github/workflows/test.yaml" and .head_branch == "main")][0].id // empty')
+          if [ -z "$run_id" ]; then
+            echo "Coverage baseline unavailable for $BASE_SHA; publishing coverage without a comparison." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          artifact_id=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/artifacts" \
+            --jq '[.artifacts[] | select(.name == "coverage-3.12")][0].id // empty')
+          if [ -z "$artifact_id" ]; then
+            echo "No coverage artifact for base $BASE_SHA (run $run_id); no comparison was made." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          # Existing baseline reports must download successfully; errors are not treated as a pass.
+          gh run download "$run_id" --name coverage-3.12 --dir baseline
+          python .github/ci/compare_coverage.py candidate/coverage.xml baseline/coverage.xml
