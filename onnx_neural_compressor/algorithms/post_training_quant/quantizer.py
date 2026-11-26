@@ -1005,6 +1005,7 @@ class DynamicQuantizer(Quantizer):
             mode="dynamic_quant",
             model=model,
             q_config=q_config,
+            reduce_range=reduce_range,
             static=False,
             quantization_params=quantization_params,
             op_types_to_quantize=op_types_to_quantize,
