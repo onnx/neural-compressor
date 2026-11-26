@@ -64,8 +64,8 @@ For a release candidate or final build, select the release branch and choose:
 
 The workflow builds the source archive and then builds its wheel from that archive,
 checks metadata with Twine and verifies matching versions. It installs each artifact
-into a separate clean environment on Linux, Windows, and macOS with Python 3.11 and
-3.12 with both minimum and current compatible dependencies, runs `pip check`,
+into a separate clean environment on Linux, Windows, and macOS with Python 3.11 through
+3.14 with both minimum and current compatible dependencies, runs `pip check`,
 records installed versions, and verifies version imports and dynamic/static quantization
 round trips outside the checkout. Download both files from the `distributions`
 artifact. Artifacts are retained for 30 days.

@@ -4,18 +4,20 @@
 
 ### Compatibility changes
 
-- Supported Python versions are now **3.11 and 3.12** (`>=3.11,<3.13`). Python
-  3.10 support is dropped. Python 3.13 and later are outside the validated range
+- Supported Python versions are now **3.11 through 3.14** (`>=3.11,<3.15`). Python
+  3.10 support is dropped. Python 3.15 and later are outside the validated range
   and are excluded by package metadata for this release.
 - Runtime dependencies now have explicit minimum versions, tested together in CI.
   Current compatible dependencies are tested separately. See the
   [compatibility policy](Compatibility.md) for the version table and platform matrix.
-- NumPy 1.26.4 and current compatible NumPy 2 versions are covered by the minimum
-  and current dependency jobs respectively. Transformers remains below version 5.
+- Python-specific minimums provide binary wheels on the supported interpreters.
+  NumPy 1.26.4 remains supported on Python 3.11/3.12; Python 3.13/3.14 require
+  NumPy >=2.3.5. Current compatible NumPy 2 versions are also tested.
+  Transformers remains below version 5.
 - `packaging` is now an explicit dependency because the library imports it directly.
-- The test extra requires Optimum `>=1.27.0,<2` to avoid resolving an older exporter
-  that installs successfully but fails the model-export fixtures. Its dependency
-  constraints may select an older Transformers version than a runtime-only install.
+- The test extra uses Optimum `>=1.27.0,<2` with PyTorch 2.4 on Python 3.11/3.12,
+  and Optimum ONNX `>=0.1.0,<0.2` with PyTorch 2.9 on Python 3.13/3.14.
+  Exporter constraints may select an older Transformers version than a runtime-only install.
 
 ### Quantization fixes
 

@@ -7,7 +7,7 @@ name = "onnx_neural_compressor"
 dynamic = ["version"]
 description = "Model compression techniques for ONNX models"
 readme = "README.md"
-requires-python = ">=3.11,<3.13"
+requires-python = ">=3.11,<3.15"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 authors = [
@@ -19,26 +19,36 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dependencies = [
-    "onnx>=1.17.0",
-    "onnxruntime>=1.20.1",
+    "onnx>=1.17.0; python_version < '3.13'",
+    "onnx>=1.20.1; python_version >= '3.13'",
+    "onnxruntime>=1.20.1; python_version < '3.13'",
+    "onnxruntime>=1.24.2; python_version >= '3.13'",
     "packaging>=24.2",
-    "psutil>=5.9.8",
+    "psutil>=5.9.8; python_version < '3.13'",
+    "psutil>=7.1.0; python_version >= '3.13'",
     "prettytable>=3.10.0",
-    "scipy>=1.12.0",
-    "numpy>=1.26.4",
+    "scipy>=1.12.0; python_version < '3.13'",
+    "scipy>=1.16.3; python_version >= '3.13'",
+    "numpy>=1.26.4; python_version < '3.13'",
+    "numpy>=2.3.5; python_version >= '3.13'",
     "py-cpuinfo>=9.0.0",
-    "pydantic>=2.7.4",
+    "pydantic>=2.7.4; python_version < '3.13'",
+    "pydantic>=2.12.5; python_version >= '3.13'",
     "transformers>=4.53.3,<5",
 ]
 
 [project.optional-dependencies]
 test = [
-    "optimum[onnxruntime]>=1.27.0,<2",
+    "optimum[onnxruntime]>=1.27.0,<2; python_version < '3.13'",
+    "optimum-onnx[onnxruntime]>=0.1.0,<0.2; python_version >= '3.13'",
     "pytest",
-    "torch<2.5.0",
+    "torch>=2.4.1,<2.5; python_version < '3.13'",
+    "torch>=2.9.1,<2.10; python_version >= '3.13'",
 ]
 
 [project.urls]
