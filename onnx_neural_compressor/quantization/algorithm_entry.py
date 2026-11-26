@@ -140,6 +140,7 @@ def static_quantize_entry(
         model,
         config_mapping,
         quant_format=quant_config.quant_format.name.lower(),
+        reduce_range=quant_config.reduce_range,
         quantization_params=quantize_params,
         op_types_to_quantize=quant_config.op_types_to_quantize,
         execution_provider=quant_config.execution_provider,
@@ -224,6 +225,7 @@ def dynamic_quantize_entry(
     _quantizer = quantizer.DynamicQuantizer(
         model,
         config_mapping,
+        reduce_range=quant_config.reduce_range,
         op_types_to_quantize=quant_config.op_types_to_quantize,
     )
     _quantizer.quantize_model()

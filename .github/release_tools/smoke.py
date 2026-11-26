@@ -50,9 +50,10 @@ def main():
         ir_version=8,
     )
     samples = [{"input": rng.standard_normal((1, 16)).astype(np.float32)} for _ in range(8)]
+    # Hosted x86 runners can lack VNNI; reduced-range weights avoid U8S8 saturation.
     configs = {
-        "dynamic": config.DynamicQuantConfig(),
-        "static": config.StaticQuantConfig(Reader(samples), quant_format=QuantFormat.QDQ),
+        "dynamic": config.DynamicQuantConfig(reduce_range=True),
+        "static": config.StaticQuantConfig(Reader(samples), quant_format=QuantFormat.QDQ, reduce_range=True),
     }
     with tempfile.TemporaryDirectory() as directory:
         source = Path(directory) / "model.onnx"
