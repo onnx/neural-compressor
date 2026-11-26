@@ -73,6 +73,7 @@ For static quantization, provide a calibration data reader whose batches match t
 ## Contributing and support
 
 - [Contribution guidelines](./docs/CONTRIBUTING.md)
+- [Release process](./docs/Releasing.md)
 - [Security policy](./SECURITY.md)
 - [GitHub Issues](https://github.com/onnx/neural-compressor/issues) for bugs, feature requests, and questions
 - [Email the maintainers](mailto:inc.maintainers@intel.com) with research and collaboration ideas

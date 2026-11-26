@@ -40,6 +40,9 @@ python -m pytest -q test
 
 ## Pull Request Template
 
+Release managers should follow the [release process](Releasing.md) for version
+changes, release branches, package validation, and publication.
+
 See [PR template](/.github/pull_request_template.md)
 
 ## Pull Request Acceptance Criteria
