@@ -12,3 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Neural Compressor: An open-source Python library supporting popular model compression techniques for ONNX models."""
+
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _distribution_version
+
+try:
+    __version__ = _distribution_version("onnx-neural-compressor")
+except PackageNotFoundError:
+    __version__ = "unknown"
