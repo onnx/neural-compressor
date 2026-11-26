@@ -13,9 +13,8 @@ from optimum.exporters.onnx import main_export
 from packaging import version
 
 from onnx_neural_compressor import data_reader, logger
-from onnx_neural_compressor.quantization import QuantFormat
+from onnx_neural_compressor.quantization import QuantFormat, config, matmul_4bits_quantizer, matmul_nbits_quantizer
 from onnx_neural_compressor.quantization import algorithm_entry as algos
-from onnx_neural_compressor.quantization import config, matmul_4bits_quantizer, matmul_nbits_quantizer
 
 
 def find_onnx_file(folder_path):
@@ -28,7 +27,6 @@ def find_onnx_file(folder_path):
 
 
 class DummyNLPDataloader(data_reader.CalibrationDataReader):
-
     def __init__(self, model_name):
         self.tokenizer = transformers.AutoTokenizer.from_pretrained(model_name)
         self.sequence_a = "intel-extension-for-transformers is based in SH"
@@ -57,7 +55,6 @@ class DummyNLPDataloader(data_reader.CalibrationDataReader):
 
 
 class MatMulDataloader(data_reader.CalibrationDataReader):
-
     def __init__(self):
         self.encoded_list = [{"A": torch.randn((1, 11008)).numpy()}]
         self.iter_next = iter(self.encoded_list)
@@ -88,7 +85,6 @@ def build_matmul_model():
 
 
 class TestGPTQQuant(unittest.TestCase):
-
     @classmethod
     def setUpClass(self):
         main_export(
@@ -141,7 +137,6 @@ class TestGPTQQuant(unittest.TestCase):
 
 
 class TestGPTQQuantWithInternalAPI(TestGPTQQuant):
-
     def test_gptq_params_combination(self):
         # some tests were skipped to accelerate the CI
         # TODO: check params combination.
@@ -238,7 +233,6 @@ class TestGPTQQuantWithInternalAPI(TestGPTQQuant):
 
 
 class TestGPTQQuantWithORTLikeAPI(TestGPTQQuant):
-
     def test_gptq_config_4bits(self):
         algo_config = matmul_4bits_quantizer.GPTQWeightOnlyQuantConfig(
             calibration_data_reader=self.calibration_data_reader

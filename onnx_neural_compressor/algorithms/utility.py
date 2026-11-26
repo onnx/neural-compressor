@@ -21,13 +21,12 @@ import struct
 import numpy as np
 from packaging import version
 
-from onnx_neural_compressor import constants, utility
+from onnx_neural_compressor import __version__, constants, utility
 
 onnx = utility.LazyImport("onnx")
 ort = utility.LazyImport("onnxruntime")
 
 __producer__ = "onnx.quantize"
-__version__ = "0.1.0"
 onnx_domain = "ai.onnx"
 ms_domain = "com.microsoft"
 QUANT_OP_NAME_SUFFIX = "_quant"
@@ -51,7 +50,7 @@ def attribute_to_kwarg(attribute):
         value = attribute_mapping[attribute.type]
     else:  # pragma: no cover
         raise ValueError(
-            "attribute {} has no type specified " "or unsupported type {}.".format(attribute.name, attribute.type)
+            "attribute {} has no type specified or unsupported type {}.".format(attribute.name, attribute.type)
         )
     return {attribute.name: value}
 

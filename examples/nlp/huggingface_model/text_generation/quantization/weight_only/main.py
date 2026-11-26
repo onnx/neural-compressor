@@ -216,7 +216,6 @@ def benchmark(model):
 
 
 class AWQDataloader(data_reader.CalibrationDataReader):
-
     def __init__(self, model_path, pad_max=196, batch_size=1, sub_folder="train", calibration_sampling_size=8):
         self.encoded_list = []
         self.pad_max = pad_max
@@ -280,7 +279,6 @@ class AWQDataloader(data_reader.CalibrationDataReader):
 
 
 class GPTQDataloader(data_reader.CalibrationDataReader):
-
     def __init__(self, model_path, batch_size=1, seqlen=2048, sub_folder="train", calibration_sampling_size=8):
         # large `calibration_sampling_size` may result in long GPTQ running time
         # recommend to use smaller `calibration_sampling_size` value

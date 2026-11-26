@@ -46,7 +46,6 @@ def build_simple_onnx_model():
 
 
 class TestQuantizationConfig(unittest.TestCase):
-
     @classmethod
     def setUpClass(self):
         main_export(
@@ -438,7 +437,6 @@ class TestQuantizationConfig(unittest.TestCase):
 
 
 class TestQuantConfigForAutotune(unittest.TestCase):
-
     def test_expand_woq_config(self):
         # test the expand functionalities, the user is not aware it
         tune_config = config.RTNConfig(weight_bits=[4, 8])
@@ -448,7 +446,6 @@ class TestQuantConfigForAutotune(unittest.TestCase):
 
 
 class TestComposableConfig(unittest.TestCase):
-
     def test_composable_config(self):
         qconfig1 = {
             "rtn": {

@@ -38,7 +38,32 @@ python -m pip install -e ".[test]"
 python -m pytest -q test
 ```
 
+Python 3.14 runs the portable test suite. Tests that exercise Hugging Face's
+Optimum ONNX exporter run on Python 3.11 through 3.13 until its released
+packages support Python 3.14. The release workflow separately verifies installed
+dynamic and static quantization round trips on Python 3.14.
+
+## Running Lint Locally
+
+Install Ruff and run the same checks as CI:
+
+```shell
+python -m pip install -r requirements-lint.txt
+ruff check .
+ruff format --check .
+```
+
+Ruff can apply the available lint fixes and format the code:
+
+```shell
+ruff check --fix .
+ruff format .
+```
+
 ## Pull Request Template
+
+Release managers should follow the [release process](Releasing.md) for version
+changes, release branches, package validation, and publication.
 
 See [PR template](/.github/pull_request_template.md)
 
@@ -57,8 +82,9 @@ CI runs on GitHub-hosted Ubuntu runners for pull requests, pushes to `main`, and
 | Check | Scope | Pass criteria |
 | --- | --- | --- |
 | [DCO](https://github.com/apps/dco/) | Commit sign-offs | Use `git commit -s` |
-| Lint | Python style, spelling, shell scripts | Required lint checks pass |
-| Python 3.11 / Python 3.12 | Full [test suite](../test) | All tests pass; JUnit and coverage reports are uploaded |
+| Lint | Python lint and formatting with Ruff | Required lint checks pass |
+| Python 3.11 through Python 3.14 | [Test suite](../test), with portable tests on Python 3.14 | All tests pass; JUnit and coverage reports are uploaded |
+| Minimum dependencies / Python 3.11 through Python 3.14 | Tests with declared runtime minimums | All tests and dependency checks pass |
 | Coverage comparison | Python 3.12 line and branch coverage | Neither drops by more than 0.05 percentage points against the exact base commit |
 | Model smoke tests | BERT dynamic/static QDQ; ResNet static QDQ/QOperator | Installed wheel quantizes, saves, reloads, and runs models on CPU |
 | zizmor | GitHub workflow analysis | Workflow analysis passes |

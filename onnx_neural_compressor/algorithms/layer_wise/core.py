@@ -142,8 +142,9 @@ def layer_wise_quant(
             ort.InferenceSession(split_model_part_1_quantized.model_path, providers=providers)
         except Exception as e:
             logger.error(
-                "Layer-wise quantized model {} can't be inferred correctly. "
-                "Please check the raise exception".format(split_idx)
+                "Layer-wise quantized model {} can't be inferred correctly. Please check the raise exception".format(
+                    split_idx
+                )
             )
             raise e
 

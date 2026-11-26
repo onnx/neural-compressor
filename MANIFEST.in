@@ -1,0 +1,6 @@
+include VERSION_NUMBER
+include LICENSE
+include README.md
+include docs/Releasing.md
+include docs/Compatibility.md
+include docs/ReleaseNotes.md

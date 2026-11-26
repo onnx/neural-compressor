@@ -31,9 +31,9 @@ def calib_registry(calib_method):
     """The class decorator used to register all Calibrator subclasses."""
 
     def decorator_calib(cls):
-        assert cls.__name__.endswith(
-            "Calibrator"
-        ), "The name of subclass of Calibrator should end with 'Calibrator' substring."
+        assert cls.__name__.endswith("Calibrator"), (
+            "The name of subclass of Calibrator should end with 'Calibrator' substring."
+        )
         if cls.__name__[: -len("Calibrator")] in CALIBRATOR:  # pragma: no cover
             raise ValueError("Cannot have two operators with the same name.")
         CALIBRATOR[calib_method] = cls
@@ -87,7 +87,7 @@ class MinMaxCalibrator(CalibratorBase):
         else:
             datas = np.asarray(datas)
             datas = datas.flatten()
-            assert datas.size > 0, "collected intermediate data size" "should not be 0, please check augmented_model"
+            assert datas.size > 0, "collected intermediate data sizeshould not be 0, please check augmented_model"
             self._collect_value(datas)
 
     def _collect_value(self, data):
@@ -306,7 +306,7 @@ class HistogramCollector:
         else:
             datas = np.asarray(datas)
             datas = datas.flatten()
-            assert datas.size > 0, "collected intermediate data size" "should not be 0, please check augmented_model"
+            assert datas.size > 0, "collected intermediate data sizeshould not be 0, please check augmented_model"
             self._collect_value(datas)
 
     @staticmethod

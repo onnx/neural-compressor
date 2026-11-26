@@ -58,9 +58,9 @@ def gptq_quantize_entry(
 ) -> onnx.ModelProto:
     """The main entry to apply gptq quantization."""
     assert calibration_data_reader is not None, "Please provide calibration_data_reader"
-    assert isinstance(
-        calibration_data_reader, data_reader.CalibrationDataReader
-    ), "Please follow onnx_neural_compressor/data_reader.py to implement calibration_data_reader"
+    assert isinstance(calibration_data_reader, data_reader.CalibrationDataReader), (
+        "Please follow onnx_neural_compressor/data_reader.py to implement calibration_data_reader"
+    )
 
     config_mapping = quant_config.to_config_mapping(model=model)
     quant_kwargs = dict(
@@ -87,9 +87,9 @@ def awq_quantize_entry(
 ) -> onnx.ModelProto:
     """The main entry to apply awq quantization."""
     assert calibration_data_reader is not None, "Please provide calibration_data_reader"
-    assert isinstance(
-        calibration_data_reader, data_reader.CalibrationDataReader
-    ), "Please follow onnx_neural_compressor/data_reader.py to implement calibration_data_reader"
+    assert isinstance(calibration_data_reader, data_reader.CalibrationDataReader), (
+        "Please follow onnx_neural_compressor/data_reader.py to implement calibration_data_reader"
+    )
 
     config_mapping = quant_config.to_config_mapping(model=model)
     quant_kwargs = dict(
@@ -120,9 +120,9 @@ def static_quantize_entry(
         logger.warning("No candidate op type to do quantization, exit.")
         exit(0)
     assert calibration_data_reader is not None, "Please provide calibration_data_reader"
-    assert isinstance(
-        calibration_data_reader, data_reader.CalibrationDataReader
-    ), "Please follow onnx_neural_compressor/quantization/calibrate.py to implement calibration_data_reader"
+    assert isinstance(calibration_data_reader, data_reader.CalibrationDataReader), (
+        "Please follow onnx_neural_compressor/quantization/calibrate.py to implement calibration_data_reader"
+    )
 
     config_mapping = quant_config.to_config_mapping(model=model)
 
@@ -140,6 +140,7 @@ def static_quantize_entry(
         model,
         config_mapping,
         quant_format=quant_config.quant_format.name.lower(),
+        reduce_range=quant_config.reduce_range,
         quantization_params=quantize_params,
         op_types_to_quantize=quant_config.op_types_to_quantize,
         execution_provider=quant_config.execution_provider,
@@ -165,9 +166,9 @@ def smooth_quant_entry(
 ) -> Union[pathlib.Path, str, onnx.ModelProto]:
     """Apply smooth quant."""
     assert calibration_data_reader is not None, "Please provide calibration_data_reader"
-    assert isinstance(
-        calibration_data_reader, data_reader.CalibrationDataReader
-    ), "Please follow onnx_neural_compressor/data_reader.py to implement calibration_data_reader"
+    assert isinstance(calibration_data_reader, data_reader.CalibrationDataReader), (
+        "Please follow onnx_neural_compressor/data_reader.py to implement calibration_data_reader"
+    )
 
     # smooth operation
     calibration_data_reader.rewind()
@@ -224,6 +225,7 @@ def dynamic_quantize_entry(
     _quantizer = quantizer.DynamicQuantizer(
         model,
         config_mapping,
+        reduce_range=quant_config.reduce_range,
         op_types_to_quantize=quant_config.op_types_to_quantize,
     )
     _quantizer.quantize_model()

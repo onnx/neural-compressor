@@ -1,0 +1,140 @@
+# Copyright (c) ONNX Neural Compressor Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+name: Create Releases
+
+on:
+  push:
+    branches: [main, rel-*]
+  pull_request:
+    branches: [main, rel-*]
+  merge_group:
+  schedule:
+    - cron: '0 0 * * MON'
+  workflow_dispatch:
+    inputs:
+      build_mode:
+        description: Build preview packages or the exact VERSION_NUMBER
+        type: choice
+        options: [preview, release]
+        default: preview
+        required: true
+      publish:
+        description: Publish tested release packages (requires a matching rel-X.Y.Z branch)
+        type: choice
+        options: [none, testpypi, pypi]
+        default: none
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}-${{ github.event_name }}-${{ inputs.publish || 'none' }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build wheel and source distribution
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.11"
+      - name: Install build tools
+        run: python -m pip install build twine pytest
+      - name: Test release policy and version compatibility
+        run: python -m pytest -q test/release
+      - name: Prepare and validate version
+        id: version
+        env:
+          BUILD_MODE: ${{ inputs.build_mode || 'preview' }}
+          PUBLISH: ${{ inputs.publish || 'none' }}
+        run: python .github/release_tools/prepare.py --mode "$BUILD_MODE" --publish "$PUBLISH"
+      - name: Build source distribution and wheel from that source distribution
+        run: python -m build
+      - name: Check package metadata
+        env:
+          PACKAGE_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          python -m twine check --strict dist/*
+          python .github/release_tools/check_artifacts.py dist "$PACKAGE_VERSION"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: distributions
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 30
+
+  verify:
+    name: Install packages / ${{ matrix.os }} / Python ${{ matrix.python-version }} / ${{ matrix.dependencies }}
+    needs: build
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022, macos-15]
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+        dependencies: [minimum, current]
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: ${{ matrix.python-version }}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: distributions
+          path: dist
+      - name: Install and test wheel and source archive in separate clean environments
+        shell: bash
+        env:
+          PACKAGE_VERSION: ${{ needs.build.outputs.version }}
+          DEPENDENCIES: ${{ matrix.dependencies }}
+        run: |
+          if [ "$DEPENDENCIES" = minimum ]; then
+            python .github/release_tools/test_install.py dist "$PACKAGE_VERSION" --constraints .github/constraints/minimum.txt
+          else
+            python .github/release_tools/test_install.py dist "$PACKAGE_VERSION"
+          fi
+
+  publish:
+    name: Publish tested release packages
+    needs: [build, verify]
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.repository == 'onnx/neural-compressor' &&
+      startsWith(github.ref, 'refs/heads/rel-') &&
+      inputs.build_mode == 'release' &&
+      (inputs.publish == 'testpypi' || inputs.publish == 'pypi')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment:
+      name: ${{ inputs.publish == 'pypi' && 'pypi-release' || 'testpypi-release' }}
+      url: ${{ inputs.publish == 'pypi' && 'https://pypi.org/p/onnx-neural-compressor' || 'https://test.pypi.org/p/onnx-neural-compressor' }}
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: distributions
+          path: dist
+      - name: Attest the tested distributions
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dist/*
+      - name: Publish with PyPI Trusted Publishing
+        uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086
+        with:
+          repository-url: ${{ inputs.publish == 'pypi' && 'https://upload.pypi.org/legacy/' || 'https://test.pypi.org/legacy/' }}
+          print-hash: true

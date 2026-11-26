@@ -7,7 +7,6 @@ import unittest
 import onnx
 import onnxruntime
 import onnxruntime.tools.symbolic_shape_infer as symbolic_shape_infer
-import optimum.exporters.onnx
 
 from onnx_neural_compressor import onnx_model, utility
 
@@ -22,7 +21,6 @@ def find_onnx_file(folder_path):
 
 
 class TestOptions(unittest.TestCase):
-
     def test_set_random_seed(self):
         seed = 12345
         utility.set_random_seed(seed)
@@ -35,7 +33,6 @@ class TestOptions(unittest.TestCase):
 
 
 class TestCPUInfo(unittest.TestCase):
-
     def test_cpu_info(self):
         cpu_info = utility.CpuInfo()
         assert cpu_info.cores_per_socket > 0, "CPU count should be greater than 0"
@@ -44,7 +41,6 @@ class TestCPUInfo(unittest.TestCase):
 
 
 class TestLazyImport(unittest.TestCase):
-
     def test_lazy_import(self):
         # Test import
         pydantic = utility.LazyImport("pydantic")
@@ -58,12 +54,10 @@ class TestLazyImport(unittest.TestCase):
 
 
 class TestSingletonDecorator:
-
     def test_singleton_decorator(self):
 
         @utility.singleton
         class TestSingleton:
-
             def __init__(self):
                 self.value = 0
 
@@ -74,7 +68,6 @@ class TestSingletonDecorator:
 
 
 class TestGetVersion(unittest.TestCase):
-
     def test_get_version(self):
         from onnx_neural_compressor import version
 
@@ -82,7 +75,6 @@ class TestGetVersion(unittest.TestCase):
 
 
 class TestUtilityFunctions(unittest.TestCase):
-
     def test_check_value(self):
         src = [1, 2, 3]
         supported_type = int

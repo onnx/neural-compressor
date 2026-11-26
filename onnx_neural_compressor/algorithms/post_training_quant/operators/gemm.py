@@ -32,10 +32,10 @@ class GemmOperator(base_op.Operator):
         """Check if quantizaion can be done."""
         node = self.node
         if len(node.input) == 3 and not quant_utils.find_by_name(node.input[2], self.quantizer.model.initializer()):
-
             logger.warning(
-                "Bias of Gemm node '{}' is not constant. "
-                "Exclude this node can get better performance.".format(node.name)
+                "Bias of Gemm node '{}' is not constant. Exclude this node can get better performance.".format(
+                    node.name
+                )
             )
             if self.quantizer.quant_format != "qdq":
                 return False

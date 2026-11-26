@@ -18,7 +18,6 @@ FAKE_MODEL_INFO = [("OP1_NAME", "OP_TYPE1"), ("OP2_NAME", "OP_TYPE1"), ("OP3_NAM
 
 
 class FakeModel:
-
     def __init__(self) -> None:
         self.name = "fake_model"
 
@@ -148,7 +147,6 @@ config.register_supported_configs()
 
 
 class TestEvaluator(unittest.TestCase):
-
     def test_single_eval_fn(self):
 
         def fake_eval_fn(model):
@@ -174,7 +172,6 @@ class TestEvaluator(unittest.TestCase):
 
 
 class TestBaseConfig(unittest.TestCase):
-
     @classmethod
     def setUpClass(self):
         pass
@@ -314,7 +311,6 @@ class TestBaseConfig(unittest.TestCase):
 
 
 class TestConfigSet(unittest.TestCase):
-
     def setUp(self):
         self.config_set = [get_default_fake_config(), get_default_fake_config()]
         self.config_set_obj = tuning.ConfigSet.from_fwk_configs(self.config_set)
@@ -325,7 +321,6 @@ class TestConfigSet(unittest.TestCase):
 
 
 class TestConfigSampler(unittest.TestCase):
-
     def setUp(self):
         self.config_set = [get_default_fake_config(), get_default_fake_config()]
         self.seq_sampler = tuning.SequentialSampler(self.config_set)
@@ -335,7 +330,6 @@ class TestConfigSampler(unittest.TestCase):
 
 
 class TestConfigLoader(unittest.TestCase):
-
     def setUp(self):
         self.config_set = [FakeAlgoConfig(weight_bits=4), FakeAlgoConfig(weight_bits=8)]
         self.loader = tuning.ConfigLoader(self.config_set)
