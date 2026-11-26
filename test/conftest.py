@@ -2,7 +2,6 @@
 
 import sys
 
-
 # Released Optimum/Optimum-ONNX packages do not yet support Python 3.14:
 # functools.partial exporter configuration attributes bind as methods there.
 # The portable suite and release quantization smoke tests still cover 3.14.
