@@ -7,7 +7,7 @@ name = "onnx_neural_compressor"
 dynamic = ["version"]
 description = "Model compression techniques for ONNX models"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.13"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 authors = [
@@ -22,15 +22,16 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dependencies = [
-    "onnx",
-    "onnxruntime",
-    "psutil",
-    "prettytable",
-    "scipy",
-    "numpy",
-    "py-cpuinfo",
-    "pydantic",
-    "transformers<5",
+    "onnx>=1.17.0",
+    "onnxruntime>=1.20.1",
+    "packaging>=24.2",
+    "psutil>=5.9.8",
+    "prettytable>=3.10.0",
+    "scipy>=1.12.0",
+    "numpy>=1.26.4",
+    "py-cpuinfo>=9.0.0",
+    "pydantic>=2.7.4",
+    "transformers>=4.57.6,<5",
 ]
 
 [project.optional-dependencies]

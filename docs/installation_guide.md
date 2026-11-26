@@ -22,6 +22,11 @@ The following prerequisites and requirements must be satisfied for a successful 
 
 - Python version: 3.11 or 3.12
 
+Package metadata restricts this source tree and the next release to Python
+`>=3.11,<3.13`. See the [compatibility policy](Compatibility.md) for dependency
+minimums and the [release notes](ReleaseNotes.md) for migration details. The
+published v1.0 package has different requirements.
+
 ### Install from Binary
   ```Shell
   # install stable basic version from pypi
@@ -47,6 +52,7 @@ The following prerequisites and requirements must be satisfied for a successful 
 
 ### Validated Software Environment
 
-* OS version: Ubuntu 24.04
+* OS versions: Ubuntu 24.04, Windows Server 2022, macOS 15 (CPU artifact tests)
 * Python version: 3.11 or 3.12
-* ONNX Runtime version: 1.18.1
+* ONNX Runtime version: 1.20.1 minimum; current compatible versions also tested
+* Minimum and current dependency sets: see the [compatibility matrix](Compatibility.md)

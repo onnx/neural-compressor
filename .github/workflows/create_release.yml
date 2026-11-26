@@ -73,7 +73,7 @@ jobs:
           retention-days: 30
 
   verify:
-    name: Install packages / ${{ matrix.os }} / Python ${{ matrix.python-version }}
+    name: Install packages / ${{ matrix.os }} / Python ${{ matrix.python-version }} / ${{ matrix.dependencies }}
     needs: build
     runs-on: ${{ matrix.os }}
     timeout-minutes: 25
@@ -82,6 +82,7 @@ jobs:
       matrix:
         os: [ubuntu-24.04, windows-2022, macos-15]
         python-version: ["3.11", "3.12"]
+        dependencies: [minimum, current]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -97,7 +98,13 @@ jobs:
         shell: bash
         env:
           PACKAGE_VERSION: ${{ needs.build.outputs.version }}
-        run: python .github/release_tools/test_install.py dist "$PACKAGE_VERSION"
+          DEPENDENCIES: ${{ matrix.dependencies }}
+        run: |
+          if [ "$DEPENDENCIES" = minimum ]; then
+            python .github/release_tools/test_install.py dist "$PACKAGE_VERSION" --constraints .github/constraints/minimum.txt
+          else
+            python .github/release_tools/test_install.py dist "$PACKAGE_VERSION"
+          fi
 
   publish:
     name: Publish tested release packages

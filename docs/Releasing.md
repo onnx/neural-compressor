@@ -41,6 +41,8 @@ access and must be configured before requesting publication.
 
 1. Agree on `X.Y.Z` and prepare notes covering changes, compatibility changes,
    Python/dependency support, and known issues. Link the relevant PRs.
+   Start from [the unreleased notes](ReleaseNotes.md) and verify the
+   [compatibility policy](Compatibility.md) against the release's CI results.
 2. Cut `rel-X.Y.Z` from the tested `main` commit. For example, `rel-1.1.0`.
 3. Set `VERSION_NUMBER` on that branch to `X.Y.Zrc1` through a reviewed PR.
 4. Advance `main` to the next planned version in a separate PR.
@@ -63,7 +65,8 @@ For a release candidate or final build, select the release branch and choose:
 The workflow builds the source archive and then builds its wheel from that archive,
 checks metadata with Twine and verifies matching versions. It installs each artifact
 into a separate clean environment on Linux, Windows, and macOS with Python 3.11 and
-3.12, runs `pip check`, and verifies version imports and dynamic/static quantization
+3.12 with both minimum and current compatible dependencies, runs `pip check`,
+records installed versions, and verifies version imports and dynamic/static quantization
 round trips outside the checkout. Download both files from the `distributions`
 artifact. Artifacts are retained for 30 days.
 
