@@ -26,7 +26,6 @@ def find_onnx_file(folder_path):
 
 
 class DummyNLPDataloader(data_reader.CalibrationDataReader):
-
     def __init__(self, model_name, model_path):
         self.tokenizer = transformers.AutoTokenizer.from_pretrained(model_name)
         self.sequence_a = "intel-extension-for-transformers is based in SH"
@@ -66,7 +65,6 @@ class DummyNLPDataloader(data_reader.CalibrationDataReader):
 
 
 class TestLayerWiseQuant(unittest.TestCase):
-
     @classmethod
     def setUpClass(self):
         # onnx model exported with transformers>=4.38.0 is different with low version

@@ -905,8 +905,9 @@ class ONNXModel:
                 break
 
         assert len(split_node.output) == 1, (
-            "Only support split at node with 1 output tensor, while "
-            "current split node {} has {} output tensors".format(split_node_name, len(split_node.output))
+            "Only support split at node with 1 output tensor, while current split node {} has {} output tensors".format(
+                split_node_name, len(split_node.output)
+            )
         )
         split_tensor_name = split_node.output[0]
 

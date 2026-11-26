@@ -23,13 +23,11 @@ import onnxruntime as ort
 from optimum.exporters.onnx import main_export
 
 from onnx_neural_compressor import data_reader, onnx_model
-from onnx_neural_compressor.quantization import QuantType
+from onnx_neural_compressor.quantization import QuantType, config, quantize
 from onnx_neural_compressor.quantization import algorithm_entry as algos
-from onnx_neural_compressor.quantization import config, quantize
 
 
 class DataReader(data_reader.CalibrationDataReader):
-
     def __init__(self, model):
         model = onnx.load(model)
         batch_size = 1
@@ -57,7 +55,6 @@ class DataReader(data_reader.CalibrationDataReader):
 
 
 class TestONNXRTSmoothQuant(unittest.TestCase):
-
     @classmethod
     def setUpClass(self):
         main_export(

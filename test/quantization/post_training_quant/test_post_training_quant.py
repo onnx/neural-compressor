@@ -36,7 +36,6 @@ def fake_eval(model, eval_result_lst):
 
 
 class DataReader(data_reader.CalibrationDataReader):
-
     def __init__(self, model):
         model = onnx.load(model)
         batch_size = 1
@@ -72,7 +71,6 @@ def _count_op_num(model, optype):
 
 
 class TestPostTrainingQuant(unittest.TestCase):
-
     @classmethod
     def setUpClass(self):
         main_export(

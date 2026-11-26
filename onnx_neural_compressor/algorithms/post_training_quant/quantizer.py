@@ -875,11 +875,9 @@ class StaticQuantizer(Quantizer):
         self.quant_format = quant_format
         if self.opset_version < 13 and self.quant_format == "qdq":
             logger.warning(
-                "Per-channel support with QDQ format requires opset version >= 13,"
-                " use per-tensor granularity instead"
+                "Per-channel support with QDQ format requires opset version >= 13, use per-tensor granularity instead"
             )
         if "TensorrtExecutionProvider" in execution_provider:
-
             # TensorrtExecutionProvider doesn't support Conv + Add fusion
             self._revert_conv_add_fusion()
 

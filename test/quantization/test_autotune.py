@@ -42,7 +42,6 @@ def _create_evaluator_for_eval_fns(eval_fns: Optional[Union[Callable, Dict, List
 
 
 class DataReader(data_reader.CalibrationDataReader):
-
     def __init__(self, model):
         model = onnx.load(model)
         batch_size = 1
@@ -70,7 +69,6 @@ class DataReader(data_reader.CalibrationDataReader):
 
 
 class TestONNXRTAutoTune(unittest.TestCase):
-
     @classmethod
     def setUpClass(self):
         main_export(

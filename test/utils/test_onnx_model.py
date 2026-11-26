@@ -60,7 +60,6 @@ def build_matmul_model():
 
 
 class TestONNXModel(unittest.TestCase):
-
     @classmethod
     def setUpClass(self):
         main_export(

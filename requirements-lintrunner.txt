@@ -1,4 +1,0 @@
-lintrunner_adapters
-ruff==0.4.5
-black==24.3.0
-isort==5.13.2

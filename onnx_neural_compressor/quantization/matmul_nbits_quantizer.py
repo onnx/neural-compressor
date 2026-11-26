@@ -21,9 +21,8 @@ import onnx
 import onnxruntime as ort
 
 from onnx_neural_compressor import data_reader, logger, onnx_model, utility
-from onnx_neural_compressor.quantization import QuantFormat
+from onnx_neural_compressor.quantization import QuantFormat, config
 from onnx_neural_compressor.quantization import algorithm_entry as algos
-from onnx_neural_compressor.quantization import config
 
 
 class WeightOnlyQuantConfig:
@@ -39,7 +38,6 @@ class WeightOnlyQuantConfig:
 
 
 class RTNWeightOnlyQuantConfig(WeightOnlyQuantConfig):
-
     def __init__(self, ratios=None, layer_wise_quant=False, quant_format=QuantFormat.QOperator):
         super().__init__(
             algorithm="RTN",
@@ -52,7 +50,6 @@ class RTNWeightOnlyQuantConfig(WeightOnlyQuantConfig):
 
 
 class GPTQWeightOnlyQuantConfig(WeightOnlyQuantConfig):
-
     def __init__(
         self,
         calibration_data_reader: data_reader.CalibrationDataReader,
@@ -78,7 +75,6 @@ class GPTQWeightOnlyQuantConfig(WeightOnlyQuantConfig):
 
 
 class AWQWeightOnlyQuantConfig(WeightOnlyQuantConfig):
-
     def __init__(
         self,
         calibration_data_reader: data_reader.CalibrationDataReader,
@@ -100,7 +96,6 @@ algorithm_config_mapping = {
 
 
 class MatMulNBitsQuantizer:
-
     def __init__(
         self,
         model: Union[onnx.ModelProto, str],
