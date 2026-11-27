@@ -77,13 +77,44 @@ See [PR template](/.github/pull_request_template.md)
 - Third-party dependency license compatible
 
 ## Pull Request Status Checks Overview
-Neural Compressor use [Azure DevOps](https://learn.microsoft.com/en-us/azure/devops/pipelines/?view=azure-devops) for CI test.
-And generally use [Azure Cloud Instance](https://azure.microsoft.com/en-us/pricing/purchase-options/pay-as-you-go) to deploy pipelines, e.g. Standard E16s v5.
-|     Test Name                 |     Test Scope                                |     Test Pass Criteria    |
-|-------------------------------|-----------------------------------------------|---------------------------|
-|     Pre-commit CI                 |      [pre-comnnit config](../../.pre-commit-config.yaml)      |     PASS          |
-|     [DCO](https://github.com/apps/dco/)     |     Use `git commit -s` to sign off     |     PASS          |
-|     Unit Test                 |     Pytest scripts under [test](/test)                |      PASS (No failure, No core dump, No segmentation fault, No coverage drop)      |
+CI runs on GitHub-hosted Ubuntu runners for pull requests, pushes to `main`, and merge queues.
+
+| Check | Scope | Pass criteria |
+| --- | --- | --- |
+| [DCO](https://github.com/apps/dco/) | Commit sign-offs | Use `git commit -s` |
+| Lint | Python lint and formatting with Ruff | Required lint checks pass |
+| Python 3.11 through Python 3.14 | [Test suite](../test), with portable tests on Python 3.14 | All tests pass; JUnit and coverage reports are uploaded |
+| Minimum dependencies / Python 3.11 through Python 3.14 | Tests with declared runtime minimums | All tests and dependency checks pass |
+| Coverage comparison | Python 3.12 line and branch coverage | Neither drops by more than 0.05 percentage points against the exact base commit |
+| Model smoke tests | BERT dynamic/static QDQ; ResNet static QDQ/QOperator | Installed wheel quantizes, saves, reloads, and runs models on CPU |
+| zizmor | GitHub workflow analysis | Workflow analysis passes |
+
+Coverage reports are stored for 30 days. The comparison uses a successful `Tests`
+push run for the PR or merge queue's exact base commit. If that commit has no
+successful run or coverage artifact yet (including runs before this migration),
+the job explicitly reports that no comparison was made. If a baseline artifact
+exists but cannot be downloaded, the job fails; rerun the base push workflow or
+refresh the PR base. API failures also fail the job.
+
+Model smoke tests use small, seeded BERT and ResNet architectures with generated
+weights and inputs, require no model downloads or private datasets, and execute
+outside the checkout against a built wheel. They check graph conversion,
+quantized operators, finite outputs, and numerical agreement on three held-out
+inputs (`rtol=0.2`, `atol=0.02`). Reports are uploaded even when a model check fails.
+The former private ImageNet/MRPC accuracy and Intel hardware throughput benchmarks
+are retired; the smoke tests do not establish production accuracy or performance.
+
+Both test workflows also support manual runs from the Actions tab. To run a model
+smoke test locally after installing the package and `torch<2.5`:
+
+```shell
+python .github/ci/model_smoke.py --model bert --mode dynamic --output reports
+```
+
+When deploying this migration, repository administrators should disable the old
+Azure service triggers and remove any legacy `onc ut test` / `onc model test`
+required checks. Deleting their configuration files does not disconnect the
+external service. Configure required GitHub checks after their first successful run.
 
 ## Support
 
